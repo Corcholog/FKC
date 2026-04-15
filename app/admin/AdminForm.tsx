@@ -65,9 +65,10 @@ const roles = ['Top', 'Jungle', 'Mid', 'ADC', 'Support']
 
 const getChampionIcon = (champion: string): string | undefined => {
   if (!champion?.trim()) return undefined
-  const cleanName = champion.trim()
-  if (!allChampions.includes(cleanName)) return undefined
-  const key = cleanName.replace(/[^a-zA-Z]/g, '')
+  const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+  const match = allChampions.find(c => normalize(c) === normalize(champion))
+  if (!match) return undefined
+  const key = match.replace(/[^a-zA-Z0-9]/g, '')
   return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
 }
 

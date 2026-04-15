@@ -120,9 +120,10 @@ const allChampions = [
 
   const getChampionIcon = (name: string): string | null => {
     if (!name?.trim()) return null
-    const cleanName = name.trim()
-    if (!allChampions.includes(cleanName)) return null
-    const key = cleanName.replace(/[^a-zA-Z0-9]/g, '')
+    const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+    const match = allChampions.find(c => normalize(c) === normalize(name))
+    if (!match) return null
+    const key = match.replace(/[^a-zA-Z0-9]/g, '')
     return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
   }
 

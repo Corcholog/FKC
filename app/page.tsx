@@ -32,9 +32,11 @@ export default async function Home() {
   const supabase = await createClient()
 
   // Fetch players
-  const { data: players = [] } = await supabase
+  const { data: players } = await supabase
     .from('players')
     .select('*')
+
+  const playerList = players || []
 
   // Fetch recent matches
   const { data: recentMatches = [] } = await supabase
@@ -66,7 +68,7 @@ export default async function Home() {
     `)
 
   // Calculate stats for the Roster cards
-  const rosterStats = players.map(player => {
+  const rosterStats = playerList.map(player => {
     const playerMatches = allPerformances.filter(p => p.player_id === player.id)
     
     let wins = 0

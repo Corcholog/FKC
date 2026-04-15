@@ -32,14 +32,14 @@ export default async function Home() {
   const supabase = await createClient()
 
   // Fetch players
-  const { data: players } = await supabase
+  const { data: playersData } = await supabase
     .from('players')
     .select('*')
 
-  const playerList = players || []
+  const playerList = playersData || []
 
   // Fetch recent matches
-  const { data: recentMatches = [] } = await supabase
+  const { data: recentMatchesData } = await supabase
     .from('matches')
     .select(`
       *,
@@ -49,14 +49,16 @@ export default async function Home() {
     `)
     .order('date', { ascending: false })
     .limit(6)
+  const recentMatches = recentMatchesData || []
 
   // Fetch all matches for overall statistics
-  const { data: allMatches = [] } = await supabase
+  const { data: allMatchesData } = await supabase
     .from('matches')
     .select('id, we_won, match_type')
+  const allMatches = allMatchesData || []
 
   // Fetch all player performances for the Roster Stats
-  const { data: allPerformances = [] } = await supabase
+  const { data: allPerformancesData } = await supabase
     .from('ally_participants')
     .select(`
       player_id,
@@ -66,6 +68,7 @@ export default async function Home() {
       assists,
       matches!inner (we_won)
     `)
+  const allPerformances = allPerformancesData || []
 
   // Calculate stats for the Roster cards
   const rosterStats = playerList.map(player => {

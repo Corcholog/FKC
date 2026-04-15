@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import Link from 'next/link'
+import Navbar from '@/app/components/Navbar'
 
 type Match = {
   id: number
@@ -123,7 +123,8 @@ const allChampions = [
     const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
     const match = allChampions.find(c => normalize(c) === normalize(name))
     if (!match) return null
-    const key = match.replace(/[^a-zA-Z0-9]/g, '')
+    const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath","Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz" }
+    const key = overrides[match] ?? match.replace(/[^a-zA-Z0-9]/g, '')
     return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
   }
 
@@ -131,19 +132,7 @@ const allChampions = [
     <main className="min-h-screen bg-zinc-950 text-white pb-20 pt-16">
       
       {/* Navigation Bar */}
-      <nav className="fixed top-0 left-0 right-0 h-16 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 z-50 flex items-center">
-        <div className="max-w-7xl w-full mx-auto px-6 flex justify-between items-center">
-          <Link href="/" className="text-2xl font-bold text-yellow-400 tracking-wider">
-            FAKE CLAN
-          </Link>
-          <div className="flex gap-8">
-            <Link href="/" className="text-sm font-semibold hover:text-yellow-400 transition">Home</Link>
-            <Link href="/stats" className="text-sm font-semibold hover:text-yellow-400 transition">Player Stats</Link>
-            <Link href="/matches" className="text-sm font-semibold text-yellow-400 transition">Matches</Link>
-            <Link href="/admin" className="text-sm font-semibold hover:text-yellow-400 transition">Admin Panel</Link>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       <div className="max-w-7xl mx-auto px-6 py-16">
         <h1 className="text-5xl font-bold mb-2 text-yellow-400">Match History</h1>

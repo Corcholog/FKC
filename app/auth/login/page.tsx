@@ -37,7 +37,7 @@ export default function LoginPage() {
       if (error) throw error
 
       setMessage('Login successful!')
-      router.push('/admin')
+      window.location.href = '/admin'
     } catch (error) {
       console.error(error)
       setMessage('Login failed: ' + (error as Error).message)

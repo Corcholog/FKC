@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Navbar from '@/app/components/Navbar'
 
 type Player = {
   id: number
@@ -68,7 +69,8 @@ const getChampionIcon = (champion: string): string | undefined => {
   const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
   const match = allChampions.find(c => normalize(c) === normalize(champion))
   if (!match) return undefined
-  const key = match.replace(/[^a-zA-Z0-9]/g, '')
+  const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath","Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz" }
+  const key = overrides[match] ?? match.replace(/[^a-zA-Z0-9]/g, '')
   return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
 }
 
@@ -335,7 +337,9 @@ export default function AdminForm({ players }: { players: Player[] }) {
     }
   }
 return (
-    <div className="w-full max-w-6xl mx-auto px-8 py-8 bg-zinc-950 text-white">
+  <>
+    <Navbar />
+    <div className="w-full max-w-6xl mx-auto px-8 pt-24 pb-8 bg-zinc-950 text-white">
       {/* Header and Logout */}
       <div className="flex justify-between items-center mb-10">
         <h1 className="text-4xl font-bold text-yellow-400">Match Admin</h1>
@@ -684,5 +688,6 @@ return (
         </form>
       )}
     </div>
+  </>
   )
 }

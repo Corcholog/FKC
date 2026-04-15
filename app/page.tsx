@@ -2,6 +2,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Image from 'next/image'
 import Link from 'next/link'
+import Navbar from '@/app/components/Navbar'
 
 type Player = {
   id: number
@@ -27,6 +28,7 @@ const getColorKDA = (kda: number) => {
 }
 
 const ROLE_ORDER = ['Top', 'Jungle', 'Mid', 'ADC', 'Support']
+
 
 export default async function Home() {
   const supabase = await createClient()
@@ -159,7 +161,8 @@ export default async function Home() {
     const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
     const match = allChampions.find(c => normalize(c) === normalize(name))
     if (!match) return null
-    const key = match.replace(/[^a-zA-Z0-9]/g, '')
+    const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath","Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz" }
+    const key = overrides[match] ?? match.replace(/[^a-zA-Z0-9]/g, '')
     return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
   }
 
@@ -188,18 +191,7 @@ export default async function Home() {
     <main className="min-h-screen bg-zinc-950 text-white pb-20 pt-16">
       
       {/* Navigation Bar */}
-      <nav className="fixed top-0 left-0 right-0 h-16 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 z-50 flex items-center">
-        <div className="max-w-7xl w-full mx-auto px-6 flex justify-between items-center">
-          <Link href="/" className="text-2xl font-bold text-yellow-400 tracking-wider">
-            FAKE CLAN
-          </Link>
-          <div className="flex gap-8">
-            <Link href="/" className="text-sm font-semibold hover:text-yellow-400 transition">Home</Link>
-            <Link href="/stats" className="text-sm font-semibold hover:text-yellow-400 transition">Player Stats</Link>
-            <Link href="/admin" className="text-sm font-semibold hover:text-yellow-400 transition">Admin Panel</Link>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* Hero Banner */}
       <div className="relative h-[700px] flex items-center justify-center overflow-hidden bg-gradient-to-b from-zinc-900 to-black">

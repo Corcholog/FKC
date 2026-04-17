@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Image from 'next/image'
 
 type Player = {
   id: number
@@ -197,9 +198,10 @@ export default function TeamOverview({ players }: { players: Player[] }) {
                 <div className="space-y-2">
                   {stat.topChampions.map((champ, cIdx) => (
                     <div key={cIdx} className="flex items-center gap-3">
-                      <img 
+                      <Image 
                         src={getChampionIcon(champ.name) || '/placeholder-icon.png'} 
                         alt={champ.name}
+                        width={32} height={32}
                         className="w-8 h-8 rounded border border-zinc-700"
                       />
                       <div className="flex-1 min-w-0">

@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Image from 'next/image'
 import Navbar from '@/app/components/Navbar'
 
 type Match = {
@@ -183,7 +184,7 @@ const allChampions = [
                             const champ = bluePicks[role]
                             const icon = getChampionIcon(champ)
                             return icon ? (
-                              <img key={role} src={icon} alt={champ} className="w-14 h-14 rounded-xl border border-blue-600/50 shadow-md object-cover" />
+                              <Image key={role} src={icon} alt={champ} width={56} height={56} className="w-14 h-14 rounded-xl border border-blue-600/50 shadow-md object-cover" />
                             ) : (
                               <div key={role} className="w-14 h-14 rounded-xl border border-zinc-600 bg-zinc-800 flex items-center justify-center text-xs text-zinc-400">?</div>
                             )
@@ -196,7 +197,7 @@ const allChampions = [
                             {blueBans.slice(0, 5).map((ban: string, i: number) => {
                               const icon = getChampionIcon(ban)
                               return icon ? (
-                                <img key={i} src={icon} alt={ban} className="w-8 h-8 rounded-lg border border-zinc-600/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
+                                <Image key={i} src={icon} alt={ban} width={32} height={32} className="w-8 h-8 rounded-lg border border-zinc-600/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
                               ) : (
                                 <div key={i} className="w-8 h-8 rounded-lg border border-zinc-600 bg-zinc-800 flex items-center justify-center text-[10px] text-zinc-400">
                                   {ban?.substring(0,2) || '?'}
@@ -219,7 +220,7 @@ const allChampions = [
                             const champ = redPicks[role]
                             const icon = getChampionIcon(champ)
                             return icon ? (
-                              <img key={role} src={icon} alt={champ} className="w-14 h-14 rounded-xl border border-red-600/50 shadow-md object-cover" />
+                              <Image key={role} src={icon} alt={champ} width={56} height={56} className="w-14 h-14 rounded-xl border border-red-600/50 shadow-md object-cover" />
                             ) : (
                               <div key={role} className="w-14 h-14 rounded-xl border border-zinc-600 bg-zinc-800 flex items-center justify-center text-xs text-zinc-400">?</div>
                             )
@@ -232,7 +233,7 @@ const allChampions = [
                             {redBans.slice(0, 5).map((ban: string, i: number) => {
                               const icon = getChampionIcon(ban)
                               return icon ? (
-                                <img key={i} src={icon} alt={ban} className="w-8 h-8 rounded-lg border border-zinc-600/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
+                                <Image key={i} src={icon} alt={ban} width={32} height={32} className="w-8 h-8 rounded-lg border border-zinc-600/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
                               ) : (
                                 <div key={i} className="w-8 h-8 rounded-lg border border-zinc-600 bg-zinc-800 flex items-center justify-center text-[10px] text-zinc-400">
                                   {ban?.substring(0,2) || '?'}

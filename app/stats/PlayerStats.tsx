@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Image from 'next/image'
 
 // Types
 type Player = {
@@ -204,9 +205,10 @@ export default function PlayerStats({ players }: { players: Player[] }) {
                 <tr key={idx} className="hover:bg-zinc-800/50 transition-colors">
                   {/* Champion Name & Icon */}
                   <td className="p-4 flex items-center gap-3">
-                    <img 
+                    <Image 
                       src={getChampionIcon(stat.championName) || '/placeholder-icon.png'} 
                       alt={stat.championName}
+                      width={40} height={40}
                       className="w-10 h-10 rounded-md shadow-sm border border-zinc-700"
                     />
                     <span className="font-medium text-lg">{stat.championName}</span>

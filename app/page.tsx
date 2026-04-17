@@ -253,9 +253,10 @@ export default async function Home() {
                     <div className="space-y-2">
                       {stat.topChampions.map((champ: any, idx: number) => (
                         <div key={idx} className="flex items-center gap-3 bg-zinc-900/60 p-2 rounded-lg border border-zinc-700/50">
-                          <img 
+                          <Image 
                             src={getChampionIcon(champ.name) || '/placeholder-icon.png'} 
                             alt={champ.name}
+                            width={28} height={28}
                             className="w-7 h-7 rounded border border-zinc-700"
                           />
                           <div className="flex-1 min-w-0">
@@ -364,7 +365,7 @@ export default async function Home() {
                           const champ = bluePicks[role] // Pulls from bluePicks
                           const icon = getChampionIcon(champ)
                           return icon ? (
-                            <img key={role} src={icon} alt={champ} className="w-14 h-14 rounded-xl border border-blue-600/50 shadow-md object-cover" />
+                            <Image key={role} src={icon} alt={champ} width={56} height={56} className="w-14 h-14 rounded-xl border border-blue-600/50 shadow-md object-cover" />
                           ) : (
                             <div key={role} className="w-14 h-14 rounded-xl border border-zinc-600 bg-zinc-800 flex items-center justify-center text-xs text-zinc-400">?</div>
                           )
@@ -377,7 +378,7 @@ export default async function Home() {
                           {blueBans.slice(0, 5).map((ban: string, i: number) => {
                             const icon = getChampionIcon(ban)
                             return icon ? (
-                              <img key={i} src={icon} alt={ban} className="w-8 h-8 rounded-lg border border-zinc-600/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
+                              <Image key={i} src={icon} alt={ban} width={32} height={32} className="w-8 h-8 rounded-lg border border-zinc-600/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
                             ) : (
                               <div key={i} className="w-8 h-8 rounded-lg border border-zinc-600 bg-zinc-800 flex items-center justify-center text-[10px] text-zinc-400">
                                 {ban?.substring(0,2) || '?'}
@@ -400,7 +401,7 @@ export default async function Home() {
                           const champ = redPicks[role] // Pulls from redPicks
                           const icon = getChampionIcon(champ)
                           return icon ? (
-                            <img key={role} src={icon} alt={champ} className="w-14 h-14 rounded-xl border border-red-600/50 shadow-md object-cover" />
+                            <Image key={role} src={icon} alt={champ} width={56} height={56} className="w-14 h-14 rounded-xl border border-red-600/50 shadow-md object-cover" />
                           ) : (
                             <div key={role} className="w-14 h-14 rounded-xl border border-zinc-600 bg-zinc-800 flex items-center justify-center text-xs text-zinc-400">?</div>
                           )
@@ -413,7 +414,7 @@ export default async function Home() {
                           {redBans.slice(0, 5).map((ban: string, i: number) => {
                             const icon = getChampionIcon(ban)
                             return icon ? (
-                              <img key={i} src={icon} alt={ban} className="w-8 h-8 rounded-lg border border-zinc-600/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
+                              <Image key={i} src={icon} alt={ban} width={32} height={32} className="w-8 h-8 rounded-lg border border-zinc-600/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
                             ) : (
                               <div key={i} className="w-8 h-8 rounded-lg border border-zinc-600 bg-zinc-800 flex items-center justify-center text-[10px] text-zinc-400">
                                 {ban?.substring(0,2) || '?'}
@@ -428,15 +429,17 @@ export default async function Home() {
 
                 {/* Footer */}
                 <div className="bg-zinc-950/50 border-t border-zinc-800/50 px-6 py-4 flex justify-between items-center text-sm">
-                  <div className="text-zinc-400 font-medium">
+                  <div className="flex-1 text-left text-zinc-400 font-medium truncate">
                     {new Date(match.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} 
                     <span className="mx-2 text-zinc-600">|</span> 
                     <span className="text-zinc-300">{match.match_type?.replace('_', ' ').toUpperCase()}</span>
                   </div>
-                  <div className="font-mono text-zinc-400 bg-zinc-900 px-3 py-1 rounded-md border border-zinc-700">
-                    {formatDuration(match.duration_minutes, match.duration_seconds || 0)}
+                  <div className="flex-1 flex justify-center">
+                    <div className="font-mono text-zinc-400 bg-zinc-900 px-3 py-1 rounded-md border border-zinc-700">
+                      {formatDuration(match.duration_minutes, match.duration_seconds || 0)}
+                    </div>
                   </div>
-                  <div className={`font-black tracking-widest text-lg ${match.we_won ? 'text-green-500' : 'text-red-500'}`}>
+                  <div className={`flex-1 text-right font-black tracking-widest text-lg ${match.we_won ? 'text-green-500' : 'text-red-500'}`}>
                     {match.we_won ? 'VICTORY' : 'DEFEAT'}
                   </div>
                 </div>

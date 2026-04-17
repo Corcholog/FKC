@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import Image from 'next/image'
 import Navbar from '@/app/components/Navbar'
 
 type Player = {
@@ -522,9 +523,10 @@ return (
                           className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg text-sm" 
                         />
                         {getChampionIcon(ban) && (
-                          <img 
+                          <Image 
                             src={getChampionIcon(ban)!} 
                             alt={ban} 
+                            width={24} height={24}
                             className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded pointer-events-none" 
                           />
                         )}
@@ -548,9 +550,10 @@ return (
                           className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg text-sm" 
                         />
                         {getChampionIcon(ban) && (
-                          <img 
+                          <Image 
                             src={getChampionIcon(ban)!} 
                             alt={ban} 
+                            width={24} height={24}
                             className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded pointer-events-none" 
                           />
                         )}
@@ -598,7 +601,7 @@ return (
                               </td>
                               <td className="p-3">
                                 <div className="flex items-center gap-2">
-                                  {p.champion && getChampionIcon(p.champion) && <img key={p.champion} src={getChampionIcon(p.champion)!} alt="" className="w-6 h-6 rounded" />}
+                                  {p.champion && getChampionIcon(p.champion) && <Image key={p.champion} src={getChampionIcon(p.champion)!} alt="" width={24} height={24} className="w-6 h-6 rounded" />}
                                   <input list="all-champions" type="text" value={p.champion} onChange={(e) => updateOurParticipant(index, 'champion', e.target.value)} onKeyDown={(e) => {
                                     if (e.key === 'Tab') {
                                       const current = e.currentTarget.value.trim();
@@ -646,7 +649,7 @@ return (
                             <td className="p-3 font-medium text-yellow-400 text-sm">{p.role}</td>
                             <td className="p-3">
                               <div className="flex items-center gap-2">
-                                {p.champion && getChampionIcon(p.champion) && <img key={p.champion} src={getChampionIcon(p.champion)!} alt="" className="w-6 h-6 rounded" />}
+                                {p.champion && getChampionIcon(p.champion) && <Image key={p.champion} src={getChampionIcon(p.champion)!} alt="" width={24} height={24} className="w-6 h-6 rounded" />}
                                 <input list="all-champions" type="text" value={p.champion} onChange={(e) => updateEnemyParticipant(index, 'champion', e.target.value)} onKeyDown={(e) => {
                                   if (e.key === 'Tab') {
                                     const current = e.currentTarget.value.trim();

@@ -49,7 +49,7 @@ const getColorCS = (cs: number, role: string) => {
 // Reusing your icon helper
 const getChampionIcon = (champion: string): string | undefined => {
   if (!champion?.trim()) return undefined
-  const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath","Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz" }
+  const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath","Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz", "Wukong": "MonkeyKing" }
   const trimmed = champion.trim()
   const key = overrides[trimmed] ?? trimmed.replace(/[^a-zA-Z0-9]/g, '')
   return `https://ddragon.leagueoflegends.com/cdn/14.7.1/img/champion/${key}.png`

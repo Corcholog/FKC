@@ -125,7 +125,7 @@ const allChampions = [
     const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
     const match = allChampions.find(c => normalize(c) === normalize(name))
     if (!match) return null
-    const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath","Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz" }
+    const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath","Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz", "Wukong": "MonkeyKing" }
     const key = overrides[match] ?? match.replace(/[^a-zA-Z0-9]/g, '')
     return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
   }
@@ -161,26 +161,23 @@ const allChampions = [
               const blueBans = isOurBlue ? ourBans : enemyBans;
               const redBans = isOurBlue ? enemyBans : ourBans;
 
+              const hasLink = match.match_type === 'flex' && match.match_id;
+              const linkProps = hasLink ? {
+                href: `https://www.leagueofgraphs.com/match/las/${match.match_id}`,
+                target: "_blank",
+                rel: "noopener noreferrer"
+              } : {};
+
               return (
-                <div
+                <a
                   key={match.id}
-                  className={`relative rounded-2xl border-2 overflow-hidden shadow-lg ${
+                  {...linkProps}
+                  className={`block relative rounded-2xl border-2 overflow-hidden shadow-lg ${
                     match.we_won 
-                      ? 'bg-gradient-to-r from-green-950/40 to-zinc-900 border-green-700/50 hover:border-green-500' 
-                      : 'bg-gradient-to-r from-red-950/40 to-zinc-900 border-red-700/50 hover:border-red-500'
-                  } transition-colors`}
+                      ? `bg-gradient-to-r from-green-950/40 to-zinc-900 border-green-700/50 ${hasLink ? 'hover:border-green-500 hover:-translate-y-1' : ''}`
+                      : `bg-gradient-to-r from-red-950/40 to-zinc-900 border-red-700/50 ${hasLink ? 'hover:border-red-500 hover:-translate-y-1' : ''}`
+                  } transition-all duration-300 ${hasLink ? 'cursor-pointer shadow-xl' : 'cursor-default'}`}
                 >
-                  {match.match_type === 'flex' && match.match_id && (
-                    <a
-                      href={`https://www.leagueofgraphs.com/match/las/${match.match_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="absolute top-4 right-4 w-6 h-6 hover:scale-110 transition-transform opacity-70 hover:opacity-100 z-10"
-                      title="View on LeagueOfGraphs"
-                    >
-                      <Image src="/icons/opgg.png" alt="OP.GG" width={24} height={24} className="rounded" />
-                    </a>
-                  )}
                   <div className="p-6">
                     <div className="grid grid-cols-2 gap-8">
                       
@@ -268,7 +265,7 @@ const allChampions = [
                       </div>
                     </div>
                   </div>
-                </div>
+                </a>
               )
             })
           ) : (

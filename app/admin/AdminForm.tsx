@@ -184,6 +184,7 @@ export default function AdminForm({ players }: { players: Player[] }) {
           duration_seconds: matchData.duration_seconds,
           enemy_team_name: matchData.enemy_team_name || null,
           notes: matchData.notes || null,
+          match_id: matchData.matchId ? matchData.matchId.split('_').pop() : null,
         })
         .select('id')
         .single()

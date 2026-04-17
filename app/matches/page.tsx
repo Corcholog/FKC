@@ -11,6 +11,7 @@ type Match = {
   we_won: boolean
   duration_minutes: number
   duration_seconds: number
+  match_id: string | null
   our_side: 'Blue' | 'Red'
   enemy_team_name: string | null
   ally_participants: {
@@ -163,12 +164,23 @@ const allChampions = [
               return (
                 <div
                   key={match.id}
-                  className={`rounded-2xl border-2 overflow-hidden shadow-lg ${
+                  className={`relative rounded-2xl border-2 overflow-hidden shadow-lg ${
                     match.we_won 
                       ? 'bg-gradient-to-r from-green-950/40 to-zinc-900 border-green-700/50 hover:border-green-500' 
                       : 'bg-gradient-to-r from-red-950/40 to-zinc-900 border-red-700/50 hover:border-red-500'
                   } transition-colors`}
                 >
+                  {match.match_type === 'flex' && match.match_id && (
+                    <a
+                      href={`https://www.leagueofgraphs.com/match/las/${match.match_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute top-4 right-4 w-6 h-6 hover:scale-110 transition-transform opacity-70 hover:opacity-100 z-10"
+                      title="View on LeagueOfGraphs"
+                    >
+                      <Image src="/icons/opgg.png" alt="OP.GG" width={24} height={24} className="rounded" />
+                    </a>
+                  )}
                   <div className="p-6">
                     <div className="grid grid-cols-2 gap-8">
                       

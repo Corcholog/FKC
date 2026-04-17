@@ -77,7 +77,9 @@ const getChampionIcon = (champion: string): string | undefined => {
 
 export default function AdminForm({ players }: { players: Player[] }) {
   const now = new Date().toISOString().slice(0, 16)
-  const [activeTab, setActiveTab] = useState<'auto' | 'manual'>('auto')
+  const [activeTab, setActiveTab] = useState<'auto' | 'import-id' | 'manual'>('auto')
+  const [importMatchId, setImportMatchId] = useState('')
+  const [importMatchIdRiotId, setImportMatchIdRiotId] = useState('Corshus#2108')
   const [importSummonerName, setImportSummonerName] = useState('')
   const [importCount, setImportCount] = useState(10)
   const [isImporting, setIsImporting] = useState(false)
@@ -119,6 +121,70 @@ export default function AdminForm({ players }: { players: Player[] }) {
 
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+
+  const handleImportById = async () => {
+    if (!importMatchId.trim()) return;
+    setIsImporting(true)
+    setImportMessage('')
+    try {
+      const [gameName, tagLine] = importMatchIdRiotId.split('#')
+      const res = await fetch('/api/import-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchId: importMatchId.trim(), gameName, tagLine })
+      })
+      const result = await res.json()
+      if (!result.success) throw new Error(result.error)
+
+      const m = result.match
+      const newFormData = { ...formData }
+      if (m.date) newFormData.date = m.date
+      newFormData.match_type = m.match_type || 'tournament'
+      newFormData.our_side = m.our_side || 'Blue'
+      newFormData.we_won = m.we_won || false
+      newFormData.duration_minutes = m.duration_minutes || 0
+      newFormData.duration_seconds = m.duration_seconds || 0
+      newFormData.enemy_team_name = '' 
+      newFormData.notes = `Imported from Match ID: ${m.matchId}`
+      
+      newFormData.our_bans = [...(m.our_bans || []), '', '', '', '', ''].slice(0, 5)
+      newFormData.enemy_bans = [...(m.enemy_bans || []), '', '', '', '', ''].slice(0, 5)
+      
+      newFormData.our_participants = [...newFormData.our_participants]
+      if (m.our_participants?.length) {
+        m.our_participants.forEach((p:any, i:number) => {
+          if (i < 5) {
+            newFormData.our_participants[i] = {
+              ...newFormData.our_participants[i],
+              champion: p.champion, kills: p.kills, deaths: p.deaths, assists: p.assists, cs: p.cs
+            }
+          }
+        })
+      }
+
+      newFormData.enemy_participants = [...newFormData.enemy_participants]
+      if (m.enemy_participants?.length) {
+        m.enemy_participants.forEach((p:any, i:number) => {
+          if (i < 5) {
+            newFormData.enemy_participants[i] = {
+              ...newFormData.enemy_participants[i],
+              champion: p.champion, kills: p.kills, deaths: p.deaths, assists: p.assists, cs: p.cs
+            }
+          }
+        })
+      }
+      
+      setFormData(newFormData)
+      setActiveTab('manual')
+      setImportMatchId('') 
+      setImportMessage('✅ Successfully loaded match. Please review and save.')
+
+    } catch (err: any) {
+      setImportMessage(`❌ Error: ${err.message}`)
+    } finally {
+      setIsImporting(false)
+    }
+  }
 
   const handleManualSubmit = async (e: React.FormEvent) => {
       e.preventDefault()
@@ -357,6 +423,12 @@ return (
           Auto Import (Flex)
         </button>
         <button 
+          onClick={() => setActiveTab('import-id')}
+          className={`px-6 py-3 rounded-lg font-medium transition ${activeTab === 'import-id' ? 'bg-purple-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+        >
+          Import by ID
+        </button>
+        <button 
           onClick={() => setActiveTab('manual')}
           className={`px-6 py-3 rounded-lg font-medium transition ${activeTab === 'manual' ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
         >
@@ -418,6 +490,37 @@ return (
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* IMPORT BY ID SECTION */}
+      {activeTab === 'import-id' && (
+        <section className="bg-zinc-900 border border-zinc-700 p-6 rounded-xl">
+          <h2 className="text-2xl font-semibold mb-4 text-purple-400">Fetch Single Match by ID</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Target Match ID</label>
+              <input type="text" value={importMatchId} onChange={(e) => setImportMatchId(e.target.value)} placeholder="e.g. 1587489137" className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Our Perspective (Riot ID)</label>
+              <input type="text" value={importMatchIdRiotId} onChange={(e) => setImportMatchIdRiotId(e.target.value)} className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg" />
+            </div>
+            <div className="flex items-end">
+              <button 
+                onClick={handleImportById} 
+                disabled={isImporting}
+                className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-zinc-700 text-white font-medium rounded-lg transition"
+              >
+                {isImporting ? 'Fetching...' : 'Fetch & Pre-fill'}
+              </button>
+            </div>
+          </div>
+          {importMessage && (
+            <div className={`p-3 rounded font-medium ${importMessage.includes('❌') ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}>
+              {importMessage}
             </div>
           )}
         </section>

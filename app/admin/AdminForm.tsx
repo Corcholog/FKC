@@ -444,12 +444,21 @@ return (
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Match Type</label>
-                  <select value={formData.match_type} onChange={(e) => updateFormData('match_type', e.target.value)} className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg">
-                    <option value="flex">Flex</option>
-                    <option value="scrim_bo1">Scrim BO1</option>
-                    <option value="scrim_bo3">Scrim BO3</option>
-                    <option value="clash">Clash</option>
-                  </select>
+                  <input 
+                    type="text" 
+                    value={formData.match_type} 
+                    onChange={(e) => updateFormData('match_type', e.target.value.toLowerCase().replace(/\s+/g, '_'))} 
+                    list="match-type-suggestions"
+                    className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg"
+                    placeholder="e.g. flex, tournament, clash"
+                  />
+                  <datalist id="match-type-suggestions">
+                    <option value="flex" />
+                    <option value="scrim_bo1" />
+                    <option value="scrim_bo3" />
+                    <option value="clash" />
+                    <option value="tournament" />
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Our Side</label>

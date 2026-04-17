@@ -176,6 +176,8 @@ export default async function Home() {
     return `${Math.round((wins / filtered.length) * 100)}%`
   }
 
+  const uniqueMatchTypes = Array.from(new Set(allMatches.map((m: any) => m.match_type))).filter(Boolean) as string[]
+
   const getPicksByRole = (participants: any[] = []) => {
     return participants.reduce((acc: any, p: any) => {
       if (p.role) acc[p.role.toLowerCase()] = p.champion
@@ -290,26 +292,16 @@ export default async function Home() {
       <div className="bg-zinc-900 py-16 border-t border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-6">
           <h2 className="text-4xl font-bold mb-10 text-center">Team Performance</h2>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-6 text-center">
-            <div className="bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg">
-              <div className="text-5xl font-bold text-green-400">{calculateWinrate('flex')}</div>
-              <div className="mt-2 text-zinc-400 font-medium">Flex Winrate</div>
-            </div>
-            <div className="bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg">
-              <div className="text-5xl font-bold text-green-400">{calculateWinrate('scrim_bo1')}</div>
-              <div className="mt-2 text-zinc-400 font-medium">Scrim BO1</div>
-            </div>
-            <div className="bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg">
-              <div className="text-5xl font-bold text-green-400">{calculateWinrate('scrim_bo3')}</div>
-              <div className="mt-2 text-zinc-400 font-medium">Scrim BO3</div>
-            </div>
-            <div className="bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg">
-              <div className="text-5xl font-bold text-green-400">{calculateWinrate('clash')}</div>
-              <div className="mt-2 text-zinc-400 font-medium">Clash</div>
-            </div>
-            <div className="bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-yellow-400/30">
+          <div className="flex flex-wrap justify-center gap-6 text-center">
+            {uniqueMatchTypes.map(type => (
+              <div key={type} className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg flex flex-col justify-center">
+                <div className="text-5xl font-bold text-green-400">{calculateWinrate(type)}</div>
+                <div className="mt-2 text-zinc-400 font-bold text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
+              </div>
+            ))}
+            <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-yellow-400/30 flex flex-col justify-center">
               <div className="text-5xl font-bold text-yellow-400">{calculateWinrate()}</div>
-              <div className="mt-2 text-yellow-400/80 font-bold tracking-wide">OVERALL WR</div>
+              <div className="mt-2 text-yellow-400/80 font-bold tracking-widest text-xs uppercase">OVERALL WR</div>
             </div>
           </div>
         </div>

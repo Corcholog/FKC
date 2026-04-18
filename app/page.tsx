@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import Navbar from '@/app/components/Navbar'
 import DurationChart from '@/app/components/DurationChart'
+import MatchCard from '@/app/components/MatchCard'
 
 type Player = {
   id: number
@@ -207,25 +208,25 @@ export default async function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white pb-20 pt-16">
+    <main className="min-h-screen bg-[#f4faff] text-slate-900 pb-20 pt-16">
 
       {/* Navigation Bar */}
       <Navbar />
 
       {/* Hero Banner */}
-      <div className="relative h-[700px] flex items-center justify-center overflow-hidden bg-gradient-to-b from-zinc-900 to-black">
-        <Image src="/hero_banner.jpeg" alt="Hero Banner" fill className="object-cover opacity-30" priority />
+      <div className="relative h-[700px] flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#74b9ff]/80 to-[#f4faff]">
+        <Image src="/hero_banner.jpeg" alt="Hero Banner" fill className="object-cover opacity-[0.15] mix-blend-multiply" priority />
         <div className="relative text-center z-10 px-6 mt-10 flex flex-col items-center">
-          <Image 
-            src="/icons/fkc_icon.jpg" 
-            alt="FKC Logo" 
-            width={120} height={120} 
-            className="w-32 h-32 mb-6 rounded-3xl border-2 border-yellow-400/80 shadow-[0_0_30px_rgba(250,204,21,0.4)] object-cover hover:scale-105 transition duration-500" 
+          <Image
+            src="/icons/fkc_icon.jpg"
+            alt="FKC Logo"
+            width={120} height={120}
+            className="w-32 h-32 mb-6 rounded-3xl border-2 border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.12)] object-cover hover:scale-105 transition duration-500"
           />
-          <h1 className="text-7xl font-bold tracking-wider text-yellow-400 mb-4">FAKE CLAN</h1>
-          <p className="text-2xl text-zinc-400">"Que ganas de mejorar la puta madre" - Joshy</p>
+          <h1 className="text-7xl font-black tracking-wider text-slate-900 drop-shadow-sm mb-4">FAKE CLAN</h1>
+          <p className="text-2xl font-bold text-slate-600 bg-white/50 backdrop-blur-sm px-6 py-2 rounded-full border border-white/60 shadow-sm">"Que ganas de mejorar la puta madre" - Joshy</p>
           <div className="mt-10 mx-auto w-full max-w-4xl">
-            <Image src="/player_roster.jpeg" alt="Team Roster" width={800} height={320} className="w-full h-80 object-cover rounded-xl border border-zinc-700 shadow-2xl" />
+            <Image src="/player_roster.jpeg" alt="Team Roster" width={800} height={320} className="w-full h-80 object-cover rounded-xl border-4 border-white shadow-[0_20px_50px_rgba(8,112,184,0.15)] bg-white" />
           </div>
         </div>
       </div>
@@ -235,36 +236,35 @@ export default async function Home() {
         <h2 className="text-4xl font-bold mb-10 text-center">Our Roster</h2>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
           {rosterStats.length > 0 ? rosterStats.map((stat: any) => (
-            <div key={stat.id} className="relative h-[720px] bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden hover:border-yellow-400 transition group flex flex-col justify-end">
+            <div key={stat.id} className="relative h-[720px] bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-yellow-400 transition group flex flex-col justify-end">
 
-              {/* Background Image: Loads from public/players/name.jpg */}
-              <div className="absolute inset-0 z-0 bg-zinc-800 overflow-hidden">
+              {/* Background Image Container */}
+              <div className="absolute inset-0 z-0 bg-white overflow-hidden">
                 <img
                   src={`/players/${stat.name.toLowerCase().replace(/\s+/g, '')}.jpg`}
                   alt=""
-                  className="w-full h-full object-cover object-top opacity-80 group-hover:scale-105 transition duration-500 text-transparent"
+                  className="w-full h-full object-cover object-top opacity-100 group-hover:scale-105 transition duration-500 text-transparent"
                 />
-                {/* Softer, lower gradient so the text is readable but the image shines through */}
-                <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/90 via-zinc-950/75 via-50% to-transparent"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-white from-50% to-transparent to-50%"></div>
               </div>
 
-              {/* Card Content Overlay */}
-              <div className="relative z-10 p-5 flex flex-col h-full justify-end">
+              {/* Card Content Overlay: */}
+              <div className="relative z-10 p-5 flex flex-col h-1/2 bg-white">
                 <div className="text-center mb-4">
-                  <div className="text-yellow-400 font-bold text-xs tracking-widest uppercase">{stat.role}</div>
-                  <div className="text-3xl font-black mt-1 text-white uppercase tracking-wider">{stat.name}</div>
+                  <div className="text-yellow-600 font-bold text-xs tracking-widest uppercase">{stat.role}</div>
+                  <div className="text-3xl font-black mt-1 text-slate-900 uppercase tracking-wider">{stat.name}</div>
                 </div>
 
                 {/* Overall Stats */}
-                <div className="grid grid-cols-2 gap-2 mb-4 border-t border-b border-zinc-700/50 py-3">
+                <div className="grid grid-cols-2 gap-2 mb-4 border-t border-b border-slate-200 py-3">
                   <div className="text-center">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold">Winrate</p>
+                    <p className="text-[10px] text-slate-500 uppercase font-bold">Winrate</p>
                     <p className={`text-xl font-bold ${getColorWR(stat.winrate)}`}>
                       {stat.totalGames > 0 ? `${stat.winrate}%` : '-'}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold">KDA</p>
+                    <p className="text-[10px] text-slate-500 uppercase font-bold">KDA</p>
                     <p className={`text-xl font-bold ${getColorKDA(stat.overallKda)}`}>
                       {stat.totalGames > 0 ? stat.overallKda.toFixed(2) : '-'}
                     </p>
@@ -273,20 +273,20 @@ export default async function Home() {
 
                 {/* Top 5 Champions */}
                 <div>
-                  <p className="text-[10px] text-zinc-500 uppercase font-bold mb-2 text-center">Top Picks</p>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold mb-2 text-center">Top Picks</p>
                   {stat.topChampions.length > 0 ? (
                     <div className="space-y-2">
                       {stat.topChampions.map((champ: any, idx: number) => (
-                        <div key={idx} className="flex items-center gap-3 bg-zinc-900/60 p-2 rounded-lg border border-zinc-700/50">
+                        <div key={idx} className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200 mt-1">
                           <Image
                             src={getChampionIcon(champ.name) || '/placeholder-icon.png'}
                             alt={champ.name}
                             width={28} height={28}
-                            className="w-7 h-7 rounded border border-zinc-700"
+                            className="w-7 h-7 rounded border border-slate-300"
                           />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-zinc-200 truncate leading-none mb-1">{champ.name}</p>
-                            <p className="text-[10px] text-zinc-400 leading-none">
+                            <p className="text-sm font-semibold text-slate-900 truncate leading-none mb-1">{champ.name}</p>
+                            <p className="text-[10px] text-slate-500 leading-none">
                               {champ.games} G •
                               <span className={`font-bold ml-1 ${getColorWR(champ.winrate)}`}>
                                 {champ.winrate.toFixed(0)}%
@@ -300,56 +300,14 @@ export default async function Home() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-zinc-500 text-center py-4">No games yet</p>
+                    <p className="text-xs text-slate-400 text-center py-4">No games yet</p>
                   )}
                 </div>
               </div>
             </div>
           )) : (
-            <p className="col-span-5 text-center text-zinc-500 py-10">No players added yet in Supabase.</p>
+            <p className="col-span-5 text-center text-zinc-500 py-10">No players added yet.</p>
           )}
-        </div>
-      </div>
-
-      {/* Team Performance */}
-      <div className="bg-zinc-900 py-16 border-t border-b border-zinc-800">
-        <div className="max-w-7xl mx-auto px-6">
-          <h2 className="text-4xl font-bold mb-10 text-center">Team Performance</h2>
-          <div className="flex flex-col gap-6">
-            <div className="flex flex-wrap justify-center gap-6 text-center">
-              {standardMatchTypes.map(type => (
-                <div key={type} className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg flex flex-col justify-center">
-                  <div className="text-5xl font-bold text-green-400">{calculateWinrate(type)}</div>
-                  <div className="mt-2 text-zinc-400 font-bold text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
-                </div>
-              ))}
-              <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-yellow-400/30 flex flex-col justify-center">
-                <div className="text-5xl font-bold text-yellow-400">{calculateWinrate()}</div>
-                <div className="mt-2 text-yellow-400/80 font-bold tracking-widest text-xs uppercase">OVERALL WR</div>
-              </div>
-            </div>
-
-            {competitiveMatchTypes.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-6 text-center pt-2">
-                <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-purple-500/30 flex flex-col justify-center">
-                  <div className="text-5xl font-bold text-purple-400">{calculateWinrate(excludeTypes, true)}</div>
-                  <div className="mt-2 text-purple-400/80 font-bold tracking-widest text-xs uppercase">COMPETITIVE WR</div>
-                </div>
-                {competitiveMatchTypes.map(type => (
-                  <div key={type} className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg flex flex-col justify-center">
-                    <div className="text-5xl font-bold text-green-400">{calculateWinrate(type)}</div>
-                    <div className="mt-2 text-zinc-400 font-bold text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Duration Based Winrates (3rd Row) */}
-            <div className="flex flex-wrap justify-center gap-6 pt-8 mt-2">
-              <DurationChart title="Overall Winrate by Duration" matches={allMatches} />
-              <DurationChart title="Competitive Winrate by Duration" matches={competitiveMatches} />
-            </div>
-          </div>
         </div>
       </div>
 
@@ -363,178 +321,12 @@ export default async function Home() {
         </div>
 
         <div className="grid gap-6">
-          {recentMatches.length > 0 ? recentMatches.map((match: any) => {
-            // Identify MVP and INT MVP for our team ONLY
-            let mvpId: number | null = null;
-            let intId: number | null = null;
-            
-            const scoredAllies = (match.ally_participants || []).filter((p: any) => typeof p.score === 'number' && p.score !== null && p.score !== 0);
-            
-            if (scoredAllies.length > 0) {
-                const mvpPlayer = [...scoredAllies].reduce((prev, current) => (prev.score > current.score) ? prev : current);
-                const intPlayer = [...scoredAllies].reduce((prev, current) => (prev.score < current.score) ? prev : current);
-                mvpId = mvpPlayer.id;
-                intId = intPlayer.id;
-            }
-
-            const allyPicks = getPicksByRole(match.ally_participants)
-            const enemyPicks = getPicksByRole(match.enemy_participants)
-
-            const bans = match.match_bans?.[0] || {}
-            const ourBans: string[] = Array.isArray(bans.our_bans) ? bans.our_bans : []
-            const enemyBans: string[] = Array.isArray(bans.enemy_bans) ? bans.enemy_bans : []
-
-            const isOurBlue = match.our_side === 'Blue'
-
-            // --- THE FIX: We route the picks to the correct visual column ---
-            const bluePicks = isOurBlue ? allyPicks : enemyPicks;
-            const redPicks = isOurBlue ? enemyPicks : allyPicks;
-            const blueBans = isOurBlue ? ourBans : enemyBans;
-            const redBans = isOurBlue ? enemyBans : ourBans;
-
-            const hasLink = match.match_type === 'flex' && match.match_id;
-            const linkProps = hasLink ? {
-              href: `https://www.leagueofgraphs.com/match/las/${match.match_id}`,
-              target: "_blank",
-              rel: "noopener noreferrer"
-            } : {};
-
-            return (
-              <a
-                key={match.id}
-                {...linkProps}
-                className={`block relative rounded-2xl border-2 overflow-hidden shadow-lg ${match.we_won
-                  ? `bg-gradient-to-r from-green-950/40 to-zinc-900 border-green-700/50 ${hasLink ? 'hover:border-green-500 hover:-translate-y-1' : ''}`
-                  : `bg-gradient-to-r from-red-950/40 to-zinc-900 border-red-700/50 ${hasLink ? 'hover:border-red-500 hover:-translate-y-1' : ''}`
-                  } transition-all duration-300 ${hasLink ? 'cursor-pointer shadow-xl' : 'cursor-default'}`}
-              >
-                <div className="p-6">
-                  <div className="grid grid-cols-2 gap-8">
-
-                    {/* LEFT COLUMN: ALWAYS BLUE */}
-                    <div>
-                      <div className="text-sm font-bold text-blue-400 mb-3 tracking-wider">
-                        BLUE {isOurBlue && '(US)'}
-                      </div>
-
-                      {/* Blue Picks */}
-                      <div className="flex justify-center gap-3 mb-6">
-                        {['top', 'jungle', 'mid', 'adc', 'support'].map(role => {
-                          const pick = bluePicks[role]
-                          const champ = pick?.champion
-                          const icon = getChampionIcon(champ)
-                          
-                          const isMVP = isOurBlue && pick?.id === mvpId && pick?.id != null;
-                          const isINT = isOurBlue && pick?.id === intId && pick?.id != null;
-                          
-                          return (
-                            <div key={role} className="relative flex flex-col items-center">
-                              {icon ? (
-                                <Image src={icon} alt={champ} width={56} height={56} className="w-14 h-14 rounded-xl border border-blue-600/50 shadow-md object-cover" />
-                              ) : (
-                                <div className="w-14 h-14 rounded-xl border border-zinc-600 bg-zinc-800 flex items-center justify-center text-xs text-zinc-400">?</div>
-                              )}
-                              {(isMVP || isINT) && (
-                                <div className="absolute -bottom-3 text-lg bg-zinc-900 border border-zinc-700 rounded-full w-6 h-6 flex items-center justify-center shadow-lg z-10" title={isMVP ? `MVP (Score: ${pick?.score})` : `INT MVP (Score: ${pick?.score})`}>
-                                  {isMVP ? '🏆' : '😈'}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-
-                      {/* Blue Bans */}
-                      {blueBans.length > 0 && (
-                        <div className="flex justify-center gap-2">
-                          {blueBans.slice(0, 5).map((ban: string, i: number) => {
-                            const icon = getChampionIcon(ban)
-                            return icon ? (
-                              <Image key={i} src={icon} alt={ban} width={32} height={32} className="w-8 h-8 rounded-lg border border-zinc-600/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
-                            ) : (
-                              <div key={i} className="w-8 h-8 rounded-lg border border-zinc-600 bg-zinc-800 flex items-center justify-center text-[10px] text-zinc-400">
-                                {ban?.substring(0, 2) || '?'}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* RIGHT COLUMN: ALWAYS RED */}
-                    <div>
-                      <div className="text-sm font-bold text-red-400 mb-3 tracking-wider">
-                        RED {!isOurBlue && '(US)'}
-                      </div>
-
-                      {/* Red Picks */}
-                      <div className="flex justify-center gap-3 mb-6">
-                        {['top', 'jungle', 'mid', 'adc', 'support'].map(role => {
-                          const pick = redPicks[role]
-                          const champ = pick?.champion
-                          const icon = getChampionIcon(champ)
-                          
-                          const isMVP = !isOurBlue && pick?.id === mvpId && pick?.id != null;
-                          const isINT = !isOurBlue && pick?.id === intId && pick?.id != null;
-                          
-                          return (
-                            <div key={role} className="relative flex flex-col items-center">
-                              {icon ? (
-                                <Image src={icon} alt={champ} width={56} height={56} className="w-14 h-14 rounded-xl border border-red-600/50 shadow-md object-cover" />
-                              ) : (
-                                <div className="w-14 h-14 rounded-xl border border-zinc-600 bg-zinc-800 flex items-center justify-center text-xs text-zinc-400">?</div>
-                              )}
-                              {(isMVP || isINT) && (
-                                <div className="absolute -bottom-3 text-lg bg-zinc-900 border border-zinc-700 rounded-full w-6 h-6 flex items-center justify-center shadow-lg z-10" title={isMVP ? `MVP (Score: ${pick?.score})` : `INT MVP (Score: ${pick?.score})`}>
-                                  {isMVP ? '🏆' : '😈'}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-
-                      {/* Red Bans */}
-                      {redBans.length > 0 && (
-                        <div className="flex justify-center gap-2">
-                          {redBans.slice(0, 5).map((ban: string, i: number) => {
-                            const icon = getChampionIcon(ban)
-                            return icon ? (
-                              <Image key={i} src={icon} alt={ban} width={32} height={32} className="w-8 h-8 rounded-lg border border-zinc-600/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
-                            ) : (
-                              <div key={i} className="w-8 h-8 rounded-lg border border-zinc-600 bg-zinc-800 flex items-center justify-center text-[10px] text-zinc-400">
-                                {ban?.substring(0, 2) || '?'}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="bg-zinc-950/50 border-t border-zinc-800/50 px-6 py-4 flex justify-between items-center text-sm">
-                  <div className="flex-1 text-left text-zinc-400 font-medium truncate">
-                    {new Date(match.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                    <span className="mx-2 text-zinc-600">|</span>
-                    <span className="text-zinc-300">{match.match_type?.replace('_', ' ').toUpperCase()}</span>
-                  </div>
-                  <div className="flex-1 flex justify-center">
-                    <div className="font-mono text-zinc-400 bg-zinc-900 px-3 py-1 rounded-md border border-zinc-700">
-                      {formatDuration(match.duration_minutes, match.duration_seconds || 0)}
-                    </div>
-                  </div>
-                  <div className={`flex-1 text-right font-black tracking-widest text-lg ${match.we_won ? 'text-green-500' : 'text-red-500'}`}>
-                    {match.we_won ? 'VICTORY' : 'DEFEAT'}
-                  </div>
-                </div>
-              </a>
-            )
-          }) : (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-12 text-center">
-              <p className="text-zinc-400 text-lg mb-4">No matches recorded yet.</p>
-              <Link href="/admin" className="inline-block px-6 py-3 bg-yellow-500 text-black font-bold rounded-lg hover:bg-yellow-400 transition">
+          {recentMatches.length > 0 ? recentMatches.map((match: any) => (
+            <MatchCard key={match.id} match={match} allChampions={allChampions} />
+          )) : (
+            <div className="bg-white border border-blue-100 rounded-2xl p-12 text-center shadow-sm">
+              <p className="text-slate-500 text-lg mb-4">No matches recorded yet.</p>
+              <Link href="/admin" className="inline-block px-6 py-3 bg-[#f1c40f] text-slate-900 font-bold rounded-lg hover:bg-yellow-400 transition shadow-md">
                 Import Matches
               </Link>
             </div>

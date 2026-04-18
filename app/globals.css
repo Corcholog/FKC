@@ -49,9 +49,9 @@
 }
 
 :root {
-  --background: #010a13;
-  --foreground: #f0e6d2;
-  --card: #091428;
+  --background: #f4faff;
+  --foreground: #0f172a;
+  --card: #ffffff;
   --card-foreground: #f0e6d2;
   --popover: #091428;
   --popover-foreground: #f0e6d2;
@@ -84,9 +84,9 @@
 }
 
 .dark {
-  --background: #010a13;
-  --foreground: #f0e6d2;
-  --card: #091428;
+  --background: #f4faff;
+  --foreground: #0f172a;
+  --card: #ffffff;
   --card-foreground: #f0e6d2;
   --popover: #091428;
   --popover-foreground: #f0e6d2;

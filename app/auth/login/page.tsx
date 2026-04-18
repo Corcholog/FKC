@@ -47,39 +47,39 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-8">
-      <div className="max-w-md w-full bg-zinc-900 p-8 rounded-lg border border-zinc-700">
-        <h1 className="text-2xl font-bold mb-6 text-yellow-400 text-center">Login to Admin</h1>
+    <div className="min-h-screen bg-[#f4faff] text-slate-900 flex items-center justify-center p-8">
+      <div className="max-w-md w-full bg-white p-8 rounded-2xl border border-blue-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+        <h1 className="text-2xl font-black mb-6 text-[#0f172a] text-center">Login to Admin</h1>
         {message && (
-          <div className={`p-4 mb-4 rounded ${message.includes('failed') ? 'bg-red-800' : 'bg-green-800'}`}>
+          <div className={`p-4 mb-4 rounded ${message.includes('failed') ? 'bg-rose-100 text-rose-600 border border-rose-200' : 'bg-emerald-100 text-emerald-600 border border-emerald-200'}`}>
             {message}
           </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
+            <label className="block text-sm font-bold text-slate-600 mb-1">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-2 bg-zinc-800 border border-zinc-700 rounded"
+              className="w-full p-2 bg-blue-50/50 border border-blue-200 rounded-lg focus:border-[#f1c40f] focus:ring-1 focus:ring-[#f1c40f] outline-none transition-all"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
+            <label className="block text-sm font-bold text-slate-600 mb-1">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-2 bg-zinc-800 border border-zinc-700 rounded"
+              className="w-full p-2 bg-blue-50/50 border border-blue-200 rounded-lg focus:border-[#f1c40f] focus:ring-1 focus:ring-[#f1c40f] outline-none transition-all"
               required
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-yellow-400 text-black font-semibold rounded hover:bg-yellow-500 disabled:opacity-50"
+            className="w-full py-3 bg-[#f1c40f] text-slate-900 font-bold rounded-lg hover:bg-[#f39c12] disabled:opacity-50 shadow-md transition-all"
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>

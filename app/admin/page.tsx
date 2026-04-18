@@ -6,7 +6,7 @@ export default async function AdminPage() {
   const { data: players } = await supabase.from('players').select('id, name, ign, role, puuid')
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
+    <div className="min-h-screen bg-[#f4faff] text-slate-900">
       <AdminForm players={players || []} />
     </div>
   )

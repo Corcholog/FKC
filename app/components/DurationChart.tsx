@@ -47,19 +47,19 @@ export default function DurationChart({ title, matches }: DurationChartProps) {
   };
 
   return (
-    <div className="bg-zinc-950 p-6 rounded-2xl border border-zinc-700 shadow-lg flex flex-col w-full max-w-sm">
-      <h3 className="text-zinc-400 font-bold text-xs uppercase tracking-widest text-center mb-8">{title}</h3>
+    <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col w-full max-w-sm">
+      <h3 className="text-slate-500 font-bold text-xs uppercase tracking-widest text-center mb-8">{title}</h3>
       
       <div className="flex justify-between items-end h-44 gap-2 mt-2 mb-2">
         {data.map((b, i) => (
           <div key={i} className="flex flex-col items-center flex-1 group relative">
             {/* Tooltip on Hover */}
-            <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-800 text-zinc-200 text-[10px] px-2 py-1 rounded whitespace-nowrap z-10 pointer-events-none font-bold">
+            <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-10 pointer-events-none font-bold shadow-md">
               {b.total > 0 ? `${b.wins}W - ${b.losses}L` : 'No Games'}
             </div>
             
             {/* Y-Axis scale visualizer background */}
-            <div className="w-full bg-zinc-900 rounded-t-lg relative flex flex-col justify-end h-36 border-b-2 border-zinc-700 hover:bg-zinc-800 transition-colors">
+            <div className="w-full bg-blue-50/50 rounded-t-lg relative flex flex-col justify-end h-36 border-b-2 border-slate-200 hover:bg-blue-50 transition-colors">
               {b.total > 0 && (
                 <div 
                   className={`w-full rounded-t-lg transition-all duration-700 ${getColor(b.winrate)} group-hover:brightness-110 shadow-[0_0_10px_rgba(0,0,0,0.5)]`}
@@ -75,8 +75,8 @@ export default function DurationChart({ title, matches }: DurationChartProps) {
               )}
             </div>
             {/* Label */}
-            <div className="text-[10px] text-zinc-400 font-bold mt-4 whitespace-nowrap tracking-wider">{b.label}</div>
-            <div className="text-[10px] text-zinc-600 font-medium mt-1">{b.total} G</div>
+            <div className="text-[10px] text-slate-500 font-bold mt-4 whitespace-nowrap tracking-wider">{b.label}</div>
+            <div className="text-[10px] text-slate-400 font-medium mt-1">{b.total} G</div>
           </div>
         ))}
       </div>

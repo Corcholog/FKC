@@ -425,31 +425,31 @@ export default function AdminForm({ players }: { players: Player[] }) {
 return (
   <>
     <Navbar />
-    <div className="w-full max-w-6xl mx-auto px-8 pt-24 pb-8 bg-zinc-950 text-white">
+    <div className="w-full max-w-6xl mx-auto px-8 pt-24 pb-8 bg-[#f4faff] text-slate-900">
       {/* Header and Logout */}
       <div className="flex justify-between items-center mb-10">
-        <h1 className="text-4xl font-bold text-yellow-400">Match Admin</h1>
-        <button onClick={handleLogout} className="px-6 py-2 bg-red-600 rounded-lg">Logout</button>
+        <h1 className="text-4xl font-black text-[#0f172a]">Match Admin</h1>
+        <button onClick={handleLogout} className="px-6 py-2 bg-rose-500 text-white font-bold rounded-lg shadow-sm hover:bg-rose-600 transition-all">Logout</button>
       </div>
 
       {/* Tabs */}
-      <div className="flex justify-between items-center mb-8 border-b border-zinc-800 pb-4">
+      <div className="flex justify-between items-center mb-8 border-b border-blue-200 pb-4">
         <div className="flex gap-4">
           <button 
             onClick={() => setActiveTab('auto')}
-            className={`px-6 py-3 rounded-lg font-medium transition ${activeTab === 'auto' ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            className={`px-6 py-3 rounded-lg font-bold transition-all shadow-sm ${activeTab === 'auto' ? 'bg-[#0984e3] text-white shadow-md' : 'bg-white border border-blue-100 text-slate-500 hover:bg-blue-50'}`}
           >
             Auto Import (Flex)
           </button>
           <button 
             onClick={() => setActiveTab('import-id')}
-            className={`px-6 py-3 rounded-lg font-medium transition ${activeTab === 'import-id' ? 'bg-purple-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            className={`px-6 py-3 rounded-lg font-bold transition-all shadow-sm ${activeTab === 'import-id' ? 'bg-purple-600 text-white shadow-md' : 'bg-white border border-blue-100 text-slate-500 hover:bg-blue-50'}`}
           >
             Import by ID
           </button>
           <button 
             onClick={() => setActiveTab('manual')}
-            className={`px-6 py-3 rounded-lg font-medium transition ${activeTab === 'manual' ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            className={`px-6 py-3 rounded-lg font-bold transition-all shadow-sm ${activeTab === 'manual' ? 'bg-[#f1c40f] text-slate-900 border border-yellow-500 shadow-md' : 'bg-white border border-blue-100 text-slate-500 hover:bg-blue-50'}`}
           >
             Manual Input
           </button>
@@ -467,7 +467,7 @@ return (
             }
           }}
           disabled={loading}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-emerald-50 text-sm font-semibold rounded-lg transition"
+          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all shadow-sm"
         >
           {loading ? 'Processing...' : 'Recalculate Database Scores'}
         </button>
@@ -475,50 +475,50 @@ return (
 
       {/* AUTO IMPORT SECTION */}
       {activeTab === 'auto' && (
-        <section className="bg-zinc-900 border border-zinc-700 p-6 rounded-xl">
-          <h2 className="text-2xl font-semibold mb-4 text-blue-400">Fetch & Insert Directly to DB</h2>
+        <section className="bg-white border border-blue-100 p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+          <h2 className="text-2xl font-black mb-4 text-[#0984e3]">Fetch & Insert Directly to DB</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Riot ID (Name#Tag)</label>
-              <input type="text" value={importSummonerName} onChange={(e) => setImportSummonerName(e.target.value)} className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg" />
+              <label className="block text-sm font-bold text-slate-600 mb-1">Riot ID (Name#Tag)</label>
+              <input type="text" value={importSummonerName} onChange={(e) => setImportSummonerName(e.target.value)} className="w-full p-3 bg-blue-50/50 border border-blue-200 rounded-lg focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] outline-none transition-all" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Target Valid Matches</label>
-              <input type="number" value={importCount} onChange={(e) => setImportCount(Number(e.target.value))} min="1" max="50" className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg" />
+              <label className="block text-sm font-bold text-slate-600 mb-1">Target Valid Matches</label>
+              <input type="number" value={importCount} onChange={(e) => setImportCount(Number(e.target.value))} min="1" max="50" className="w-full p-3 bg-blue-50/50 border border-blue-200 rounded-lg focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] outline-none transition-all" />
             </div>
             <div className="flex items-end">
               <button 
                 onClick={handleImportFlexMatches} 
                 disabled={isImporting}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 text-white font-medium rounded-lg transition"
+                className="w-full py-3 bg-[#0984e3] hover:bg-blue-600 disabled:bg-slate-300 text-white font-bold rounded-lg transition-all shadow-md"
               >
                 {isImporting ? 'Processing...' : 'Fetch & Insert'}
               </button>
             </div>
           </div>
           {importMessage && (
-            <div className={`p-3 rounded font-medium ${importMessage.includes('❌') ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}>
+            <div className={`p-3 rounded-lg font-bold border ${importMessage.includes('❌') ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
               {importMessage}
             </div>
           )}
           
           {/* ADD THIS NEW BLOCK: Skipped Matches Log */}
           {skippedLogs.length > 0 && (
-            <div className="mt-4 border border-zinc-700 bg-zinc-950 rounded-lg overflow-hidden">
-              <div className="bg-zinc-800 p-3 border-b border-zinc-700 flex justify-between items-center">
-                <h3 className="font-bold text-yellow-400">Skipped Matches ({skippedLogs.length})</h3>
-                <span className="text-xs text-zinc-400">Missing Full Roster</span>
+            <div className="mt-4 border border-blue-200 bg-white rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-blue-50/80 p-3 border-b border-blue-100 flex justify-between items-center">
+                <h3 className="font-black text-slate-700">Skipped Matches ({skippedLogs.length})</h3>
+                <span className="text-xs font-bold text-slate-500">Missing Full Roster</span>
               </div>
               <div className="max-h-60 overflow-y-auto p-4 space-y-3">
                 {skippedLogs.map((log, idx) => (
-                  <div key={idx} className="text-sm border-b border-zinc-800 pb-2 last:border-0 last:pb-0">
-                    <div className="text-zinc-500 font-mono mb-1">{log.date}</div>
+                  <div key={idx} className="text-sm border-b border-blue-100 pb-2 last:border-0 last:pb-0">
+                    <div className="text-slate-500 font-mono font-bold mb-1">{log.date}</div>
                     <div className="flex flex-wrap gap-2">
                       {log.players.map((riotId, pIdx) => {
                         // Highlight players that DO exist in our DB in green, and strangers in red
                         const isRecognized = players.some(p => p.ign.toLowerCase() === riotId.toLowerCase());
                         return (
-                          <span key={pIdx} className={`px-2 py-0.5 rounded text-xs font-medium ${isRecognized ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+                          <span key={pIdx} className={`px-2 py-0.5 rounded text-xs font-bold border ${isRecognized ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-rose-50 border-rose-200 text-rose-600'}`}>
                             {riotId}
                           </span>
                         )
@@ -534,29 +534,29 @@ return (
 
       {/* IMPORT BY ID SECTION */}
       {activeTab === 'import-id' && (
-        <section className="bg-zinc-900 border border-zinc-700 p-6 rounded-xl">
-          <h2 className="text-2xl font-semibold mb-4 text-purple-400">Fetch Single Match by ID</h2>
+        <section className="bg-white border border-blue-100 p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+          <h2 className="text-2xl font-black mb-4 text-purple-600">Fetch Single Match by ID</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Target Match ID</label>
-              <input type="text" value={importMatchId} onChange={(e) => setImportMatchId(e.target.value)} placeholder="e.g. 1587489137" className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg" />
+              <label className="block text-sm font-bold text-slate-600 mb-1">Target Match ID</label>
+              <input type="text" value={importMatchId} onChange={(e) => setImportMatchId(e.target.value)} placeholder="e.g. 1587489137" className="w-full p-3 bg-blue-50/50 border border-blue-200 rounded-lg focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none transition-all" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Our Perspective (Riot ID)</label>
-              <input type="text" value={importMatchIdRiotId} onChange={(e) => setImportMatchIdRiotId(e.target.value)} className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg" />
+              <label className="block text-sm font-bold text-slate-600 mb-1">Our Perspective (Riot ID)</label>
+              <input type="text" value={importMatchIdRiotId} onChange={(e) => setImportMatchIdRiotId(e.target.value)} className="w-full p-3 bg-blue-50/50 border border-blue-200 rounded-lg focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none transition-all" />
             </div>
             <div className="flex items-end">
               <button 
                 onClick={handleImportById} 
                 disabled={isImporting}
-                className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-zinc-700 text-white font-medium rounded-lg transition"
+                className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 text-white font-bold rounded-lg transition-all shadow-md"
               >
                 {isImporting ? 'Fetching...' : 'Fetch & Pre-fill'}
               </button>
             </div>
           </div>
           {importMessage && (
-            <div className={`p-3 rounded font-medium ${importMessage.includes('❌') ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}>
+            <div className={`p-3 rounded-lg font-bold border ${importMessage.includes('❌') ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
               {importMessage}
             </div>
           )}
@@ -570,26 +570,26 @@ return (
           <div className="space-y-12">
             {/* Match Information */}
             <section>
-              <h2 className="text-2xl font-semibold mb-4 text-yellow-400">Match Information</h2>
+              <h2 className="text-2xl font-black mb-4 text-[#0f172a]">Match Information</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Date & Time</label>
+                  <label className="block text-sm font-bold text-slate-600 mb-1">Date & Time</label>
                   <input 
                     type="datetime-local" 
                     value={formData.date} 
                     onChange={(e) => updateFormData('date', e.target.value)} 
-                    className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg" 
+                    className="w-full p-3 bg-white border border-blue-200 rounded-lg outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all" 
                     required 
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Match Type</label>
+                  <label className="block text-sm font-bold text-slate-600 mb-1">Match Type</label>
                   <input 
                     type="text" 
                     value={formData.match_type} 
                     onChange={(e) => updateFormData('match_type', e.target.value.toLowerCase().replace(/\s+/g, '_'))} 
                     list="match-type-suggestions"
-                    className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg"
+                    className="w-full p-3 bg-white border border-blue-200 rounded-lg outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all"
                     placeholder="e.g. flex, tournament, clash"
                   />
                   <datalist id="match-type-suggestions">
@@ -601,31 +601,31 @@ return (
                   </datalist>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Our Side</label>
-                  <div className="flex gap-6">
-                    <label className="flex items-center gap-2">
-                      <input type="radio" name="our_side" value="Blue" checked={formData.our_side === 'Blue'} onChange={(e) => updateFormData('our_side', e.target.value as 'Blue' | 'Red')} />
+                  <label className="block text-sm font-bold text-slate-600 mb-1">Our Side</label>
+                  <div className="flex gap-6 font-medium text-slate-700">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="radio" name="our_side" value="Blue" checked={formData.our_side === 'Blue'} onChange={(e) => updateFormData('our_side', e.target.value as 'Blue' | 'Red')} className="accent-[#0984e3]" />
                       Blue
                     </label>
-                    <label className="flex items-center gap-2">
-                      <input type="radio" name="our_side" value="Red" checked={formData.our_side === 'Red'} onChange={(e) => updateFormData('our_side', e.target.value as 'Blue' | 'Red')} />
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="radio" name="our_side" value="Red" checked={formData.our_side === 'Red'} onChange={(e) => updateFormData('our_side', e.target.value as 'Blue' | 'Red')} className="accent-rose-500" />
                       Red
                     </label>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">We Won</label>
-                  <input type="checkbox" checked={formData.we_won} onChange={(e) => updateFormData('we_won', e.target.checked)} className="w-5 h-5" />
+                  <label className="block text-sm font-bold text-slate-600 mb-1">We Won</label>
+                  <input type="checkbox" checked={formData.we_won} onChange={(e) => updateFormData('we_won', e.target.checked)} className="w-5 h-5 accent-emerald-500 cursor-pointer rounded" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Duration</label>
+                  <label className="block text-sm font-bold text-slate-600 mb-1">Duration</label>
                   <div className="flex gap-3">
                     <div className="flex-1">
                       <input 
                         type="number" 
                         value={formData.duration_minutes || ''} 
                         onChange={(e) => updateFormData('duration_minutes', parseInt(e.target.value) || 0)} 
-                        className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg text-center" 
+                        className="w-full p-3 bg-white border border-blue-200 rounded-lg text-center outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all" 
                         min="0" 
                         placeholder="Minutes" 
                       />
@@ -635,7 +635,7 @@ return (
                         type="number" 
                         value={formData.duration_seconds || ''} 
                         onChange={(e) => updateFormData('duration_seconds', parseInt(e.target.value) || 0)} 
-                        className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg text-center" 
+                        className="w-full p-3 bg-white border border-blue-200 rounded-lg text-center outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all" 
                         min="0" 
                         max="59" 
                         placeholder="Seconds" 
@@ -644,23 +644,23 @@ return (
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Enemy Team Name</label>
-                  <input type="text" value={formData.enemy_team_name} onChange={(e) => updateFormData('enemy_team_name', e.target.value)} className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg" />
+                  <label className="block text-sm font-bold text-slate-600 mb-1">Enemy Team Name</label>
+                  <input type="text" value={formData.enemy_team_name} onChange={(e) => updateFormData('enemy_team_name', e.target.value)} className="w-full p-3 bg-white border border-blue-200 rounded-lg outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all" />
                 </div>
               </div>
               <div className="mt-4">
-                <label className="block text-sm font-medium mb-1">Notes</label>
-                <textarea value={formData.notes} onChange={(e) => updateFormData('notes', e.target.value)} className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg" rows={3} />
+                <label className="block text-sm font-bold text-slate-600 mb-1">Notes</label>
+                <textarea value={formData.notes} onChange={(e) => updateFormData('notes', e.target.value)} className="w-full p-3 bg-white border border-blue-200 rounded-lg outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all" rows={3} />
               </div>
             </section>
             
             {/* Bans Section with Icon Preview */}
-            <section>
-              <h2 className="text-2xl font-semibold mb-6 text-yellow-400">Bans</h2>
+            <section className="bg-white p-6 rounded-2xl border border-blue-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+              <h2 className="text-2xl font-black mb-6 text-[#0f172a]">Bans</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Our Bans */}
-                <div>
-                  <h3 className="text-lg font-medium mb-3 text-green-400">Our Bans</h3>
+                <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                  <h3 className="text-lg font-bold mb-3 text-emerald-600">Our Bans</h3>
                   <div className="grid grid-cols-5 gap-3">
                     {formData.our_bans.map((ban, index) => (
                       <div key={index} className="relative">
@@ -670,14 +670,14 @@ return (
                           value={ban} 
                           onChange={(e) => updateBans('our', index, e.target.value)} 
                           placeholder={`Ban ${index + 1}`} 
-                          className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg text-sm" 
+                          className="w-full px-2 py-3 bg-white border border-emerald-200 rounded-lg text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all font-medium text-slate-800 placeholder-slate-400" 
                         />
                         {getChampionIcon(ban) && (
                           <Image 
                             src={getChampionIcon(ban)!} 
                             alt={ban} 
                             width={24} height={24}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded pointer-events-none" 
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded pointer-events-none shadow-sm" 
                           />
                         )}
                       </div>
@@ -686,8 +686,8 @@ return (
                 </div>
 
                 {/* Enemy Bans */}
-                <div>
-                  <h3 className="text-lg font-medium mb-3 text-red-400">Enemy Bans</h3>
+                <div className="bg-rose-50/50 p-4 rounded-xl border border-rose-100">
+                  <h3 className="text-lg font-bold mb-3 text-rose-600">Enemy Bans</h3>
                   <div className="grid grid-cols-5 gap-3">
                     {formData.enemy_bans.map((ban, index) => (
                       <div key={index} className="relative">
@@ -697,14 +697,14 @@ return (
                           value={ban} 
                           onChange={(e) => updateBans('enemy', index, e.target.value)} 
                           placeholder={`Ban ${index + 1}`} 
-                          className="w-full p-3 bg-zinc-800 border border-zinc-700 rounded-lg text-sm" 
+                          className="w-full px-2 py-3 bg-white border border-rose-200 rounded-lg text-sm outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400 transition-all font-medium text-slate-800 placeholder-slate-400" 
                         />
                         {getChampionIcon(ban) && (
                           <Image 
                             src={getChampionIcon(ban)!} 
                             alt={ban} 
                             width={24} height={24}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded pointer-events-none" 
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded pointer-events-none shadow-sm" 
                           />
                         )}
                       </div>
@@ -716,32 +716,32 @@ return (
             
             {/* Player Performance */}
             <section>
-                <h2 className="text-3xl font-semibold mb-8 text-yellow-400">Player Performance</h2>
+                <h2 className="text-3xl font-black mb-8 text-[#0f172a]">Player Performance</h2>
 
                 {/* Our Team */}
                 <div className="mb-12">
-                  <h3 className="text-xl font-medium mb-4 text-green-400">Our Team</h3>
-                  <div className="overflow-hidden">
-                    <table className="w-full bg-zinc-900 border border-zinc-700 rounded-xl">
+                  <h3 className="text-xl font-bold mb-4 text-[#0984e3]">Our Team</h3>
+                  <div className="overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-xl border border-blue-200">
+                    <table className="w-full bg-white">
                       <thead>
-                        <tr className="border-b border-zinc-700 bg-zinc-800">
-                          <th className="p-3 text-left w-16">Role</th>
-                          <th className="p-3 text-left min-w-[120px]">Player</th>
-                          <th className="p-3 text-left min-w-[140px]">Champion</th>
-                          <th className="p-3 text-center w-12">K</th>
-                          <th className="p-3 text-center w-12">D</th>
-                          <th className="p-3 text-center w-12">A</th>
-                          <th className="p-3 text-center w-14">CS</th>
+                        <tr className="border-b border-blue-200 bg-blue-50">
+                          <th className="p-3 text-left w-16 text-slate-600">Role</th>
+                          <th className="p-3 text-left min-w-[120px] text-slate-600">Player</th>
+                          <th className="p-3 text-left min-w-[140px] text-slate-600">Champion</th>
+                          <th className="p-3 text-center w-12 text-slate-600">K</th>
+                          <th className="p-3 text-center w-12 text-slate-600">D</th>
+                          <th className="p-3 text-center w-12 text-slate-600">A</th>
+                          <th className="p-3 text-center w-14 text-slate-600">CS</th>
                         </tr>
                       </thead>
                       <tbody>
                         {formData.our_participants.map((p, index) => {
                           const selectedPlayer = players.find(pl => pl.id === p.player_id)
                           return (
-                            <tr key={index} className="border-b border-zinc-700 hover:bg-zinc-800">
-                              <td className="p-3 font-medium text-yellow-400 text-sm">{p.role}</td>
+                            <tr key={index} className="border-b border-blue-100 hover:bg-blue-50/50">
+                              <td className="p-3 font-bold text-[#f1c40f] text-sm">{p.role}</td>
                               <td className="p-3">
-                                <select value={p.player_id} onChange={(e) => updateOurParticipant(index, 'player_id', parseInt(e.target.value))} className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-sm">
+                                <select value={p.player_id} onChange={(e) => updateOurParticipant(index, 'player_id', parseInt(e.target.value))} className="w-full bg-white border border-blue-200 rounded px-2 py-1.5 text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3]">
                                   {players.map(player => (
                                     <option key={player.id} value={player.id}>
                                       {player.name} ({player.ign})
@@ -751,7 +751,7 @@ return (
                               </td>
                               <td className="p-3">
                                 <div className="flex items-center gap-2">
-                                  {p.champion && getChampionIcon(p.champion) && <Image key={p.champion} src={getChampionIcon(p.champion)!} alt="" width={24} height={24} className="w-6 h-6 rounded" />}
+                                  {p.champion && getChampionIcon(p.champion) && <Image key={p.champion} src={getChampionIcon(p.champion)!} alt="" width={24} height={24} className="w-6 h-6 rounded shadow-sm" />}
                                   <input list="all-champions" type="text" value={p.champion} onChange={(e) => updateOurParticipant(index, 'champion', e.target.value)} onKeyDown={(e) => {
                                     if (e.key === 'Tab') {
                                       const current = e.currentTarget.value.trim();
@@ -763,13 +763,13 @@ return (
                                         }
                                       }
                                     }
-                                  }} className="flex-1 bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-sm" placeholder="Champion" />
+                                  }} className="flex-1 bg-white border border-blue-200 rounded px-2 py-1.5 text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3]" placeholder="Champion" />
                                 </div>
                               </td>
-                              <td className="p-3"><input type="number" min="0" value={p.kills === 0 ? '' : p.kills} onChange={(e) => updateOurParticipant(index, 'kills', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-zinc-800 border border-zinc-600 rounded text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
-                              <td className="p-3"><input type="number" min="0" value={p.deaths === 0 ? '' : p.deaths} onChange={(e) => updateOurParticipant(index, 'deaths', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-zinc-800 border border-zinc-600 rounded text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
-                              <td className="p-3"><input type="number" min="0" value={p.assists === 0 ? '' : p.assists} onChange={(e) => updateOurParticipant(index, 'assists', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-zinc-800 border border-zinc-600 rounded text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
-                              <td className="p-3"><input type="number" min="0" value={p.cs === 0 ? '' : p.cs} onChange={(e) => updateOurParticipant(index, 'cs', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-zinc-800 border border-zinc-600 rounded text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                              <td className="p-3"><input type="number" min="0" value={p.kills === 0 ? '' : p.kills} onChange={(e) => updateOurParticipant(index, 'kills', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                              <td className="p-3"><input type="number" min="0" value={p.deaths === 0 ? '' : p.deaths} onChange={(e) => updateOurParticipant(index, 'deaths', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                              <td className="p-3"><input type="number" min="0" value={p.assists === 0 ? '' : p.assists} onChange={(e) => updateOurParticipant(index, 'assists', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                              <td className="p-3"><input type="number" min="0" value={p.cs === 0 ? '' : p.cs} onChange={(e) => updateOurParticipant(index, 'cs', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
                             </tr>
                           )
                         })}
@@ -780,26 +780,26 @@ return (
 
                 {/* Enemy Team */}
                 <div>
-                  <h3 className="text-xl font-medium mb-4 text-red-400">Enemy Team</h3>
-                  <div className="overflow-hidden">
-                    <table className="w-full bg-zinc-900 border border-zinc-700 rounded-xl">
+                  <h3 className="text-xl font-bold mb-4 text-rose-500">Enemy Team</h3>
+                  <div className="overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-xl border border-rose-200">
+                    <table className="w-full bg-white">
                       <thead>
-                        <tr className="border-b border-zinc-700 bg-zinc-800">
-                          <th className="p-3 text-left w-16">Role</th>
-                          <th className="p-3 text-left min-w-[140px]">Champion</th>
-                          <th className="p-3 text-center w-12">K</th>
-                          <th className="p-3 text-center w-12">D</th>
-                          <th className="p-3 text-center w-12">A</th>
-                          <th className="p-3 text-center w-14">CS</th>
+                        <tr className="border-b border-rose-200 bg-rose-50">
+                          <th className="p-3 text-left w-16 text-slate-600">Role</th>
+                          <th className="p-3 text-left min-w-[140px] text-slate-600">Champion</th>
+                          <th className="p-3 text-center w-12 text-slate-600">K</th>
+                          <th className="p-3 text-center w-12 text-slate-600">D</th>
+                          <th className="p-3 text-center w-12 text-slate-600">A</th>
+                          <th className="p-3 text-center w-14 text-slate-600">CS</th>
                         </tr>
                       </thead>
                       <tbody>
                         {formData.enemy_participants.map((p, index) => (
-                          <tr key={index} className="border-b border-zinc-700 hover:bg-zinc-800">
-                            <td className="p-3 font-medium text-yellow-400 text-sm">{p.role}</td>
+                          <tr key={index} className="border-b border-rose-100 hover:bg-rose-50/50">
+                            <td className="p-3 font-bold text-[#f1c40f] text-sm">{p.role}</td>
                             <td className="p-3">
                               <div className="flex items-center gap-2">
-                                {p.champion && getChampionIcon(p.champion) && <Image key={p.champion} src={getChampionIcon(p.champion)!} alt="" width={24} height={24} className="w-6 h-6 rounded" />}
+                                {p.champion && getChampionIcon(p.champion) && <Image key={p.champion} src={getChampionIcon(p.champion)!} alt="" width={24} height={24} className="w-6 h-6 rounded shadow-sm" />}
                                 <input list="all-champions" type="text" value={p.champion} onChange={(e) => updateEnemyParticipant(index, 'champion', e.target.value)} onKeyDown={(e) => {
                                   if (e.key === 'Tab') {
                                     const current = e.currentTarget.value.trim();
@@ -811,13 +811,13 @@ return (
                                       }
                                     }
                                   }
-                                }} className="flex-1 bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-sm" placeholder="Champion" />
+                                }} className="flex-1 bg-white border border-rose-200 rounded px-2 py-1.5 text-sm font-medium text-slate-700 outline-none focus:border-rose-400" placeholder="Champion" />
                               </div>
                             </td>
-                            <td className="p-3"><input type="number" min="0" value={p.kills === 0 ? '' : p.kills} onChange={(e) => updateEnemyParticipant(index, 'kills', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-zinc-800 border border-zinc-600 rounded text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
-                            <td className="p-3"><input type="number" min="0" value={p.deaths === 0 ? '' : p.deaths} onChange={(e) => updateEnemyParticipant(index, 'deaths', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-zinc-800 border border-zinc-600 rounded text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
-                            <td className="p-3"><input type="number" min="0" value={p.assists === 0 ? '' : p.assists} onChange={(e) => updateEnemyParticipant(index, 'assists', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-zinc-800 border border-zinc-600 rounded text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
-                            <td className="p-3"><input type="number" min="0" value={p.cs === 0 ? '' : p.cs} onChange={(e) => updateEnemyParticipant(index, 'cs', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-zinc-800 border border-zinc-600 rounded text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                            <td className="p-3"><input type="number" min="0" value={p.kills === 0 ? '' : p.kills} onChange={(e) => updateEnemyParticipant(index, 'kills', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-rose-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-rose-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                            <td className="p-3"><input type="number" min="0" value={p.deaths === 0 ? '' : p.deaths} onChange={(e) => updateEnemyParticipant(index, 'deaths', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-rose-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-rose-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                            <td className="p-3"><input type="number" min="0" value={p.assists === 0 ? '' : p.assists} onChange={(e) => updateEnemyParticipant(index, 'assists', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-rose-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-rose-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                            <td className="p-3"><input type="number" min="0" value={p.cs === 0 ? '' : p.cs} onChange={(e) => updateEnemyParticipant(index, 'cs', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-rose-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-rose-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
                           </tr>
                         ))}
                       </tbody>
@@ -834,7 +834,7 @@ return (
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-10 py-4 bg-yellow-400 hover:bg-yellow-500 disabled:bg-zinc-600 text-black font-bold text-lg rounded-xl transition"
+            className="w-full mt-10 py-4 bg-[#f1c40f] hover:bg-[#f39c12] disabled:bg-slate-300 disabled:text-slate-500 text-slate-900 font-bold text-lg rounded-xl shadow-md transition-all"
           >
             {loading ? 'Adding Match...' : 'Add Match to Database'}
           </button>

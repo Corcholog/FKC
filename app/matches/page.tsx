@@ -46,46 +46,74 @@ type Match = {
 const MATCHES_PER_PAGE = 10
 
 export default function MatchesPage() {
-  const [matches, setMatches] = useState<Match[]>([])
-  const [totalMatches, setTotalMatches] = useState(0)
+  const [allMatches, setAllMatches] = useState<Match[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  
+  // Filters
+  const [typeFilter, setTypeFilter] = useState<string>('all')
+  const [resultFilter, setResultFilter] = useState<string>('all')
+
   const supabase = createClient()
 
   useEffect(() => {
-    const fetchMatches = async () => {
+    const fetchAllMatches = async () => {
       setLoading(true)
       
-      // Get total count
-      const { count: totalCount } = await supabase
-        .from('matches')
-        .select('*', { count: 'exact', head: true })
-
-      setTotalMatches(totalCount || 0)
-
-      // Get paginated matches
-      const offset = (currentPage - 1) * MATCHES_PER_PAGE
-      const { data, error } = await supabase
-        .from('matches')
-        .select(`
+      const { data, error } = await supabase.from('matches').select(`
           *,
           ally_participants(*),
           enemy_participants(*),
           match_bans(*)
-        `)
-        .order('date', { ascending: false })
-        .range(offset, offset + MATCHES_PER_PAGE - 1)
+      `).order('date', { ascending: false })
 
       if (!error && data) {
-        setMatches(data as Match[])
+        setAllMatches(data as Match[])
       }
       setLoading(false)
     }
 
-    fetchMatches()
-  }, [currentPage])
+    fetchAllMatches()
+  }, [])
 
-  const totalPages = Math.ceil(totalMatches / MATCHES_PER_PAGE)
+  // In-memory filtering
+  const filteredMatches = allMatches.filter(match => {
+    let typeMatches = true
+    if (typeFilter === 'competitive') {
+      const exclude = ['flex', 'scrim_bo1', 'scrim_bo3', 'scrim', 'clash']
+      typeMatches = !exclude.includes(match.match_type)
+    } else if (typeFilter === 'scrims') {
+      typeMatches = ['scrim_bo1', 'scrim_bo3', 'scrim'].includes(match.match_type)
+    } else if (typeFilter !== 'all') {
+      typeMatches = match.match_type === typeFilter
+    }
+
+    let resultMatches = true
+    if (resultFilter === 'victory') {
+      resultMatches = match.we_won === true
+    } else if (resultFilter === 'defeat') {
+      resultMatches = match.we_won === false
+    }
+
+    return typeMatches && resultMatches
+  })
+
+  // Pagination logic
+  const totalMatches = filteredMatches.length
+  const totalPages = Math.max(1, Math.ceil(totalMatches / MATCHES_PER_PAGE))
+  const offset = (currentPage - 1) * MATCHES_PER_PAGE
+  const displayedMatches = filteredMatches.slice(offset, offset + MATCHES_PER_PAGE)
+
+  // Reset pagination when using filters
+  const handleTypeFilter = (val: string) => {
+    setTypeFilter(val)
+    setCurrentPage(1)
+  }
+
+  const handleResultFilter = (val: string) => {
+    setResultFilter(val)
+    setCurrentPage(1)
+  }
 
 // Full champion list (April 2026)
 const allChampions = [
@@ -137,15 +165,66 @@ const allChampions = [
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-6 py-16">
-        <h1 className="text-5xl font-bold mb-2 text-yellow-400">Match History</h1>
-        <p className="text-zinc-400 mb-10">Total matches: {totalMatches}</p>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
+          <div>
+            <h1 className="text-5xl font-bold mb-2 text-yellow-400">Match History</h1>
+            <p className="text-zinc-400">Total matches: {totalMatches}</p>
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-col gap-3">
+            {/* Match Type */}
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: 'all', label: 'All Matches' },
+                { id: 'competitive', label: 'Competitive' },
+                { id: 'scrims', label: 'Scrims' },
+                { id: 'flex', label: 'Flex' },
+                { id: 'clash', label: 'Clash' }
+              ].map(f => (
+                <button 
+                  key={f.id}
+                  onClick={() => handleTypeFilter(f.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                    typeFilter === f.id 
+                      ? 'bg-yellow-400 text-black border-yellow-400' 
+                      : 'bg-zinc-900 text-zinc-400 border-zinc-700 hover:border-yellow-400 hover:text-yellow-400'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            
+            {/* Result */}
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: 'all', label: 'Any Result', colorClass: 'hover:border-zinc-300 hover:text-zinc-300', activeClass: 'bg-zinc-300 text-black border-zinc-300' },
+                { id: 'victory', label: 'Victories', colorClass: 'hover:border-green-400 hover:text-green-400', activeClass: 'bg-green-500 text-black border-green-500' },
+                { id: 'defeat', label: 'Defeats', colorClass: 'hover:border-red-400 hover:text-red-400', activeClass: 'bg-red-500 text-black border-red-500' }
+              ].map(f => (
+                <button 
+                  key={f.id}
+                  onClick={() => handleResultFilter(f.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                    resultFilter === f.id 
+                      ? f.activeClass
+                      : `bg-zinc-900 text-zinc-400 border-zinc-700 ${f.colorClass}`
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
         {/* Matches List */}
         <div className="grid gap-6">
           {loading ? (
             <div className="text-center py-12 text-zinc-400">Loading matches...</div>
-          ) : matches.length > 0 ? (
-            matches.map((match) => {
+          ) : displayedMatches.length > 0 ? (
+            displayedMatches.map((match) => {
               const allyPicks = getPicksByRole(match.ally_participants)
               const enemyPicks = getPicksByRole(match.enemy_participants)
 

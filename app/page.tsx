@@ -186,8 +186,9 @@ export default async function Home() {
   }
 
   const uniqueMatchTypes = Array.from(new Set(allMatches.map((m: any) => m.match_type))).filter(Boolean) as string[]
-  const standardMatchTypes = uniqueMatchTypes.filter(t => ['flex', 'scrim_bo1', 'scrim_bo3', 'scrim'].includes(t))
-  const competitiveMatchTypes = uniqueMatchTypes.filter(t => !['flex', 'scrim_bo1', 'scrim_bo3', 'scrim'].includes(t))
+  const desiredStandardOrder = ['flex', 'clash', 'scrim_bo1', 'scrim_bo3', 'scrim']
+  const standardMatchTypes = desiredStandardOrder.filter(t => uniqueMatchTypes.includes(t))
+  const competitiveMatchTypes = uniqueMatchTypes.filter(t => !desiredStandardOrder.includes(t))
 
   const getPicksByRole = (participants: any[] = []) => {
     return participants.reduce((acc: any, p: any) => {

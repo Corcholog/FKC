@@ -44,6 +44,7 @@ Create a `.env.local` file with:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+RIOT_API_KEY=your_riot_api_key
 ```
 
 4. Run the development server:
@@ -61,6 +62,7 @@ Open [http://localhost:3000](http://localhost:3000) to view the application.
 2. Add environment variables in Vercel dashboard:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `RIOT_API_KEY`
 3. Deploy
 
 The application is optimized for Vercel deployment with Next.js.
@@ -74,8 +76,7 @@ The application is optimized for Vercel deployment with Next.js.
 
 ## Security
 
-- Authentication required for all pages
-- Admin functions protected by user roles
+- Admin functions protected by user roles (authentication required)
 - Secure API routes with Supabase RLS policies
 
 ## Contributing

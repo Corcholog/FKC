@@ -215,7 +215,13 @@ export default async function Home() {
       {/* Hero Banner */}
       <div className="relative h-[700px] flex items-center justify-center overflow-hidden bg-gradient-to-b from-zinc-900 to-black">
         <Image src="/hero_banner.jpeg" alt="Hero Banner" fill className="object-cover opacity-30" priority />
-        <div className="relative text-center z-10 px-6 mt-10">
+        <div className="relative text-center z-10 px-6 mt-10 flex flex-col items-center">
+          <Image 
+            src="/icons/fkc_icon.jpg" 
+            alt="FKC Logo" 
+            width={120} height={120} 
+            className="w-32 h-32 mb-6 rounded-3xl border-2 border-yellow-400/80 shadow-[0_0_30px_rgba(250,204,21,0.4)] object-cover hover:scale-105 transition duration-500" 
+          />
           <h1 className="text-7xl font-bold tracking-wider text-yellow-400 mb-4">FAKE CLAN</h1>
           <p className="text-2xl text-zinc-400">"Que ganas de mejorar la puta madre" - Joshy</p>
           <div className="mt-10 mx-auto w-full max-w-4xl">

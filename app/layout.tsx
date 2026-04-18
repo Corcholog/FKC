@@ -18,6 +18,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Fake Clan",
   description: "Fake Clan team management app with statistics and match history",
+  icons: {
+    icon: '/icons/fkc_icon.jpg',
+  },
 };
 
 export default function RootLayout({

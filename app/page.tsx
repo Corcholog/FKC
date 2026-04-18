@@ -186,6 +186,8 @@ export default async function Home() {
   }
 
   const uniqueMatchTypes = Array.from(new Set(allMatches.map((m: any) => m.match_type))).filter(Boolean) as string[]
+  const standardMatchTypes = uniqueMatchTypes.filter(t => ['flex', 'scrim_bo1', 'scrim_bo3', 'scrim'].includes(t))
+  const competitiveMatchTypes = uniqueMatchTypes.filter(t => !['flex', 'scrim_bo1', 'scrim_bo3', 'scrim'].includes(t))
 
   const getPicksByRole = (participants: any[] = []) => {
     return participants.reduce((acc: any, p: any) => {
@@ -301,21 +303,34 @@ export default async function Home() {
       <div className="bg-zinc-900 py-16 border-t border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-6">
           <h2 className="text-4xl font-bold mb-10 text-center">Team Performance</h2>
-          <div className="flex flex-wrap justify-center gap-6 text-center">
-            {uniqueMatchTypes.map(type => (
-              <div key={type} className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg flex flex-col justify-center">
-                <div className="text-5xl font-bold text-green-400">{calculateWinrate(type)}</div>
-                <div className="mt-2 text-zinc-400 font-bold text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-wrap justify-center gap-6 text-center">
+              {standardMatchTypes.map(type => (
+                <div key={type} className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg flex flex-col justify-center">
+                  <div className="text-5xl font-bold text-green-400">{calculateWinrate(type)}</div>
+                  <div className="mt-2 text-zinc-400 font-bold text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
+                </div>
+              ))}
+              <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-yellow-400/30 flex flex-col justify-center">
+                <div className="text-5xl font-bold text-yellow-400">{calculateWinrate()}</div>
+                <div className="mt-2 text-yellow-400/80 font-bold tracking-widest text-xs uppercase">OVERALL WR</div>
               </div>
-            ))}
-            <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-purple-500/30 flex flex-col justify-center">
-              <div className="text-5xl font-bold text-purple-400">{calculateWinrate(['flex', 'scrim_bo1'], true)}</div>
-              <div className="mt-2 text-purple-400/80 font-bold tracking-widest text-xs uppercase">COMPETITIVE WR</div>
             </div>
-            <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-yellow-400/30 flex flex-col justify-center">
-              <div className="text-5xl font-bold text-yellow-400">{calculateWinrate()}</div>
-              <div className="mt-2 text-yellow-400/80 font-bold tracking-widest text-xs uppercase">OVERALL WR</div>
-            </div>
+
+            {competitiveMatchTypes.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-6 text-center pt-2">
+                <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-purple-500/30 flex flex-col justify-center">
+                  <div className="text-5xl font-bold text-purple-400">{calculateWinrate(['flex', 'scrim_bo1', 'scrim_bo3', 'scrim'], true)}</div>
+                  <div className="mt-2 text-purple-400/80 font-bold tracking-widest text-xs uppercase">COMPETITIVE WR</div>
+                </div>
+                {competitiveMatchTypes.map(type => (
+                  <div key={type} className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg flex flex-col justify-center">
+                    <div className="text-5xl font-bold text-green-400">{calculateWinrate(type)}</div>
+                    <div className="mt-2 text-zinc-400 font-bold text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

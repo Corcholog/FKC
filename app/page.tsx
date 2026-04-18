@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Image from 'next/image'
 import Link from 'next/link'
 import Navbar from '@/app/components/Navbar'
+import DurationChart from '@/app/components/DurationChart'
 
 type Player = {
   id: number
@@ -75,7 +76,7 @@ export default async function Home() {
   // Calculate stats for the Roster cards
   const rosterStats = playerList.map(player => {
     const playerMatches = allPerformances.filter(p => p.player_id === player.id)
-    
+
     let wins = 0
     let kills = 0
     let deaths = 0
@@ -106,8 +107,8 @@ export default async function Home() {
     const topChampions = Object.entries(champStats)
       .map(([name, stats]) => {
         const champWinrate = (stats.wins / stats.games) * 100
-        const champKda = stats.deaths === 0 
-          ? (stats.kills + stats.assists) 
+        const champKda = stats.deaths === 0
+          ? (stats.kills + stats.assists)
           : (stats.kills + stats.assists) / stats.deaths
 
         return {
@@ -118,7 +119,7 @@ export default async function Home() {
         }
       })
       .sort((a, b) => b.games - a.games)
-      .slice(0, 5) 
+      .slice(0, 5)
 
     return {
       ...player,
@@ -161,39 +162,25 @@ export default async function Home() {
     const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
     const match = allChampions.find(c => normalize(c) === normalize(name))
     if (!match) return null
-    const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath","Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz", "Wukong": "MonkeyKing" }
+    const overrides: Record<string, string> = { "Bel'Veth": "Belveth", "Cho'Gath": "Chogath", "Kai'Sa": "Kaisa", "Kha'Zix": "Khazix", "K'Sante": "KSante", "Rek'Sai": "RekSai", "Vel'Koz": "Velkoz", "Wukong": "MonkeyKing" }
     const key = overrides[match] ?? match.replace(/[^a-zA-Z0-9]/g, '')
     return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
   }
 
   const calculateWinrate = (matchType?: string | string[], isExclude: boolean = false): string => {
     if (!allMatches.length) return '0%'
-    
+
     let filtered = allMatches;
     if (matchType) {
       if (Array.isArray(matchType)) {
-        filtered = isExclude 
+        filtered = isExclude
           ? allMatches.filter((m: any) => !matchType.includes(m.match_type))
           : allMatches.filter((m: any) => matchType.includes(m.match_type))
       } else {
         filtered = allMatches.filter((m: any) => m.match_type === matchType)
       }
     }
-    
-    if (!filtered.length) return '0%'
-    const wins = filtered.filter((m: any) => m.we_won).length
-    return `${Math.round((wins / filtered.length) * 100)}%`
-  }
 
-  const calculateDurationWinrate = (condition: 'under30' | 'over30'): string => {
-    if (!allMatches.length) return '0%'
-    
-    const filtered = allMatches.filter((m: any) => {
-      if (typeof m.duration_minutes !== 'number') return false;
-      if (condition === 'under30') return m.duration_minutes < 30;
-      return m.duration_minutes >= 30;
-    })
-    
     if (!filtered.length) return '0%'
     const wins = filtered.filter((m: any) => m.we_won).length
     return `${Math.round((wins / filtered.length) * 100)}%`
@@ -203,6 +190,10 @@ export default async function Home() {
   const desiredStandardOrder = ['flex', 'clash', 'scrim_bo1', 'scrim_bo3', 'scrim']
   const standardMatchTypes = desiredStandardOrder.filter(t => uniqueMatchTypes.includes(t))
   const competitiveMatchTypes = uniqueMatchTypes.filter(t => !desiredStandardOrder.includes(t))
+
+  // Create an array specifically for competitive matches using the same filter logic as the WR box
+  const excludeTypes = ['flex', 'scrim_bo1', 'scrim_bo3', 'scrim', 'clash'];
+  const competitiveMatches = allMatches.filter((m: any) => !excludeTypes.includes(m.match_type));
 
   const getPicksByRole = (participants: any[] = []) => {
     return participants.reduce((acc: any, p: any) => {
@@ -217,7 +208,7 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pb-20 pt-16">
-      
+
       {/* Navigation Bar */}
       <Navbar />
 
@@ -239,7 +230,7 @@ export default async function Home() {
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
           {rosterStats.length > 0 ? rosterStats.map((stat: any) => (
             <div key={stat.id} className="relative h-[720px] bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden hover:border-yellow-400 transition group flex flex-col justify-end">
-              
+
               {/* Background Image: Loads from public/players/name.jpg */}
               <div className="absolute inset-0 z-0 bg-zinc-800 overflow-hidden">
                 <img
@@ -281,8 +272,8 @@ export default async function Home() {
                     <div className="space-y-2">
                       {stat.topChampions.map((champ: any, idx: number) => (
                         <div key={idx} className="flex items-center gap-3 bg-zinc-900/60 p-2 rounded-lg border border-zinc-700/50">
-                          <Image 
-                            src={getChampionIcon(champ.name) || '/placeholder-icon.png'} 
+                          <Image
+                            src={getChampionIcon(champ.name) || '/placeholder-icon.png'}
                             alt={champ.name}
                             width={28} height={28}
                             className="w-7 h-7 rounded border border-zinc-700"
@@ -290,10 +281,10 @@ export default async function Home() {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-zinc-200 truncate leading-none mb-1">{champ.name}</p>
                             <p className="text-[10px] text-zinc-400 leading-none">
-                              {champ.games} G • 
+                              {champ.games} G •
                               <span className={`font-bold ml-1 ${getColorWR(champ.winrate)}`}>
                                 {champ.winrate.toFixed(0)}%
-                              </span> • 
+                              </span> •
                               <span className={`font-bold ml-1 ${getColorKDA(champ.kda)}`}>
                                 {champ.kda.toFixed(2)} KDA
                               </span>
@@ -335,7 +326,7 @@ export default async function Home() {
             {competitiveMatchTypes.length > 0 && (
               <div className="flex flex-wrap justify-center gap-6 text-center pt-2">
                 <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-purple-500/30 flex flex-col justify-center">
-                  <div className="text-5xl font-bold text-purple-400">{calculateWinrate(['flex', 'scrim_bo1', 'scrim_bo3', 'scrim'], true)}</div>
+                  <div className="text-5xl font-bold text-purple-400">{calculateWinrate(excludeTypes, true)}</div>
                   <div className="mt-2 text-purple-400/80 font-bold tracking-widest text-xs uppercase">COMPETITIVE WR</div>
                 </div>
                 {competitiveMatchTypes.map(type => (
@@ -348,15 +339,9 @@ export default async function Home() {
             )}
 
             {/* Duration Based Winrates (3rd Row) */}
-            <div className="flex flex-wrap justify-center gap-6 text-center pt-2">
-              <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-cyan-500/30 flex flex-col justify-center">
-                <div className="text-5xl font-bold text-cyan-400">{calculateDurationWinrate('under30')}</div>
-                <div className="mt-2 text-cyan-400/80 font-bold tracking-widest text-xs uppercase">&lt; 30 MIN WR</div>
-              </div>
-              <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-orange-500/30 flex flex-col justify-center">
-                <div className="text-5xl font-bold text-orange-400">{calculateDurationWinrate('over30')}</div>
-                <div className="mt-2 text-orange-400/80 font-bold tracking-widest text-xs uppercase">&ge; 30 MIN WR</div>
-              </div>
+            <div className="flex flex-wrap justify-center gap-6 pt-8 mt-2">
+              <DurationChart title="Overall Winrate by Duration" matches={allMatches} />
+              <DurationChart title="Competitive Winrate by Duration" matches={competitiveMatches} />
             </div>
           </div>
         </div>
@@ -399,15 +384,14 @@ export default async function Home() {
               <a
                 key={match.id}
                 {...linkProps}
-                className={`block relative rounded-2xl border-2 overflow-hidden shadow-lg ${
-                  match.we_won 
-                    ? `bg-gradient-to-r from-green-950/40 to-zinc-900 border-green-700/50 ${hasLink ? 'hover:border-green-500 hover:-translate-y-1' : ''}`
-                    : `bg-gradient-to-r from-red-950/40 to-zinc-900 border-red-700/50 ${hasLink ? 'hover:border-red-500 hover:-translate-y-1' : ''}`
-                } transition-all duration-300 ${hasLink ? 'cursor-pointer shadow-xl' : 'cursor-default'}`}
+                className={`block relative rounded-2xl border-2 overflow-hidden shadow-lg ${match.we_won
+                  ? `bg-gradient-to-r from-green-950/40 to-zinc-900 border-green-700/50 ${hasLink ? 'hover:border-green-500 hover:-translate-y-1' : ''}`
+                  : `bg-gradient-to-r from-red-950/40 to-zinc-900 border-red-700/50 ${hasLink ? 'hover:border-red-500 hover:-translate-y-1' : ''}`
+                  } transition-all duration-300 ${hasLink ? 'cursor-pointer shadow-xl' : 'cursor-default'}`}
               >
                 <div className="p-6">
                   <div className="grid grid-cols-2 gap-8">
-                    
+
                     {/* LEFT COLUMN: ALWAYS BLUE */}
                     <div>
                       <div className="text-sm font-bold text-blue-400 mb-3 tracking-wider">
@@ -416,7 +400,7 @@ export default async function Home() {
 
                       {/* Blue Picks */}
                       <div className="flex justify-center gap-3 mb-6">
-                        {['top','jungle','mid','adc','support'].map(role => {
+                        {['top', 'jungle', 'mid', 'adc', 'support'].map(role => {
                           const champ = bluePicks[role] // Pulls from bluePicks
                           const icon = getChampionIcon(champ)
                           return icon ? (
@@ -436,7 +420,7 @@ export default async function Home() {
                               <Image key={i} src={icon} alt={ban} width={32} height={32} className="w-8 h-8 rounded-lg border border-zinc-600/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
                             ) : (
                               <div key={i} className="w-8 h-8 rounded-lg border border-zinc-600 bg-zinc-800 flex items-center justify-center text-[10px] text-zinc-400">
-                                {ban?.substring(0,2) || '?'}
+                                {ban?.substring(0, 2) || '?'}
                               </div>
                             )
                           })}
@@ -452,7 +436,7 @@ export default async function Home() {
 
                       {/* Red Picks */}
                       <div className="flex justify-center gap-3 mb-6">
-                        {['top','jungle','mid','adc','support'].map(role => {
+                        {['top', 'jungle', 'mid', 'adc', 'support'].map(role => {
                           const champ = redPicks[role] // Pulls from redPicks
                           const icon = getChampionIcon(champ)
                           return icon ? (
@@ -472,7 +456,7 @@ export default async function Home() {
                               <Image key={i} src={icon} alt={ban} width={32} height={32} className="w-8 h-8 rounded-lg border border-zinc-600/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition" />
                             ) : (
                               <div key={i} className="w-8 h-8 rounded-lg border border-zinc-600 bg-zinc-800 flex items-center justify-center text-[10px] text-zinc-400">
-                                {ban?.substring(0,2) || '?'}
+                                {ban?.substring(0, 2) || '?'}
                               </div>
                             )
                           })}
@@ -485,8 +469,8 @@ export default async function Home() {
                 {/* Footer */}
                 <div className="bg-zinc-950/50 border-t border-zinc-800/50 px-6 py-4 flex justify-between items-center text-sm">
                   <div className="flex-1 text-left text-zinc-400 font-medium truncate">
-                    {new Date(match.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} 
-                    <span className="mx-2 text-zinc-600">|</span> 
+                    {new Date(match.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    <span className="mx-2 text-zinc-600">|</span>
                     <span className="text-zinc-300">{match.match_type?.replace('_', ' ').toUpperCase()}</span>
                   </div>
                   <div className="flex-1 flex justify-center">

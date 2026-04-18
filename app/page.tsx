@@ -166,11 +166,20 @@ export default async function Home() {
     return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
   }
 
-  const calculateWinrate = (matchType?: string): string => {
+  const calculateWinrate = (matchType?: string | string[], isExclude: boolean = false): string => {
     if (!allMatches.length) return '0%'
-    const filtered = matchType 
-      ? allMatches.filter((m: any) => m.match_type === matchType)
-      : allMatches
+    
+    let filtered = allMatches;
+    if (matchType) {
+      if (Array.isArray(matchType)) {
+        filtered = isExclude 
+          ? allMatches.filter((m: any) => !matchType.includes(m.match_type))
+          : allMatches.filter((m: any) => matchType.includes(m.match_type))
+      } else {
+        filtered = allMatches.filter((m: any) => m.match_type === matchType)
+      }
+    }
+    
     if (!filtered.length) return '0%'
     const wins = filtered.filter((m: any) => m.we_won).length
     return `${Math.round((wins / filtered.length) * 100)}%`
@@ -299,6 +308,10 @@ export default async function Home() {
                 <div className="mt-2 text-zinc-400 font-bold text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
               </div>
             ))}
+            <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-purple-500/30 flex flex-col justify-center">
+              <div className="text-5xl font-bold text-purple-400">{calculateWinrate(['flex', 'scrim_bo1'], true)}</div>
+              <div className="mt-2 text-purple-400/80 font-bold tracking-widest text-xs uppercase">COMPETITIVE WR</div>
+            </div>
             <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-yellow-400/30 flex flex-col justify-center">
               <div className="text-5xl font-bold text-yellow-400">{calculateWinrate()}</div>
               <div className="mt-2 text-yellow-400/80 font-bold tracking-widest text-xs uppercase">OVERALL WR</div>

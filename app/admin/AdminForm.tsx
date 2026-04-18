@@ -21,6 +21,7 @@ type FormData = {
   duration_seconds: number
   enemy_team_name: string
   notes: string
+  matchId?: string
   our_bans: string[]
   enemy_bans: string[]
   our_participants: {
@@ -146,6 +147,7 @@ export default function AdminForm({ players }: { players: Player[] }) {
       newFormData.duration_seconds = m.duration_seconds || 0
       newFormData.enemy_team_name = '' 
       newFormData.notes = `Imported from Match ID: ${m.matchId}`
+      newFormData.matchId = m.matchId || importMatchId.trim()
       
       newFormData.our_bans = [...(m.our_bans || []), '', '', '', '', ''].slice(0, 5)
       newFormData.enemy_bans = [...(m.enemy_bans || []), '', '', '', '', ''].slice(0, 5)

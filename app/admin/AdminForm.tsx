@@ -32,6 +32,9 @@ type FormData = {
     deaths: number
     assists: number
     cs: number
+    vision_score: number
+    damage_dealt: number
+    gold_earned: number
   }[]
   enemy_participants: {
     champion: string
@@ -108,6 +111,9 @@ export default function AdminForm({ players }: { players: Player[] }) {
         deaths: 0,
         assists: 0,
         cs: 0,
+        vision_score: 0,
+        damage_dealt: 0,
+        gold_earned: 0,
       }
     }),
     enemy_participants: roles.map(role => ({
@@ -158,7 +164,8 @@ export default function AdminForm({ players }: { players: Player[] }) {
           if (i < 5) {
             newFormData.our_participants[i] = {
               ...newFormData.our_participants[i],
-              champion: p.champion, kills: p.kills, deaths: p.deaths, assists: p.assists, cs: p.cs
+              champion: p.champion, kills: p.kills, deaths: p.deaths, assists: p.assists, cs: p.cs,
+              vision_score: p.vision_score || 0, damage_dealt: p.damage_dealt || 0, gold_earned: p.gold_earned || 0
             }
           }
         })
@@ -267,6 +274,11 @@ export default function AdminForm({ players }: { players: Player[] }) {
           const dbPlayer = players.find(player => player.puuid === p.puuid);
           dbPlayerId = dbPlayer?.id || 0;
         }
+        let score = (p.kills * 3) + (p.assists * 2) - (p.deaths * 2) + ((p.damage_dealt || 0) / 1000) + ((p.gold_earned || 0) / 1000);
+        if (p.role === 'Support') {
+          score += (p.vision_score || 0) * 0.5;
+        }
+
         return {
           match_id: matchId,
           player_id: dbPlayerId,
@@ -276,6 +288,10 @@ export default function AdminForm({ players }: { players: Player[] }) {
           deaths: p.deaths,
           assists: p.assists,
           cs: p.cs,
+          vision_score: p.vision_score || 0,
+          damage_dealt: p.damage_dealt || 0,
+          gold_earned: p.gold_earned || 0,
+          score: Number(score.toFixed(2))
         }
       })
       
@@ -417,24 +433,43 @@ return (
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-4 mb-8 border-b border-zinc-800 pb-4">
+      <div className="flex justify-between items-center mb-8 border-b border-zinc-800 pb-4">
+        <div className="flex gap-4">
+          <button 
+            onClick={() => setActiveTab('auto')}
+            className={`px-6 py-3 rounded-lg font-medium transition ${activeTab === 'auto' ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+          >
+            Auto Import (Flex)
+          </button>
+          <button 
+            onClick={() => setActiveTab('import-id')}
+            className={`px-6 py-3 rounded-lg font-medium transition ${activeTab === 'import-id' ? 'bg-purple-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+          >
+            Import by ID
+          </button>
+          <button 
+            onClick={() => setActiveTab('manual')}
+            className={`px-6 py-3 rounded-lg font-medium transition ${activeTab === 'manual' ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+          >
+            Manual Input
+          </button>
+        </div>
         <button 
-          onClick={() => setActiveTab('auto')}
-          className={`px-6 py-3 rounded-lg font-medium transition ${activeTab === 'auto' ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+          onClick={async () => {
+            if (!confirm('Recalculate all missing scores? This may take ~1 minute to complete.')) return;
+            setLoading(true);
+            try {
+              const res = await fetch('/api/matches/recalculate-scores', { method: 'POST', body: JSON.stringify({force: false}) });
+              const result = await res.json();
+              alert(result.success ? `Done! ${result.message}` : `Error: ${result.error}`);
+            } finally {
+              setLoading(false);
+            }
+          }}
+          disabled={loading}
+          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-emerald-50 text-sm font-semibold rounded-lg transition"
         >
-          Auto Import (Flex)
-        </button>
-        <button 
-          onClick={() => setActiveTab('import-id')}
-          className={`px-6 py-3 rounded-lg font-medium transition ${activeTab === 'import-id' ? 'bg-purple-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-        >
-          Import by ID
-        </button>
-        <button 
-          onClick={() => setActiveTab('manual')}
-          className={`px-6 py-3 rounded-lg font-medium transition ${activeTab === 'manual' ? 'bg-yellow-500 text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-        >
-          Manual Input
+          {loading ? 'Processing...' : 'Recalculate Database Scores'}
         </button>
       </div>
 

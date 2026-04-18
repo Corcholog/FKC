@@ -67,7 +67,10 @@ export async function POST(request: NextRequest) {
       kills: p.kills,
       deaths: p.deaths,
       assists: p.assists,
-      cs: p.totalMinionsKilled + p.neutralMinionsKilled
+      cs: p.totalMinionsKilled + p.neutralMinionsKilled,
+      vision_score: p.visionScore || 0,
+      damage_dealt: p.totalDamageDealtToChampions || 0,
+      gold_earned: p.goldEarned || 0
     });
     
     const our_participants = matchData.info.participants.filter((p: any) => p.teamId === ourTeamId).map(mapParticipant);

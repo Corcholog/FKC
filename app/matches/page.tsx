@@ -24,6 +24,7 @@ type Match = {
     deaths: number
     assists: number
     cs: number
+    score?: number
   }[]
   enemy_participants: {
     id: number
@@ -139,7 +140,7 @@ const allChampions = [
 
   const getPicksByRole = (participants: any[] = []) => {
     return participants.reduce((acc: any, p: any) => {
-      if (p.role) acc[p.role.toLowerCase()] = p.champion
+      if (p.role) acc[p.role.toLowerCase()] = p
       return acc
     }, {})
   }
@@ -225,6 +226,19 @@ const allChampions = [
             <div className="text-center py-12 text-zinc-400">Loading matches...</div>
           ) : displayedMatches.length > 0 ? (
             displayedMatches.map((match) => {
+              // Identify MVP and INT MVP for our team ONLY
+              let mvpId: number | null = null;
+              let intId: number | null = null;
+              
+              const scoredAllies = (match.ally_participants || []).filter(p => typeof p.score === 'number' && p.score !== null && p.score !== 0);
+              
+              if (scoredAllies.length > 0) {
+                 const mvpPlayer = [...scoredAllies].reduce((prev, current) => (prev.score! > current.score!) ? prev : current);
+                 const intPlayer = [...scoredAllies].reduce((prev, current) => (prev.score! < current.score!) ? prev : current);
+                 mvpId = mvpPlayer.id;
+                 intId = intPlayer.id;
+              }
+
               const allyPicks = getPicksByRole(match.ally_participants)
               const enemyPicks = getPicksByRole(match.enemy_participants)
 
@@ -269,12 +283,26 @@ const allChampions = [
                         {/* Blue Picks */}
                         <div className="flex justify-center gap-3 mb-6">
                           {['top','jungle','mid','adc','support'].map(role => {
-                            const champ = bluePicks[role]
+                            const pick = bluePicks[role]
+                            const champ = pick?.champion
                             const icon = getChampionIcon(champ)
-                            return icon ? (
-                              <Image key={role} src={icon} alt={champ} width={56} height={56} className="w-14 h-14 rounded-xl border border-blue-600/50 shadow-md object-cover" />
-                            ) : (
-                              <div key={role} className="w-14 h-14 rounded-xl border border-zinc-600 bg-zinc-800 flex items-center justify-center text-xs text-zinc-400">?</div>
+                            
+                            const isMVP = isOurBlue && pick?.id === mvpId && pick?.id != null;
+                            const isINT = isOurBlue && pick?.id === intId && pick?.id != null;
+
+                            return (
+                              <div key={role} className="relative flex flex-col items-center">
+                                {icon ? (
+                                  <Image src={icon} alt={champ} width={56} height={56} className="w-14 h-14 rounded-xl border border-blue-600/50 shadow-md object-cover" />
+                                ) : (
+                                  <div className="w-14 h-14 rounded-xl border border-zinc-600 bg-zinc-800 flex items-center justify-center text-xs text-zinc-400">?</div>
+                                )}
+                                {(isMVP || isINT) && (
+                                  <div className="absolute -bottom-3 text-lg bg-zinc-900 border border-zinc-700 rounded-full w-6 h-6 flex items-center justify-center shadow-lg z-10" title={isMVP ? `MVP (Score: ${pick?.score})` : `INT MVP (Score: ${pick?.score})`}>
+                                    {isMVP ? '🏆' : '😈'}
+                                  </div>
+                                )}
+                              </div>
                             )
                           })}
                         </div>
@@ -305,12 +333,26 @@ const allChampions = [
                         {/* Red Picks */}
                         <div className="flex justify-center gap-3 mb-6">
                           {['top','jungle','mid','adc','support'].map(role => {
-                            const champ = redPicks[role]
+                            const pick = redPicks[role]
+                            const champ = pick?.champion
                             const icon = getChampionIcon(champ)
-                            return icon ? (
-                              <Image key={role} src={icon} alt={champ} width={56} height={56} className="w-14 h-14 rounded-xl border border-red-600/50 shadow-md object-cover" />
-                            ) : (
-                              <div key={role} className="w-14 h-14 rounded-xl border border-zinc-600 bg-zinc-800 flex items-center justify-center text-xs text-zinc-400">?</div>
+                            
+                            const isMVP = !isOurBlue && pick?.id === mvpId && pick?.id != null;
+                            const isINT = !isOurBlue && pick?.id === intId && pick?.id != null;
+
+                            return (
+                              <div key={role} className="relative flex flex-col items-center">
+                                {icon ? (
+                                  <Image src={icon} alt={champ} width={56} height={56} className="w-14 h-14 rounded-xl border border-red-600/50 shadow-md object-cover" />
+                                ) : (
+                                  <div className="w-14 h-14 rounded-xl border border-zinc-600 bg-zinc-800 flex items-center justify-center text-xs text-zinc-400">?</div>
+                                )}
+                                {(isMVP || isINT) && (
+                                  <div className="absolute -bottom-3 text-lg bg-zinc-900 border border-zinc-700 rounded-full w-6 h-6 flex items-center justify-center shadow-lg z-10" title={isMVP ? `MVP (Score: ${pick?.score})` : `INT MVP (Score: ${pick?.score})`}>
+                                    {isMVP ? '🏆' : '😈'}
+                                  </div>
+                                )}
+                              </div>
                             )
                           })}
                         </div>

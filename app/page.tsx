@@ -56,7 +56,7 @@ export default async function Home() {
   // Fetch all matches for overall statistics
   const { data: allMatchesData } = await supabase
     .from('matches')
-    .select('id, we_won, match_type')
+    .select('id, we_won, match_type, duration_minutes')
   const allMatches = allMatchesData || []
 
   // Fetch all player performances for the Roster Stats
@@ -179,6 +179,20 @@ export default async function Home() {
         filtered = allMatches.filter((m: any) => m.match_type === matchType)
       }
     }
+    
+    if (!filtered.length) return '0%'
+    const wins = filtered.filter((m: any) => m.we_won).length
+    return `${Math.round((wins / filtered.length) * 100)}%`
+  }
+
+  const calculateDurationWinrate = (condition: 'under30' | 'over30'): string => {
+    if (!allMatches.length) return '0%'
+    
+    const filtered = allMatches.filter((m: any) => {
+      if (typeof m.duration_minutes !== 'number') return false;
+      if (condition === 'under30') return m.duration_minutes < 30;
+      return m.duration_minutes >= 30;
+    })
     
     if (!filtered.length) return '0%'
     const wins = filtered.filter((m: any) => m.we_won).length
@@ -332,6 +346,18 @@ export default async function Home() {
                 ))}
               </div>
             )}
+
+            {/* Duration Based Winrates (3rd Row) */}
+            <div className="flex flex-wrap justify-center gap-6 text-center pt-2">
+              <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-cyan-500/30 flex flex-col justify-center">
+                <div className="text-5xl font-bold text-cyan-400">{calculateDurationWinrate('under30')}</div>
+                <div className="mt-2 text-cyan-400/80 font-bold tracking-widest text-xs uppercase">&lt; 30 MIN WR</div>
+              </div>
+              <div className="w-full sm:w-48 bg-zinc-950 p-8 rounded-2xl border border-zinc-700 shadow-lg ring-1 ring-orange-500/30 flex flex-col justify-center">
+                <div className="text-5xl font-bold text-orange-400">{calculateDurationWinrate('over30')}</div>
+                <div className="mt-2 text-orange-400/80 font-bold tracking-widest text-xs uppercase">&ge; 30 MIN WR</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

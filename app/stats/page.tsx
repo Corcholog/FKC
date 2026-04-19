@@ -8,6 +8,8 @@ import TeamOverview from './TeamOverview'
 export default function StatsPage() {
   const [players, setPlayers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedPlayerId, setSelectedPlayerId] = useState<number>(0)
+  
   const supabase = createClient()
 
   useEffect(() => {
@@ -17,25 +19,34 @@ export default function StatsPage() {
         .select('*')
         .order('name')
       
-      if (data) setPlayers(data)
+      if (data && data.length > 0) {
+        setPlayers(data)
+        setSelectedPlayerId(data[0].id)
+      }
       setLoading(false)
     }
 
     fetchPlayers()
   }, [])
 
-  if (loading) return <div className="min-h-screen bg-zinc-950 p-8 text-center text-yellow-400">Loading Team Data...</div>
+  if (loading) return <div className="min-h-screen bg-[#f4faff] p-8 text-center text-[#0984e3] font-bold">Loading Team Data...</div>
 
   return (
-    <main className="min-h-screen bg-zinc-950 pb-20 pt-16">
+    <main className="min-h-screen bg-[#f4faff] pb-20 pt-16 text-slate-900">
       <Navbar />
 
-      {/* 1. The 5-Player Team Roster Cards */}
-      <TeamOverview players={players} />
+      <TeamOverview 
+        players={players} 
+        selectedPlayerId={selectedPlayerId} 
+        onPlayerSelect={setSelectedPlayerId} 
+      />
       
-      <div className="w-full max-w-[1400px] mx-auto px-8 py-8 border-t border-zinc-800 mt-8">
-         {/* 2. The Detailed Individual Player Stats */}
-        <PlayerStats players={players} />
+      <div className="w-full max-w-[1400px] mx-auto px-8 py-8 border-t border-slate-200 mt-8">
+        {/* Aquí quitamos el onPlayerSelect, ya no lo necesitamos abajo */}
+        <PlayerStats 
+          players={players} 
+          selectedPlayerId={selectedPlayerId} 
+        />
       </div>
     </main>
   )

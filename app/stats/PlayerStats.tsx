@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 
-// Types
 type Player = {
   id: number
   name: string
@@ -24,7 +23,6 @@ type ChampionStat = {
   csPerMin: number
 }
 
-// Color Helpers
 const getColorWR = (wr: number) => {
   if (wr >= 60) return 'text-blue-400'
   if (wr >= 53) return 'text-green-400'
@@ -40,26 +38,31 @@ const getColorKDA = (kda: number) => {
 }
 
 const getColorCS = (cs: number, role: string) => {
-  if (role === 'Support') return 'text-zinc-400' // Neutral color for supports
+  if (role === 'Support') return 'text-slate-400' 
   if (cs >= 8.0) return 'text-blue-400'
   if (cs >= 6.0) return 'text-green-400'
   return 'text-red-400'
 }
 
-// Reusing your icon helper
 const getChampionIcon = (champion: string): string | undefined => {
   if (!champion?.trim()) return undefined
-  const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath","Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz", "Wukong": "MonkeyKing" }
+  const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath", "FiddleSticks" : "Fiddlesticks", "Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz", "Wukong":"MonkeyKing" }
   const trimmed = champion.trim()
   const key = overrides[trimmed] ?? trimmed.replace(/[^a-zA-Z0-9]/g, '')
-  return `https://ddragon.leagueoflegends.com/cdn/14.7.1/img/champion/${key}.png`
+  return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
 }
-export default function PlayerStats({ players }: { players: Player[] }) {
-  const [selectedPlayerId, setSelectedPlayerId] = useState<number>(players[0]?.id || 0)
+
+// Limpiamos las props: ya no necesitamos onPlayerSelect
+export default function PlayerStats({ 
+  players, 
+  selectedPlayerId 
+}: { 
+  players: Player[], 
+  selectedPlayerId: number 
+}) {
   const [stats, setStats] = useState<ChampionStat[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Grab the active player to check their role
   const activePlayer = players.find(p => p.id === selectedPlayerId)
   const activeRole = activePlayer?.role || 'Unknown'
 
@@ -70,7 +73,6 @@ export default function PlayerStats({ players }: { players: Player[] }) {
       setLoading(true)
       const supabase = createClient()
 
-      // Fetch all performances for this player, joining the match data
       const { data, error } = await supabase
         .from('ally_participants')
         .select(`
@@ -93,7 +95,6 @@ export default function PlayerStats({ players }: { players: Player[] }) {
         return
       }
 
-      // Aggregate the raw data into champion stats
       const aggregated: Record<string, any> = {}
 
       data.forEach((row: any) => {
@@ -118,14 +119,12 @@ export default function PlayerStats({ players }: { players: Player[] }) {
         aggregated[champ].assists += row.assists
         aggregated[champ].cs += row.cs
         
-        // Calculate exact minutes (e.g., 30 mins 30 secs = 30.5 minutes)
         aggregated[champ].totalMinutes += match.duration_minutes + (match.duration_seconds / 60)
       })
 
-      // Format the final array and calculate averages
       const finalStats: ChampionStat[] = Object.values(aggregated).map((stat: any) => {
         const kda = stat.deaths === 0 
-          ? (stat.kills + stat.assists) // "Perfect" KDA
+          ? (stat.kills + stat.assists) 
           : (stat.kills + stat.assists) / stat.deaths
 
         const csPerMin = stat.totalMinutes > 0 ? stat.cs / stat.totalMinutes : 0
@@ -145,7 +144,6 @@ export default function PlayerStats({ players }: { players: Player[] }) {
         }
       })
 
-      // Sort by games played (descending), then by winrate
       finalStats.sort((a, b) => {
         if (b.games !== a.games) return b.games - a.games
         return b.winrate - a.winrate
@@ -159,95 +157,80 @@ export default function PlayerStats({ players }: { players: Player[] }) {
   }, [selectedPlayerId])
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-8 py-8 bg-zinc-950 text-white">
-      <div className="flex justify-between items-center mb-8 border-b border-zinc-800 pb-6">
-        <h1 className="text-4xl font-bold text-yellow-400">Player Statistics</h1>
-        
-        {/* Player Selector Dropdown */}
-        <div className="flex items-center gap-4">
-          <label className="font-medium text-zinc-400">Select Player:</label>
-          <select 
-            value={selectedPlayerId} 
-            onChange={(e) => setSelectedPlayerId(Number(e.target.value))}
-            className="p-3 bg-zinc-800 border border-zinc-700 rounded-lg font-medium text-white min-w-[200px]"
-          >
-            {players.map(p => (
-              <option key={p.id} value={p.id}>{p.name} ({p.ign}) - {p.role}</option>
-            ))}
-          </select>
-        </div>
+    <div className="w-full max-w-6xl mx-auto px-8 py-8 bg-[#f4faff] text-slate-900">
+      
+      <div className="mb-8 border-b border-slate-200 pb-6 flex flex-col items-center text-center">
+        <h1 className="text-4xl font-black text-slate-900 drop-shadow-sm">
+          Estadísticas de {activePlayer?.name || 'Jugador'}
+        </h1>
+        <p className="text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">
+          Haz clic en las tarjetas de arriba para ver el historial de otro jugador
+        </p>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20 text-yellow-400 font-medium text-xl animate-pulse">
-          Analyzing matches...
+        <div className="flex justify-center py-20 text-[#0984e3] font-bold text-xl animate-pulse">
+          Analizando partidas...
         </div>
       ) : stats.length === 0 ? (
-        <div className="text-center py-20 text-zinc-500 text-lg">
-          No matches found for this player. Import some data!
+        <div className="text-center py-20 text-slate-500 font-medium text-lg">
+          No hay partidas registradas para este jugador.
         </div>
       ) : (
-        <div className="overflow-hidden bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl">
+        <div className="overflow-hidden bg-white border border-blue-100 rounded-2xl shadow-xl shadow-blue-900/5">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-zinc-800 border-b border-zinc-700 text-zinc-300 text-sm uppercase tracking-wider">
-                <th className="p-4 font-semibold">Champion</th>
-                <th className="p-4 font-semibold text-center">Games</th>
-                <th className="p-4 font-semibold text-center">W - L</th>
-                <th className="p-4 font-semibold text-center">Winrate</th>
-                <th className="p-4 font-semibold text-center">K / D / A</th>
-                <th className="p-4 font-semibold text-center">KDA Ratio</th>
-                <th className="p-4 font-semibold text-center">CS/Min</th>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
+                <th className="p-4 font-black">Champion</th>
+                <th className="p-4 font-black text-center">Games</th>
+                <th className="p-4 font-black text-center">W - L</th>
+                <th className="p-4 font-black text-center">Winrate</th>
+                <th className="p-4 font-black text-center">K / D / A</th>
+                <th className="p-4 font-black text-center">KDA Ratio</th>
+                <th className="p-4 font-black text-center">CS/Min</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800">
+            <tbody className="divide-y divide-slate-100">
               {stats.map((stat, idx) => (
-                <tr key={idx} className="hover:bg-zinc-800/50 transition-colors">
-                  {/* Champion Name & Icon */}
+                <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
                   <td className="p-4 flex items-center gap-3">
                     <Image 
                       src={getChampionIcon(stat.championName) || '/placeholder-icon.png'} 
                       alt={stat.championName}
                       width={40} height={40}
-                      className="w-10 h-10 rounded-md shadow-sm border border-zinc-700"
+                      className="w-10 h-10 rounded-md shadow-sm border border-slate-200"
                     />
-                    <span className="font-medium text-lg">{stat.championName}</span>
+                    <span className="font-bold text-slate-900">{stat.championName}</span>
                   </td>
                   
-                  {/* Games Played */}
-                  <td className="p-4 text-center font-bold text-lg text-yellow-400">
+                  <td className="p-4 text-center font-black text-lg text-yellow-600">
                     {stat.games}
                   </td>
                   
-                  {/* Wins - Losses */}
-                  <td className="p-4 text-center text-zinc-300">
-                    <span className="text-green-400 font-semibold">{stat.wins}W</span>
-                    <span className="mx-1 text-zinc-500">-</span>
-                    <span className="text-red-400 font-semibold">{stat.losses}L</span>
+                  <td className="p-4 text-center text-slate-500 font-semibold text-sm">
+                    <span className="text-green-500">{stat.wins}W</span>
+                    <span className="mx-1 text-slate-300">-</span>
+                    <span className="text-red-500">{stat.losses}L</span>
                   </td>
 
-                  {/* Winrate */}
                   <td className="p-4 text-center">
-                    <span className={`font-bold text-lg ${getColorWR(stat.winrate)}`}>
+                    <span className={`font-black text-lg ${getColorWR(stat.winrate)}`}>
                       {stat.winrate}%
                     </span>
                   </td>
 
-                  {/* Average KDA (Kills / Deaths / Assists) */}
-                  <td className="p-4 text-center text-zinc-300">
+                  <td className="p-4 text-center text-slate-600 font-semibold text-sm">
                     {stat.kills} / <span className="text-red-400">{stat.deaths}</span> / {stat.assists}
                   </td>
 
-                  {/* KDA Ratio */}
                   <td className="p-4 text-center">
-                    <span className={`font-bold ${getColorKDA(stat.kda)}`}>
+                    <span className={`font-black ${getColorKDA(stat.kda)}`}>
                       {stat.kda}
                     </span>
                   </td>
 
-                  {/* CS Per Minute */}
                   <td className="p-4 text-center">
-                    <span className={`font-bold ${getColorCS(stat.csPerMin, activeRole)}`}>
+                    <span className={`font-black ${getColorCS(stat.csPerMin, activeRole)}`}>
                       {stat.csPerMin}
                     </span>
                   </td>

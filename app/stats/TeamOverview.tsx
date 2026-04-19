@@ -27,13 +27,12 @@ type PlayerSummary = {
 
 const getChampionIcon = (champion: string): string | undefined => {
   if (!champion?.trim()) return undefined
-  const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath","Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz", "Wukong":"MonkeyKing" }
+  const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath", "FiddleSticks" : "Fiddlesticks", "Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz", "Wukong":"MonkeyKing" }
   const trimmed = champion.trim()
   const key = overrides[trimmed] ?? trimmed.replace(/[^a-zA-Z0-9]/g, '')
-  return `https://ddragon.leagueoflegends.com/cdn/14.7.1/img/champion/${key}.png`
+  return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
 }
 
-// Color Helpers
 const getColorWR = (wr: number) => {
   if (wr >= 60) return 'text-blue-400'
   if (wr >= 53) return 'text-green-400'
@@ -50,7 +49,16 @@ const getColorKDA = (kda: number) => {
 
 const ROLE_ORDER = ['Top', 'Jungle', 'Mid', 'ADC', 'Support']
 
-export default function TeamOverview({ players }: { players: Player[] }) {
+// NUEVO: Recibimos selectedPlayerId y onPlayerSelect como props
+export default function TeamOverview({ 
+  players, 
+  selectedPlayerId, 
+  onPlayerSelect 
+}: { 
+  players: Player[], 
+  selectedPlayerId: number, 
+  onPlayerSelect: (id: number) => void 
+}) {
   const [teamStats, setTeamStats] = useState<PlayerSummary[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -84,7 +92,6 @@ export default function TeamOverview({ players }: { players: Player[] }) {
         let totalDeaths = 0
         let totalAssists = 0
         
-        // We MUST initialize kills, deaths, and assists here to calculate the KDA later
         const champStats: Record<string, { games: number, wins: number, kills: number, deaths: number, assists: number }> = {}
 
         playerMatches.forEach((row: any) => {
@@ -100,7 +107,6 @@ export default function TeamOverview({ players }: { players: Player[] }) {
           champStats[row.champion].games++
           if (row.matches.we_won) champStats[row.champion].wins++
           
-          // Tally up the stats for this specific champion
           champStats[row.champion].kills += row.kills || 0
           champStats[row.champion].deaths += row.deaths || 0
           champStats[row.champion].assists += row.assists || 0
@@ -112,7 +118,6 @@ export default function TeamOverview({ players }: { players: Player[] }) {
           ? (totalKills + totalAssists) 
           : (totalKills + totalAssists) / totalDeaths
 
-        // Calculate individual champion KDA and grab the top 5
         const topChampions = Object.entries(champStats)
           .map(([name, stats]) => {
             const champWinrate = (stats.wins / stats.games) * 100
@@ -151,81 +156,96 @@ export default function TeamOverview({ players }: { players: Player[] }) {
   }, [players])
 
   if (loading) {
-    return <div className="py-20 text-center text-yellow-400 text-xl animate-pulse">Loading Team Data...</div>
+    return <div className="py-20 text-center text-[#0984e3] font-bold text-xl animate-pulse">Loading Team Data...</div>
   }
 
   return (
     <div className="w-full max-w-[1400px] mx-auto px-4 py-8">
-      <h2 className="text-3xl font-bold text-yellow-400 mb-8 px-4">Starting Roster</h2>
+      <h2 className="text-3xl font-black text-slate-900 mb-8 px-4 drop-shadow-sm">Starting Roster</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-        {teamStats.map((stat, idx) => (
-          <div key={idx} className="bg-zinc-900 border border-zinc-700 rounded-xl overflow-hidden shadow-xl flex flex-col">
-            
-            <div className="bg-zinc-800 p-4 border-b border-zinc-700 text-center">
-              <span className="text-xs uppercase tracking-wider text-zinc-400 font-bold block mb-1">
-                {stat.player.role}
-              </span>
-              <h3 className="text-xl font-bold text-white truncate" title={stat.player.ign}>
-                {stat.player.ign}
-              </h3>
-              <p className="text-sm text-zinc-500">{stat.player.name}</p>
-            </div>
+        {teamStats.map((stat, idx) => {
+          const isSelected = selectedPlayerId === stat.player.id;
+          
+          return (
+            <div 
+              key={idx} 
+              onClick={() => onPlayerSelect(stat.player.id)}
+              className={`cursor-pointer bg-white border rounded-2xl overflow-hidden shadow-xl flex flex-col transition-all duration-300 ${
+                isSelected 
+                  ? 'border-blue-400 ring-4 ring-blue-100 shadow-blue-900/15 scale-[1.02]' 
+                  : 'border-blue-100 shadow-blue-900/5 hover:-translate-y-1 hover:border-blue-200'
+              }`}
+            >
+              
+              <div className={`p-4 border-b text-center transition-colors ${isSelected ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
+                <span className="text-xs uppercase tracking-widest text-yellow-600 font-bold block mb-1">
+                  {stat.player.role}
+                </span>
+                {/* INVERTIDO: Nombre real grande, IGN chico */}
+                <h3 className="text-2xl font-black text-slate-900 truncate" title={stat.player.name}>
+                  {stat.player.name}
+                </h3>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-1">
+                  {stat.player.ign}
+                </p>
+              </div>
 
-            <div className="p-5 flex-1 border-b border-zinc-800">
-              <div className="flex justify-between items-center mb-4">
-                <div className="text-center">
-                  <p className="text-xs text-zinc-500 uppercase">Winrate</p>
-                  <p className={`text-xl font-bold ${getColorWR(stat.winrate)}`}>
-                    {stat.totalGames > 0 ? `${stat.winrate}%` : '-'}
-                  </p>
+              <div className="p-5 flex-1 border-b border-slate-100">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="text-center">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Winrate</p>
+                    <p className={`text-xl font-bold ${getColorWR(stat.winrate)}`}>
+                      {stat.totalGames > 0 ? `${stat.winrate}%` : '-'}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">KDA</p>
+                    <p className={`text-xl font-bold ${getColorKDA(stat.overallKda)}`}>
+                      {stat.totalGames > 0 ? stat.overallKda.toFixed(2) : '-'}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <p className="text-xs text-zinc-500 uppercase">KDA</p>
-                  <p className={`text-xl font-bold ${getColorKDA(stat.overallKda)}`}>
-                    {stat.totalGames > 0 ? stat.overallKda.toFixed(2) : '-'}
-                  </p>
+                <div className="text-center text-xs text-slate-500 font-bold pb-2">
+                  {stat.wins}W - {stat.losses}L ({stat.totalGames} Games)
                 </div>
               </div>
-              <div className="text-center text-sm text-zinc-400 font-medium pb-2">
-                {stat.wins}W - {stat.losses}L ({stat.totalGames} Games)
-              </div>
-            </div>
 
-            <div className="p-4 bg-zinc-900/50">
-              <p className="text-xs text-zinc-500 uppercase font-bold mb-3">Top 5 Champions</p>
-              {stat.topChampions.length > 0 ? (
-                <div className="space-y-2">
-                  {stat.topChampions.map((champ, cIdx) => (
-                    <div key={cIdx} className="flex items-center gap-3">
-                      <Image 
-                        src={getChampionIcon(champ.name) || '/placeholder-icon.png'} 
-                        alt={champ.name}
-                        width={32} height={32}
-                        className="w-8 h-8 rounded border border-zinc-700"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-zinc-200 truncate">{champ.name}</p>
-                        <p className="text-[11px] text-zinc-400">
-                          {champ.games} games • 
-                          <span className={`font-bold ml-1 ${getColorWR(champ.winrate)}`}>
-                            {champ.winrate.toFixed(0)}%
-                          </span> • 
-                          <span className={`font-bold ml-1 ${getColorKDA(champ.kda)}`}>
-                            {champ.kda.toFixed(2)} KDA
-                          </span>
-                        </p>
+              <div className="p-4 bg-white">
+                <p className="text-[10px] text-slate-400 uppercase font-bold mb-3 text-center">Top Picks</p>
+                {stat.topChampions.length > 0 ? (
+                  <div className="space-y-2">
+                    {stat.topChampions.map((champ, cIdx) => (
+                      <div key={cIdx} className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <Image 
+                          src={getChampionIcon(champ.name) || '/placeholder-icon.png'} 
+                          alt={champ.name}
+                          width={32} height={32}
+                          className="w-8 h-8 rounded border border-slate-200 shadow-sm"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate leading-none mb-1">{champ.name}</p>
+                          <p className="text-[10px] text-slate-500 leading-none">
+                            {champ.games} G • 
+                            <span className={`font-bold ml-1 ${getColorWR(champ.winrate)}`}>
+                              {champ.winrate.toFixed(0)}%
+                            </span> • 
+                            <span className={`font-bold ml-1 ${getColorKDA(champ.kda)}`}>
+                              {champ.kda.toFixed(2)} KDA
+                            </span>
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-zinc-600 text-center py-4">No data yet</div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-400 text-center py-4">No data yet</div>
+                )}
+              </div>
 
-          </div>
-        ))}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

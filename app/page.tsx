@@ -311,6 +311,50 @@ export default async function Home() {
         </div>
       </div>
 
+      {/* Team Performance */}
+<div className="bg-[#eaf4fc] py-16 border-y border-[#bae6fd] shadow-inner relative z-20">
+  <div className="max-w-7xl mx-auto px-6">
+    <h2 className="text-4xl font-black mb-10 text-center text-[#0f172a] drop-shadow-sm">Team Performance</h2>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap justify-center gap-8 text-center">
+        {standardMatchTypes.map(type => (
+          <div key={type} className="w-full sm:w-48 bg-white p-8 rounded-[2rem] border border-blue-100 shadow-xl shadow-blue-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200">
+            <div className="text-5xl font-black text-[#0984e3] drop-shadow-sm">{calculateWinrate(type)}</div>
+            <div className="mt-3 text-slate-500 font-black text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
+          </div>
+        ))}
+        {/* Overall WR Box (Estilo Dorado/Destacado) */}
+        <div className="w-full sm:w-48 bg-white p-8 rounded-[2rem] border-2 border-[#f1c40f]/60 shadow-xl shadow-yellow-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-yellow-900/10">
+          <div className="text-5xl font-black text-[#f39c12] drop-shadow-sm">{calculateWinrate()}</div>
+          <div className="mt-3 text-[#f39c12] font-black tracking-widest text-xs uppercase">OVERALL WR</div>
+        </div>
+      </div>
+
+      {competitiveMatchTypes.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-8 text-center pt-4">
+          {/* Competitive WR Box (Estilo Púrpura) */}
+          <div className="w-full sm:w-48 bg-white p-8 rounded-[2rem] border-2 border-purple-200 shadow-xl shadow-purple-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-purple-900/10">
+            <div className="text-5xl font-black text-purple-600 drop-shadow-sm">{calculateWinrate(excludeTypes, true)}</div>
+            <div className="mt-3 text-purple-600/80 font-black tracking-widest text-xs uppercase">COMPETITIVE WR</div>
+          </div>
+          {competitiveMatchTypes.map(type => (
+            <div key={type} className="w-full sm:w-48 bg-white p-8 rounded-[2rem] border border-blue-100 shadow-xl shadow-blue-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200">
+              <div className="text-5xl font-black text-[#0984e3] drop-shadow-sm">{calculateWinrate(type)}</div>
+              <div className="mt-3 text-slate-500 font-black text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Charts Row */}
+      <div className="flex flex-wrap justify-center gap-6 pt-8 mt-2">
+        <DurationChart title="Overall Winrate by Duration" matches={allMatches} />
+        <DurationChart title="Competitive Winrate by Duration" matches={competitiveMatches} />
+      </div>
+    </div>
+  </div>
+</div>
+
       {/* Recent Matches */}
       <div className="max-w-7xl mx-auto px-6 py-16">
         <div className="flex justify-between items-center mb-10">

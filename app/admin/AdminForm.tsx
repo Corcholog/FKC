@@ -32,9 +32,7 @@ type FormData = {
     deaths: number
     assists: number
     cs: number
-    vision_score: number
-    damage_dealt: number
-    gold_earned: number
+    score: number
   }[]
   enemy_participants: {
     champion: string
@@ -111,9 +109,7 @@ export default function AdminForm({ players }: { players: Player[] }) {
         deaths: 0,
         assists: 0,
         cs: 0,
-        vision_score: 0,
-        damage_dealt: 0,
-        gold_earned: 0,
+        score: 0,
       }
     }),
     enemy_participants: roles.map(role => ({
@@ -165,7 +161,7 @@ export default function AdminForm({ players }: { players: Player[] }) {
             newFormData.our_participants[i] = {
               ...newFormData.our_participants[i],
               champion: p.champion, kills: p.kills, deaths: p.deaths, assists: p.assists, cs: p.cs,
-              vision_score: p.vision_score || 0, damage_dealt: p.damage_dealt || 0, gold_earned: p.gold_earned || 0
+              score: p.score || 0
             }
           }
         })
@@ -270,13 +266,8 @@ export default function AdminForm({ players }: { players: Player[] }) {
       const allyParticipantsData = matchData.our_participants.map((p: any) => {
         let dbPlayerId = p.player_id;
         if (!isManual) {
-          // Links stats to the exact PUUID, completely ignoring name changes!
           const dbPlayer = players.find(player => player.puuid === p.puuid);
           dbPlayerId = dbPlayer?.id || 0;
-        }
-        let score = (p.kills * 3) + (p.assists * 2) - (p.deaths * 2) + ((p.damage_dealt || 0) / 1000) + ((p.gold_earned || 0) / 1000);
-        if (p.role === 'Support') {
-          score += (p.vision_score || 0) * 0.5;
         }
 
         return {
@@ -288,10 +279,7 @@ export default function AdminForm({ players }: { players: Player[] }) {
           deaths: p.deaths,
           assists: p.assists,
           cs: p.cs,
-          vision_score: p.vision_score || 0,
-          damage_dealt: p.damage_dealt || 0,
-          gold_earned: p.gold_earned || 0,
-          score: Number(score.toFixed(2))
+          score: p.score || 0
         }
       })
       
@@ -456,12 +444,12 @@ return (
         </div>
         <button 
           onClick={async () => {
-            if (!confirm('Recalculate all missing scores? This may take ~1 minute to complete.')) return;
+            if (!confirm('Recalculate all scores? This may take a few minutes.')) return;
             setLoading(true);
             try {
-              const res = await fetch('/api/matches/recalculate-scores', { method: 'POST', body: JSON.stringify({force: false}) });
+              const res = await fetch('/api/matches/recalculate-scores', { method: 'POST', body: JSON.stringify({force: true}) });
               const result = await res.json();
-              alert(result.success ? `Done! ${result.message}` : `Error: ${result.error}`);
+              alert(result.success ? `Done! Updated ${result.updated} scores.` : `Error: ${result.error}`);
             } finally {
               setLoading(false);
             }
@@ -732,6 +720,7 @@ return (
                           <th className="p-3 text-center w-12 text-slate-600">D</th>
                           <th className="p-3 text-center w-12 text-slate-600">A</th>
                           <th className="p-3 text-center w-14 text-slate-600">CS</th>
+                          <th className="p-3 text-center w-14 text-slate-600 bg-emerald-50">Score</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -770,6 +759,11 @@ return (
                               <td className="p-3"><input type="number" min="0" value={p.deaths === 0 ? '' : p.deaths} onChange={(e) => updateOurParticipant(index, 'deaths', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
                               <td className="p-3"><input type="number" min="0" value={p.assists === 0 ? '' : p.assists} onChange={(e) => updateOurParticipant(index, 'assists', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
                               <td className="p-3"><input type="number" min="0" value={p.cs === 0 ? '' : p.cs} onChange={(e) => updateOurParticipant(index, 'cs', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                              <td className="p-3 text-center">
+                                <span className={`inline-block px-2 py-1 rounded font-bold text-sm ${p.score >= 8 ? 'bg-emerald-100 text-emerald-700' : p.score >= 6 ? 'bg-blue-100 text-blue-700' : p.score >= 4 ? 'bg-yellow-100 text-yellow-700' : 'bg-rose-100 text-rose-700'}`}>
+                                  {p.score.toFixed(1)}
+                                </span>
+                              </td>
                             </tr>
                           )
                         })}

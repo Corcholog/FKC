@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { calculateScore } from '@/lib/score';
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
@@ -12,9 +13,6 @@ const mapRiotRole = (riotRole: string): string => {
   };
   return roleMap[riotRole] || 'Top';
 };
-
-// Helper to pause execution briefly
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,22 +57,52 @@ export async function POST(request: NextRequest) {
       ourTeamId = targetPlayer.teamId;
     }
 
-    const mapParticipant = (p: any) => ({
-      riotId: `${p.riotIdGameName}#${p.riotIdTagline}`,
-      puuid: p.puuid,
-      role: mapRiotRole(p.teamPosition),
-      champion: p.championName,
-      kills: p.kills,
-      deaths: p.deaths,
-      assists: p.assists,
-      cs: p.totalMinionsKilled + p.neutralMinionsKilled,
-      vision_score: p.visionScore || 0,
-      damage_dealt: p.totalDamageDealtToChampions || 0,
-      gold_earned: p.goldEarned || 0
-    });
+    const durationMinutes = Math.max(1, Math.floor((matchData.info.gameDuration || 1800) / 60));
     
-    const our_participants = matchData.info.participants.filter((p: any) => p.teamId === ourTeamId).map(mapParticipant);
-    const enemy_participants = matchData.info.participants.filter((p: any) => p.teamId !== ourTeamId).map(mapParticipant);
+    const ourRiotParticipants = matchData.info.participants.filter((p: any) => p.teamId === ourTeamId);
+    const enemyRiotParticipants = matchData.info.participants.filter((p: any) => p.teamId !== ourTeamId);
+
+    const teamKills = ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.kills || 0), 0);
+    const teamDamageDealt = ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.totalDamageDealtToChampions || 0), 0);
+    const teamDamageTaken = ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.totalDamageTaken || 0), 0);
+    const teamCCTime = ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.timeCCingOthers || 0), 0);
+
+    const mapParticipant = (p: any, isAlly: boolean) => {
+      const data = {
+        riotId: `${p.riotIdGameName}#${p.riotIdTagline}`,
+        puuid: p.puuid,
+        role: mapRiotRole(p.teamPosition),
+        champion: p.championName,
+        kills: p.kills,
+        deaths: p.deaths,
+        assists: p.assists,
+        cs: p.totalMinionsKilled + p.neutralMinionsKilled,
+        score: 0
+      };
+
+      if (isAlly) {
+        data.score = calculateScore(
+          p.goldEarned || 0,
+          p.visionScore || 0,
+          teamKills,
+          p.kills,
+          p.assists,
+          p.deaths,
+          p.totalDamageDealtToChampions || 0,
+          p.totalDamageTaken || 0,
+          p.timeCCingOthers || 0,
+          teamDamageDealt,
+          teamDamageTaken,
+          teamCCTime,
+          durationMinutes
+        );
+      }
+
+      return data;
+    };
+    
+    const our_participants = ourRiotParticipants.map((p: any) => mapParticipant(p, true));
+    const enemy_participants = enemyRiotParticipants.map((p: any) => mapParticipant(p, false));
 
     const ourTeamData = matchData.info.teams.find((t: any) => t.teamId === ourTeamId);
     const enemyTeamData = matchData.info.teams.find((t: any) => t.teamId !== ourTeamId);

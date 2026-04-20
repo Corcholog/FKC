@@ -29,7 +29,7 @@ const getColorKDA = (kda: number) => {
   return 'text-red-400'
 }
 
-const ROLE_ORDER = ['Top', 'Jungle', 'Mid', 'ADC', 'Support']
+const ROLE_ORDER = ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUPPORT']
 
 
 export default async function Home() {
@@ -65,14 +65,46 @@ export default async function Home() {
   const { data: allPerformancesData } = await supabase
     .from('ally_participants')
     .select(`
+      id,
       player_id,
+      match_id,
       champion,
       kills,
       deaths,
       assists,
-      matches!inner (we_won)
+      score,
+      matches!inner (id, we_won)
     `)
   const allPerformances = allPerformancesData || []
+
+  // Group performances by match to determine MVP and INT per match
+  const matchPerformances: Record<number, any[]> = {}
+  allPerformances.forEach((row: any) => {
+    const matchId = row.matches?.id
+    if (matchId) {
+      if (!matchPerformances[matchId]) matchPerformances[matchId] = []
+      matchPerformances[matchId].push(row)
+    }
+  })
+
+  const playerMvpIntCounts: Record<number, { mvpCount: number; intMvpCount: number }> = {}
+  Object.values(matchPerformances).forEach(playersInMatch => {
+    const scoredPlayers = playersInMatch.filter((p: any) => typeof p.score === 'number' && p.score > 0)
+    if (scoredPlayers.length < 2) return
+
+    const sorted = [...scoredPlayers].sort((a, b) => b.score - a.score)
+    const mvpPlayerId = sorted[0].player_id
+    const intPlayerId = sorted[sorted.length - 1].player_id
+
+    if (mvpPlayerId) {
+      playerMvpIntCounts[mvpPlayerId] = playerMvpIntCounts[mvpPlayerId] || { mvpCount: 0, intMvpCount: 0 }
+      playerMvpIntCounts[mvpPlayerId].mvpCount++
+    }
+    if (intPlayerId && intPlayerId !== mvpPlayerId) {
+      playerMvpIntCounts[intPlayerId] = playerMvpIntCounts[intPlayerId] || { mvpCount: 0, intMvpCount: 0 }
+      playerMvpIntCounts[intPlayerId].intMvpCount++
+    }
+  })
 
   // Calculate stats for the Roster cards
   const rosterStats = playerList.map(player => {
@@ -82,6 +114,9 @@ export default async function Home() {
     let kills = 0
     let deaths = 0
     let assists = 0
+    let totalScore = 0
+    const mvpCount = playerMvpIntCounts[player.id]?.mvpCount || 0
+    const intMvpCount = playerMvpIntCounts[player.id]?.intMvpCount || 0
     const champStats: Record<string, { games: number, wins: number, kills: number, deaths: number, assists: number }> = {}
 
     playerMatches.forEach((row: any) => {
@@ -89,6 +124,11 @@ export default async function Home() {
       kills += row.kills || 0
       deaths += row.deaths || 0
       assists += row.assists || 0
+
+      const score = row.score
+      if (typeof score === 'number' && score > 0) {
+        totalScore += score
+      }
 
       if (!champStats[row.champion]) {
         champStats[row.champion] = { games: 0, wins: 0, kills: 0, deaths: 0, assists: 0 }
@@ -103,6 +143,9 @@ export default async function Home() {
     const totalGames = playerMatches.length
     const winrate = totalGames > 0 ? (wins / totalGames) * 100 : 0
     const overallKda = deaths === 0 ? (kills + assists) : (kills + assists) / deaths
+    
+    const gamesWithScore = playerMatches.filter((p: any) => typeof p.score === 'number' && p.score > 0).length
+    const avgScore = gamesWithScore > 0 ? totalScore / gamesWithScore : 0
 
     // Calculate individual KDA and slice top 5
     const topChampions = Object.entries(champStats)
@@ -129,6 +172,9 @@ export default async function Home() {
       losses: totalGames - wins,
       winrate: Number(winrate.toFixed(1)),
       overallKda: Number(overallKda.toFixed(2)),
+      avgScore: Number(avgScore.toFixed(1)),
+      mvpCount,
+      intMvpCount,
       topChampions
     }
   })
@@ -236,75 +282,116 @@ export default async function Home() {
         <h2 className="text-4xl font-bold mb-10 text-center">Our Roster</h2>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
           {rosterStats.length > 0 ? rosterStats.map((stat: any) => (
-            <div key={stat.id} className="relative h-[720px] bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-yellow-400 transition group flex flex-col justify-end">
+            <div
+  key={stat.id}
+  className="bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-yellow-400 transition flex flex-col"
+>
+  {/* IMAGE TOP */}
+  <div className="h-[300px] relative overflow-hidden">
+    <img
+      src={`/players/${stat.name.toLowerCase().replace(/\s+/g, '')}.jpg`}
+      alt=""
+      className="w-full h-full object-cover object-top transition duration-500 hover:scale-105"
+    />
+  </div>
 
-              {/* Background Image Container */}
-              <div className="absolute inset-0 z-0 bg-white overflow-hidden">
-                <img
-                  src={`/players/${stat.name.toLowerCase().replace(/\s+/g, '')}.jpg`}
-                  alt=""
-                  className="w-full h-full object-cover object-top opacity-100 group-hover:scale-105 transition duration-500 text-transparent"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-white from-50% to-transparent to-50%"></div>
-              </div>
+  {/* CONTENT */}
+  <div className="p-5 flex flex-col flex-1">
 
-              {/* Card Content Overlay: */}
-              <div className="relative z-10 p-5 flex flex-col h-1/2 bg-white">
-                <div className="text-center mb-4">
-                  <div className="text-yellow-600 font-bold text-xs tracking-widest uppercase">{stat.role}</div>
-                  <div className="text-3xl font-black mt-1 text-slate-900 uppercase tracking-wider">{stat.name}</div>
-                </div>
+    {/* NAME + ROLE */}
+    <div className="text-center mb-4">
+      <div className="text-yellow-600 font-bold text-xs tracking-widest uppercase">
+        {stat.role}
+      </div>
+      <div className="text-3xl font-black mt-1 text-slate-900 uppercase tracking-wider">
+        {stat.name}
+      </div>
+    </div>
 
-                {/* Overall Stats */}
-                <div className="grid grid-cols-2 gap-2 mb-4 border-t border-b border-slate-200 py-3">
-                  <div className="text-center">
-                    <p className="text-[10px] text-slate-500 uppercase font-bold">Winrate</p>
-                    <p className={`text-xl font-bold ${getColorWR(stat.winrate)}`}>
-                      {stat.totalGames > 0 ? `${stat.winrate}%` : '-'}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] text-slate-500 uppercase font-bold">KDA</p>
-                    <p className={`text-xl font-bold ${getColorKDA(stat.overallKda)}`}>
-                      {stat.totalGames > 0 ? stat.overallKda.toFixed(2) : '-'}
-                    </p>
-                  </div>
-                </div>
+    {/* Overall Stats */}
+    <div className="grid grid-cols-3 gap-1 mb-4 border-t border-b border-slate-200 py-3">
+      <div className="text-center">
+        <p className="text-[10px] text-slate-500 uppercase font-bold">Winrate</p>
+        <p className={`text-lg font-bold ${getColorWR(stat.winrate)}`}>
+          {stat.totalGames > 0 ? `${stat.winrate}%` : '-'}
+        </p>
+      </div>
+      <div className="text-center">
+        <p className="text-[10px] text-slate-500 uppercase font-bold">KDA</p>
+        <p className={`text-lg font-bold ${getColorKDA(stat.overallKda)}`}>
+          {stat.totalGames > 0 ? stat.overallKda.toFixed(2) : '-'}
+        </p>
+      </div>
+      <div className="text-center">
+        <p className="text-[10px] text-slate-500 uppercase font-bold">Avg Score</p>
+        <p className={`text-lg font-bold ${
+          stat.avgScore >= 6 ? 'text-blue-500' :
+          stat.avgScore >= 4 ? 'text-yellow-500' :
+          stat.avgScore > 0 ? 'text-rose-500' :
+          'text-slate-400'
+        }`}>
+          {stat.avgScore > 0 ? stat.avgScore.toFixed(1) : '-'}
+        </p>
+      </div>
+    </div>
 
-                {/* Top 5 Champions */}
-                <div>
-                  <p className="text-[10px] text-slate-500 uppercase font-bold mb-2 text-center">Top Picks</p>
-                  {stat.topChampions.length > 0 ? (
-                    <div className="space-y-2">
-                      {stat.topChampions.map((champ: any, idx: number) => (
-                        <div key={idx} className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200 mt-1">
-                          <Image
-                            src={getChampionIcon(champ.name) || '/placeholder-icon.png'}
-                            alt={champ.name}
-                            width={28} height={28}
-                            className="w-7 h-7 rounded border border-slate-300"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-slate-900 truncate leading-none mb-1">{champ.name}</p>
-                            <p className="text-[10px] text-slate-500 leading-none">
-                              {champ.games} G •
-                              <span className={`font-bold ml-1 ${getColorWR(champ.winrate)}`}>
-                                {champ.winrate.toFixed(0)}%
-                              </span> •
-                              <span className={`font-bold ml-1 ${getColorKDA(champ.kda)}`}>
-                                {champ.kda.toFixed(2)} KDA
-                              </span>
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-400 text-center py-4">No games yet</p>
-                  )}
-                </div>
+    {/* MVP Stats */}
+    <div className="grid grid-cols-2 gap-2 mb-4">
+      <div className="text-center bg-emerald-50 rounded-lg py-2">
+        <p className="text-[9px] text-emerald-600 uppercase font-bold">MVPs</p>
+        <p className="text-lg font-bold text-emerald-600">{stat.mvpCount}</p>
+      </div>
+      <div className="text-center bg-rose-50 rounded-lg py-2">
+        <p className="text-[9px] text-rose-600 uppercase font-bold">INTs</p>
+        <p className="text-lg font-bold text-rose-600">{stat.intMvpCount}</p>
+      </div>
+    </div>
+
+    {/* Top Champions */}
+    <div className="flex flex-col flex-1">
+      <p className="text-[10px] text-slate-500 uppercase font-bold mb-2 text-center">
+        Top Picks
+      </p>
+
+      {stat.topChampions.length > 0 ? (
+        <div className="space-y-2 overflow-y-auto max-h-[270px] pr-1">
+          {stat.topChampions.map((champ: any, idx: number) => (
+            <div
+              key={idx}
+              className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200"
+            >
+              <Image
+                src={getChampionIcon(champ.name) || '/placeholder-icon.png'}
+                alt={champ.name}
+                width={28}
+                height={28}
+                className="w-7 h-7 rounded border border-slate-300"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-900 truncate leading-none mb-1">
+                  {champ.name}
+                </p>
+                <p className="text-[10px] text-slate-500 leading-none">
+                  {champ.games} G •
+                  <span className={`font-bold ml-1 ${getColorWR(champ.winrate)}`}>
+                    {champ.winrate.toFixed(0)}%
+                  </span> •
+                  <span className={`font-bold ml-1 ${getColorKDA(champ.kda)}`}>
+                    {champ.kda.toFixed(2)} KDA
+                  </span>
+                </p>
               </div>
             </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-slate-400 text-center py-4">
+          No games yet
+        </p>
+      )}
+    </div>
+  </div>
+</div>
           )) : (
             <p className="col-span-5 text-center text-zinc-500 py-10">No players added yet.</p>
           )}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { calculateScore } from '@/lib/score';
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -9,17 +10,30 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     let body = {};
     try { body = await request.json(); } catch(e) {}
-    const { force = false } = body as { force?: boolean };
+    const { force = true } = body as { force?: boolean };
+    console.log('FORCE:', force);
 
     const { data: matches, error } = await supabase
       .from('matches')
-      .select('id, match_id, we_won, ally_participants(id, champion, role, kills, deaths, assists, vision_score)');
+      .select('id, match_id, duration_minutes, ally_participants(id, champion, role, kills, deaths, assists, score)');
 
     if (error) throw error;
 
     let updatedRows = 0;
-    const skipped = [];
-    const logs = [];
+    const skipped: { id: number; reason: string }[] = [];
+    const logs: string[] = [];
+
+    if (matches.length === 0) {
+      return NextResponse.json({ success: true, message: 'No matches found' });
+    }
+    
+    const matchesWithScores = matches.filter(m => m.ally_participants.some(p => p.score > 0));
+    const matchesWithoutScores = matches.filter(m => !m.ally_participants.some(p => p.score > 0));
+    console.log('Matches with scores:', matchesWithScores.length);
+    console.log('Matches without scores:', matchesWithoutScores.length);
+    if (matchesWithoutScores.length > 0) {
+      console.log('Sample matches without scores:', matchesWithoutScores.slice(0, 3).map(m => ({ id: m.id, match_id: m.match_id })));
+    }
 
     for (const match of matches) {
       if (!match.match_id) {
@@ -27,32 +41,23 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // If force is not passed, only update matches where ally_participants have 0 vision_score (assume never fetched)
-      const needsUpdate = force || match.ally_participants.some((p: any) => !p.vision_score || p.vision_score === 0);
-      
-      if (!needsUpdate) {
+      if (!force && match.ally_participants.length > 0 && match.ally_participants.every((p: any) => p.score !== null && p.score > 0)) {
         skipped.push({ id: match.id, reason: 'Already calculated' });
         continue;
       }
 
+      console.log('Processing match:', match.match_id);
       const fullMatchId = match.match_id.includes('_') ? match.match_id : `LA2_${match.match_id}`;
 
-      // Ping Riot API
-      await delay(200); // Respect rate limit
+      await delay(200);
       const matchDataRes = await fetch(
         `https://americas.api.riotgames.com/lol/match/v5/matches/${fullMatchId}`,
         { headers: { 'X-Riot-Token': RIOT_API_KEY! } }
       );
+      console.log('Response:', matchDataRes.status);
 
       if (!matchDataRes.ok) {
-        logs.push(`Failed to fetch ${fullMatchId} from Riot API. Status: ${matchDataRes.status}`);
-        
-        // Compute with Fallback logic missing Riot data
-        for (const p of match.ally_participants) {
-            let score = (p.kills * 3) + (p.assists * 2) - (p.deaths * 2);
-            await supabase.from('ally_participants').update({ score: Number(score.toFixed(2)) }).eq('id', p.id);
-            updatedRows++;
-        }
+        logs.push(`Failed to fetch ${fullMatchId}: ${matchDataRes.status}`);
         continue;
       }
 
@@ -60,61 +65,71 @@ export async function POST(request: NextRequest) {
       const riotParticipants = matchData?.info?.participants;
 
       if (!riotParticipants) {
-        logs.push(`No participants found in Riot API for ${fullMatchId}`);
+        logs.push(`No participants for ${fullMatchId}`);
         continue;
       }
 
-      // Update each ally
+      const durationMinutes = Math.max(1, Math.floor((matchData?.info?.gameDuration || 1800) / 60));
+
+      const ourTeamId = riotParticipants.find((p: any) =>
+        match.ally_participants.some((ap: any) =>
+          ap.champion.toLowerCase() === p.championName.toLowerCase()
+        )
+      )?.teamId || 100;
+
+      const ourParticipants = riotParticipants.filter((p: any) => p.teamId === ourTeamId);
+
+      const teamKills = ourParticipants.reduce((s: number, p: any) => s + (p.kills || 0), 0);
+      const teamDamageDealt = ourParticipants.reduce((s: number, p: any) => s + (p.totalDamageDealtToChampions || 0), 0);
+      const teamDamageTaken = ourParticipants.reduce((s: number, p: any) => s + (p.totalDamageTaken || 0), 0);
+      const teamCCTime = ourParticipants.reduce((s: number, p: any) => s + (p.timeCCingOthers || 0), 0);
+
       for (const p of match.ally_participants) {
-        let score = (p.kills * 3) + (p.assists * 2) - (p.deaths * 2);
-        
         const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-        
-        // Find matching riot participant by Champion Name
-        const riotData = riotParticipants.find((rp: any) => normalize(rp.championName) === normalize(p.champion));
-        
-        let vision_score = 0;
-        let damage_dealt = 0;
-        let gold_earned = 0;
+        const riotData = ourParticipants.find((rp: any) =>
+          normalize(rp.championName) === normalize(p.champion)
+        );
 
-        if (riotData) {
-          vision_score = riotData.visionScore || 0;
-          damage_dealt = riotData.totalDamageDealtToChampions || 0;
-          gold_earned = riotData.goldEarned || 0;
-
-          score += (damage_dealt / 1000) + (gold_earned / 1000);
-          if (p.role === 'Support') {
-            score += vision_score * 0.5;
-          }
+        if (!riotData) {
+          logs.push(`No Riot data for ${p.champion} in match ${match.id}`);
+          continue;
         }
 
-        const scoreRounded = Number(score.toFixed(2));
+        const score = calculateScore(
+          riotData.goldEarned || 0,
+          riotData.visionScore || 0,
+          teamKills,
+          p.kills,
+          p.assists,
+          p.deaths,
+          riotData.totalDamageDealtToChampions || 0,
+          riotData.totalDamageTaken || 0,
+          riotData.timeCCingOthers || 0,
+          teamDamageDealt,
+          teamDamageTaken,
+          teamCCTime,
+          durationMinutes
+        );
 
         const { error: updateErr } = await supabase
           .from('ally_participants')
-          .update({
-             vision_score,
-             damage_dealt,
-             gold_earned,
-             score: scoreRounded
-          })
+          .update({ score })
           .eq('id', p.id);
-          
+
         if (updateErr) {
-            logs.push(`Failed to update Player ${p.champion} in Match ${match.id}: ${updateErr.message}`);
+          logs.push(`Failed update ${p.champion}: ${updateErr.message}`);
         } else {
-            updatedRows++;
+          updatedRows++;
         }
       }
     }
 
-    console.log("RECALCULATION LOGS:", logs, "SKIPPED:", skipped.length, "UPDATED:", updatedRows);
-    
-    return NextResponse.json({ 
-        success: true, 
-        message: `Updated ${updatedRows} player records across matches.`,
-        skipped: skipped.length,
-        logs 
+    return NextResponse.json({
+      success: true,
+      message: `Updated ${updatedRows} scores. Skipped: ${skipped.length}`,
+      updated: updatedRows,
+      skipped_info: skipped.slice(0, 10),
+      logs: logs.slice(0, 10)
     });
 
   } catch (error: any) {

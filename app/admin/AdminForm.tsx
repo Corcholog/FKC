@@ -760,8 +760,8 @@ return (
                               <td className="p-3"><input type="number" min="0" value={p.assists === 0 ? '' : p.assists} onChange={(e) => updateOurParticipant(index, 'assists', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
                               <td className="p-3"><input type="number" min="0" value={p.cs === 0 ? '' : p.cs} onChange={(e) => updateOurParticipant(index, 'cs', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
                               <td className="p-3 text-center">
-                                <span className={`inline-block px-2 py-1 rounded font-bold text-sm ${p.score >= 8 ? 'bg-emerald-100 text-emerald-700' : p.score >= 6 ? 'bg-blue-100 text-blue-700' : p.score >= 4 ? 'bg-yellow-100 text-yellow-700' : 'bg-rose-100 text-rose-700'}`}>
-                                  {p.score.toFixed(1)}
+                                <span className={`inline-block px-2 py-1 rounded font-bold text-sm ${p.score >= 70 ? 'bg-emerald-100 text-emerald-700' : p.score >= 50 ? 'bg-blue-100 text-blue-700' : p.score >= 30 ? 'bg-yellow-100 text-yellow-700' : 'bg-rose-100 text-rose-700'}`}>
+                                  {Math.round(p.score)}
                                 </span>
                               </td>
                             </tr>

@@ -29,6 +29,13 @@ const getColorKDA = (kda: number) => {
   return 'text-red-400'
 }
 
+const getColorAvgScore = (score: number) => {
+  if (score >= 60) return 'text-blue-500'
+  if (score >= 40) return 'text-green-500'
+  if (score >= 25) return 'text-yellow-500'
+  return 'text-rose-500'
+}
+
 const ROLE_ORDER = ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUPPORT']
 
 
@@ -324,13 +331,8 @@ export default async function Home() {
       </div>
       <div className="text-center">
         <p className="text-[10px] text-slate-500 uppercase font-bold">Avg Score</p>
-        <p className={`text-lg font-bold ${
-          stat.avgScore >= 6 ? 'text-blue-500' :
-          stat.avgScore >= 4 ? 'text-yellow-500' :
-          stat.avgScore > 0 ? 'text-rose-500' :
-          'text-slate-400'
-        }`}>
-          {stat.avgScore > 0 ? stat.avgScore.toFixed(1) : '-'}
+        <p className={`text-lg font-bold ${stat.avgScore > 0 ? getColorAvgScore(stat.avgScore) : 'text-slate-400'}`}>
+          {stat.avgScore > 0 ? Math.round(stat.avgScore) : '-'}
         </p>
       </div>
     </div>

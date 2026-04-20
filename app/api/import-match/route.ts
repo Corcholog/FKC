@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { calculateScore } from '@/lib/score';
+import { calculateScoreV2 } from '@/lib/score';
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
@@ -62,10 +62,18 @@ export async function POST(request: NextRequest) {
     const ourRiotParticipants = matchData.info.participants.filter((p: any) => p.teamId === ourTeamId);
     const enemyRiotParticipants = matchData.info.participants.filter((p: any) => p.teamId !== ourTeamId);
 
-    const teamKills = ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.kills || 0), 0);
-    const teamDamageDealt = ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.totalDamageDealtToChampions || 0), 0);
-    const teamDamageTaken = ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.totalDamageTaken || 0), 0);
-    const teamCCTime = ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.timeCCingOthers || 0), 0);
+    const teamTotals = {
+      teamKills: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.kills || 0), 0),
+      teamDamageDealt: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.totalDamageDealtToChampions || 0), 0),
+      teamDamageTaken: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.totalDamageTaken || 0), 0),
+      teamAssists: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.assists || 0), 0),
+    };
+
+    const objectives: { dragons: number; barons: number; hersalds: number } = {
+      dragons: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.dragons || 0), 0),
+      barons: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.barons || 0), 0),
+      hersalds: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.riftHeraldTakedowns || 0), 0),
+    };
 
     const mapParticipant = (p: any, isAlly: boolean) => {
       const data = {
@@ -76,26 +84,44 @@ export async function POST(request: NextRequest) {
         kills: p.kills,
         deaths: p.deaths,
         assists: p.assists,
-        cs: p.totalMinionsKilled + p.neutralMinionsKilled,
+        cs: p.totalMinionsKilled + (p.neutralMinionsKilled || 0),
         score: 0
       };
 
       if (isAlly) {
-        data.score = calculateScore(
-          p.goldEarned || 0,
-          p.visionScore || 0,
-          teamKills,
-          p.kills,
-          p.assists,
-          p.deaths,
-          p.totalDamageDealtToChampions || 0,
-          p.totalDamageTaken || 0,
-          p.timeCCingOthers || 0,
-          teamDamageDealt,
-          teamDamageTaken,
-          teamCCTime,
-          durationMinutes
-        );
+        const opponent = enemyRiotParticipants.find((e: any) => e.teamPosition === p.teamPosition) || null;
+        
+        const playerData = {
+          kills: p.kills || 0,
+          deaths: p.deaths || 0,
+          assists: p.assists || 0,
+          cs: (p.totalMinionsKilled || 0) + (p.neutralMinionsKilled || 0),
+          goldEarned: p.goldEarned || 0,
+          visionScore: p.visionScore || 0,
+          damageDealt: p.totalDamageDealtToChampions || 0,
+          damageTaken: p.totalDamageTaken || 0,
+          champExperience: p.champExperience || 0,
+          neutralMinionsKilled: p.neutralMinionsKilled || 0,
+          damageDealtToObjectives: p.damageDealtToBuildings || 0,
+          turretKills: p.turretTakedowns || 0,
+          detectorWardsPlaced: p.detectorWardsPlaced || 0,
+          wardsPlaced: p.wardsPlaced || 0,
+          wardsCleared: p.wardsCleared || 0,
+          teamPosition: p.teamPosition || 'TOP',
+        };
+
+        const opponentData = opponent ? {
+          kills: opponent.kills || 0,
+          deaths: opponent.deaths || 0,
+          assists: opponent.assists || 0,
+          cs: (opponent.totalMinionsKilled || 0) + (opponent.neutralMinionsKilled || 0),
+          goldEarned: opponent.goldEarned || 0,
+          visionScore: opponent.visionScore || 0,
+          champExperience: opponent.champExperience || 0,
+          neutralMinionsKilled: opponent.neutralMinionsKilled || 0,
+        } : null;
+
+        data.score = calculateScoreV2(playerData, opponentData, teamTotals, durationMinutes, data.role, objectives);
       }
 
       return data;

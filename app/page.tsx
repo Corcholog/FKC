@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Navbar from '@/app/components/Navbar'
 import DurationChart from '@/app/components/DurationChart'
 import MatchCard from '@/app/components/MatchCard'
+import Countdown from '@/app/components/Countdown'
 
 type Player = {
   id: number
@@ -265,6 +266,9 @@ export default async function Home() {
 
       {/* Navigation Bar */}
       <Navbar />
+
+      {/* LEIF Countdown */}
+      <Countdown />
 
       {/* Hero Banner */}
       <div className="relative h-[700px] flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#74b9ff]/80 to-[#f4faff]">

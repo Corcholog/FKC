@@ -18,6 +18,7 @@ interface PlayerData {
 }
 
 interface OpponentData {
+  teamPosition: string;
   kills: number;
   deaths: number;
   assists: number;
@@ -32,7 +33,6 @@ interface TeamTotals {
   teamKills: number;
   teamDamageDealt: number;
   teamDamageTaken: number;
-  teamAssists: number;
 }
 
 interface MatchObjectives {
@@ -41,152 +41,161 @@ interface MatchObjectives {
   hersalds: number;
 }
 
-const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
-const safeDiv = (num: number, den: number) => den > 0 ? num / den : 0;
+const clamp = (val: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, val));
 
-export const calculateScoreV2 = (
+const safeDiv = (num: number, den: number) =>
+  den > 0 ? num / den : 0;
+
+const avg = (arr: number[]) =>
+  arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+
+const tanh = (x: number) => {
+  return (Math.exp(x) - Math.exp(-x)) / (Math.exp(x) + Math.exp(-x));
+};
+
+export const calculateScoreV3 = (
   player: PlayerData,
   opponent: OpponentData | null,
   teamTotals: TeamTotals,
   matchDuration: number,
   role: string,
-  objectives: MatchObjectives
+  objectives: MatchObjectives,
+  teamParticipants: PlayerData[]
 ): number => {
-  const duration = matchDuration > 0 ? matchDuration : 1;
+  const duration = Math.max(1, matchDuration);
 
-  const globalScore = calculateGlobalScore(player, duration, role);
-  const opponentScore = calculateVsOpponentScore(player, opponent, duration);
-  const teamScore = calculateTeamImpactScore(player, teamTotals, duration);
-  const roleScore = calculateRoleScore(player, role, duration);
-  const objectiveScore = calculateObjectiveScore(player, objectives);
+  const avgDpm = avg(teamParticipants.map(p => p.damageDealt / duration));
+  const avgCspm = avg(teamParticipants.map(p => p.cs / duration));
+  const avgGpm = avg(teamParticipants.map(p => p.goldEarned / duration));
+  const avgVpm = avg(teamParticipants.map(p => p.visionScore / duration));
 
-  const rawScore = globalScore * 0.40 + opponentScore * 0.22 + teamScore * 0.16 + roleScore * 0.14 + objectiveScore * 0.08;
-  
-  return Math.round(clamp(rawScore, 0, 100));
+  const global = calculateGlobal(player, duration, role, avgDpm, avgCspm, avgGpm, avgVpm);
+  const vsOpp = calculateVsOpponent(player, opponent);
+  const team = calculateTeamImpact(player, teamTotals, role);
+  const roleScore = calculateRole(player, role, duration);
+  const obj = calculateObjectives(player, objectives);
+
+  const raw =
+    global * 0.35 +
+    vsOpp * 0.25 +
+    team * 0.18 +
+    roleScore * 0.12 +
+    obj * 0.10;
+
+  return Math.round(clamp(raw, 0, 100));
 };
 
-const calculateGlobalScore = (p: PlayerData, duration: number, role: string): number => {
-  const gpm = p.goldEarned / duration;
-  const cspm = p.cs / duration;
+const calculateGlobal = (
+  p: PlayerData,
+  duration: number,
+  role: string,
+  avgDpm: number,
+  avgCspm: number,
+  avgGpm: number,
+  avgVpm: number
+) => {
   const dpm = p.damageDealt / duration;
+  const cspm = p.cs / duration;
+  const gpm = p.goldEarned / duration;
   const vpm = p.visionScore / duration;
 
-  const assistWeight = role === 'Support' ? 3.5 : 2.5;
-  const visionWeight = role === 'Support' ? 2.0 : 0.8;
+  const dmgScore = clamp((dpm / (avgDpm || 1)) * 10, 0, 20);
+  const csScore = clamp((cspm / (avgCspm || 1)) * 10, 0, 15);
+  const goldScore = clamp((gpm / (avgGpm || 1)) * 10, 0, 20);
 
-  const killScore = Math.min(20, p.kills * 4);
-  const deathScore = p.deaths * -3;
-  const assistScore = Math.min(15, p.assists * assistWeight);
-  const csScore = Math.min(15, cspm * 0.8);
-  const goldScore = Math.min(25, gpm / 80);
-  const damageScore = Math.min(20, dpm / 150);
-  const visionScore = Math.min(10, vpm * visionWeight);
+  const visionWeight = role === 'Support' ? 1.8 : 0.7;
+  const visionScore = clamp((vpm / (avgVpm || 1)) * 10 * visionWeight, 0, 15);
 
-  return killScore + deathScore + assistScore + csScore + goldScore + damageScore + visionScore;
+  const kda =
+    (p.kills + p.assists * (role === 'Support' ? 1.5 : 1)) /
+    Math.max(1, p.deaths);
+
+  const kdaScore = clamp(kda * 3, 0, 20);
+
+  return dmgScore + csScore + goldScore + visionScore + kdaScore;
 };
 
-const calculateVsOpponentScore = (p: PlayerData, opp: OpponentData | null, duration: number): number => {
-  if (!opp) return 50;
-
-  const pCspm = p.cs / duration;
-  const oppCspm = opp.cs / duration;
+const calculateVsOpponent = (p: PlayerData, opp: OpponentData | null) => {
+  if (!opp) return 0;
 
   const xpDiff = p.champExperience - opp.champExperience;
   const goldDiff = p.goldEarned - opp.goldEarned;
   const csDiff = p.cs - opp.cs;
-  const visionDiff = p.visionScore - opp.visionScore;
 
-  const xpScore = clamp(xpDiff / 400, -15, 15);
-  const goldScore = clamp(goldDiff / 150, -15, 15);
-  const csScore = clamp((pCspm - oppCspm) * 2, -10, 10);
-  const visionScore = clamp(visionDiff * 0.5, -5, 5);
+  const xpScore = 15 * tanh(xpDiff / 3000);
+  const goldScore = 15 * tanh(goldDiff / 4000);
+  const csScore = 10 * tanh(csDiff / 100);
 
-  return xpScore + goldScore + csScore + visionScore + 50;
+  return xpScore + goldScore + csScore;
 };
 
-const calculateTeamImpactScore = (p: PlayerData, totals: TeamTotals, duration: number): number => {
-  const kp = totals.teamKills > 0 
-    ? ((p.kills + p.assists) / totals.teamKills) * 100 
-    : 50;
-  
-  const dmgShare = totals.teamDamageDealt > 0 
-    ? (p.damageDealt / totals.teamDamageDealt) * 100 
-    : 20;
-  
-  const takenShare = totals.teamDamageTaken > 0 
-    ? (p.damageTaken / totals.teamDamageTaken) * 100 
-    : 20;
+const calculateTeamImpact = (
+  p: PlayerData,
+  totals: TeamTotals,
+  role: string
+) => {
+  const kp = safeDiv(p.kills + p.assists, totals.teamKills) * 100;
+  const dmgShare = safeDiv(p.damageDealt, totals.teamDamageDealt) * 100;
+  const takenShare = safeDiv(p.damageTaken, totals.teamDamageTaken) * 100;
 
-  const kpScore = Math.min(25, kp * 0.35);
-  const dmgScore = Math.min(25, dmgShare * 0.6);
-  const takenScore = Math.min(15, clamp(takenShare * 0.4, -10, 15));
+  const kpScore = kp * 0.5;
 
-  return kpScore + dmgScore + takenScore;
+  const dmgScore =
+    role === 'ADC' || role === 'Mid'
+      ? dmgShare * 0.8
+      : dmgShare * 0.4;
+
+  const tankScore =
+    role === 'Top' || role === 'Jungle'
+      ? takenShare * 0.4
+      : takenShare * 0.2;
+
+  return clamp(kpScore + dmgScore + tankScore, 0, 30);
 };
 
-const calculateRoleScore = (p: PlayerData, role: string, duration: number): number => {
+const calculateRole = (
+  p: PlayerData,
+  role: string,
+  duration: number
+) => {
   if (role === 'Support') {
-    const wardsPlaced = Math.min(20, p.wardsPlaced / (duration / 6) * 1.5);
-    const wardsCleared = Math.min(15, p.wardsCleared * 2);
-    const controlWards = Math.min(15, p.detectorWardsPlaced * 3);
-    const assistBonus = Math.min(20, p.assists * 1.5);
-    return wardsPlaced + wardsCleared + controlWards + assistBonus;
+    return (
+      p.wardsPlaced * 0.6 +
+      p.wardsCleared * 1.2 +
+      p.detectorWardsPlaced * 2
+    );
   }
 
   if (role === 'Jungle') {
-    const jgCs = Math.min(20, p.neutralMinionsKilled / duration * 15);
-    const objDmg = Math.min(20, p.damageDealtToObjectives / 500);
-    const killPart = Math.min(15, p.kills + p.assists);
-    return jgCs + objDmg + killPart;
+    return (
+      (p.neutralMinionsKilled / duration) * 10 +
+      p.damageDealtToObjectives / 800
+    );
   }
 
-  if (role === 'Mid') {
-    const soloKills = Math.min(25, p.kills * 4);
-    const turret = Math.min(20, p.turretKills * 8);
-    const cs10 = Math.min(15, p.cs > 80 ? 15 : p.cs / 80 * 15);
-    return soloKills + turret + cs10;
+  if (role === 'Mid' || role === 'ADC') {
+    return (
+      (p.damageDealt / duration) * 0.05 +
+      p.turretKills * 3
+    );
   }
 
-  if (role === 'ADC') {
-    const dmg = Math.min(30, p.damageDealt / 100);
-    const cs = Math.min(20, p.cs / 8);
-    const turret = Math.min(15, p.turretKills * 5);
-    return dmg + cs + turret;
-  }
-
-  const csScore = Math.min(25, p.cs / 8);
-  const dmgScore = Math.min(25, p.damageDealt / 200);
-  const turretScore = Math.min(15, p.turretKills * 5);
-  return csScore + dmgScore + turretScore;
+  return (
+    (p.cs / duration) * 2 +
+    p.turretKills * 3 +
+    p.damageTaken * 0.0005
+  );
 };
 
-const calculateObjectiveScore = (p: PlayerData, objectives: MatchObjectives): number => {
-  const dragDmg = objectives.dragons * 20;
-  const baronDmg = objectives.barons * 25;
-  const heraldDmg = objectives.hersalds * 15;
-  const objDmg = Math.min(30, p.damageDealtToObjectives / 300);
-
-  return dragDmg + baronDmg + heraldDmg + objDmg;
-};
-
-export const recalculateScoresForTeam = (
-  participants: PlayerData[],
-  enemyParticipants: OpponentData[],
-  teamTotals: TeamTotals,
-  matchDuration: number,
-  objectives: MatchObjectives
-): { scores: number[] } => {
-  const scores = participants.map(p => {
-    const role = p.teamPosition === 'UTILITY' ? 'Support' 
-      : p.teamPosition === 'JUNGLE' ? 'Jungle'
-      : p.teamPosition === 'MIDDLE' ? 'Mid'
-      : p.teamPosition === 'BOTTOM' ? 'ADC'
-      : 'Top';
-
-    const opponent = enemyParticipants.find(e => e.teamPosition === p.teamPosition) || null;
-
-    return calculateScoreV2(p, opponent, teamTotals, matchDuration, role, objectives);
-  });
-
-  return { scores };
+const calculateObjectives = (
+  p: PlayerData,
+  obj: MatchObjectives
+) => {
+  return (
+    p.damageDealtToObjectives / 1000 +
+    obj.dragons * 2 +
+    obj.barons * 3 +
+    obj.hersalds * 2
+  );
 };

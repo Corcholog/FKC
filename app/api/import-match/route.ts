@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { calculateScoreV2 } from '@/lib/score';
+import { calculateScoreV3 } from '@/lib/score';
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
@@ -66,14 +66,32 @@ export async function POST(request: NextRequest) {
       teamKills: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.kills || 0), 0),
       teamDamageDealt: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.totalDamageDealtToChampions || 0), 0),
       teamDamageTaken: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.totalDamageTaken || 0), 0),
-      teamAssists: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.assists || 0), 0),
     };
 
-    const objectives: { dragons: number; barons: number; hersalds: number } = {
+    const objectives = {
       dragons: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.dragons || 0), 0),
       barons: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.barons || 0), 0),
       hersalds: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.riftHeraldTakedowns || 0), 0),
     };
+
+    const teamParticipantsForV3 = ourRiotParticipants.map((p: any) => ({
+      kills: p.kills || 0,
+      deaths: p.deaths || 0,
+      assists: p.assists || 0,
+      cs: (p.totalMinionsKilled || 0) + (p.neutralMinionsKilled || 0),
+      goldEarned: p.goldEarned || 0,
+      visionScore: p.visionScore || 0,
+      damageDealt: p.totalDamageDealtToChampions || 0,
+      damageTaken: p.totalDamageTaken || 0,
+      champExperience: p.champExperience || 0,
+      neutralMinionsKilled: p.neutralMinionsKilled || 0,
+      damageDealtToObjectives: p.damageDealtToBuildings || 0,
+      turretKills: p.turretTakedowns || 0,
+      detectorWardsPlaced: p.detectorWardsPlaced || 0,
+      wardsPlaced: p.wardsPlaced || 0,
+      wardsCleared: p.wardsCleared || 0,
+      teamPosition: p.teamPosition || 'TOP',
+    }));
 
     const mapParticipant = (p: any, isAlly: boolean) => {
       const data = {
@@ -111,6 +129,7 @@ export async function POST(request: NextRequest) {
         };
 
         const opponentData = opponent ? {
+          teamPosition: opponent.teamPosition || 'TOP',
           kills: opponent.kills || 0,
           deaths: opponent.deaths || 0,
           assists: opponent.assists || 0,
@@ -121,7 +140,7 @@ export async function POST(request: NextRequest) {
           neutralMinionsKilled: opponent.neutralMinionsKilled || 0,
         } : null;
 
-        data.score = calculateScoreV2(playerData, opponentData, teamTotals, durationMinutes, data.role, objectives);
+        data.score = calculateScoreV3(playerData, opponentData, teamTotals, durationMinutes, data.role, objectives, teamParticipantsForV3);
       }
 
       return data;

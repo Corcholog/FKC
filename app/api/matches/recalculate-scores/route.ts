@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { calculateScoreV2 } from '@/lib/score';
+import { calculateScoreV3 } from '@/lib/score';
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -73,7 +73,6 @@ export async function POST(request: NextRequest) {
         teamKills: ourParticipants.reduce((s: number, p: any) => s + (p.kills || 0), 0),
         teamDamageDealt: ourParticipants.reduce((s: number, p: any) => s + (p.totalDamageDealtToChampions || 0), 0),
         teamDamageTaken: ourParticipants.reduce((s: number, p: any) => s + (p.totalDamageTaken || 0), 0),
-        teamAssists: ourParticipants.reduce((s: number, p: any) => s + (p.assists || 0), 0),
       };
 
       const objectives = {
@@ -81,6 +80,25 @@ export async function POST(request: NextRequest) {
         barons: ourParticipants.reduce((s: number, p: any) => s + (p.barons || 0), 0),
         hersalds: ourParticipants.reduce((s: number, p: any) => s + (p.riftHeraldTakedowns || 0), 0),
       };
+
+      const teamParticipantsForV3 = ourParticipants.map((p: any) => ({
+        kills: p.kills || 0,
+        deaths: p.deaths || 0,
+        assists: p.assists || 0,
+        cs: (p.totalMinionsKilled || 0) + (p.neutralMinionsKilled || 0),
+        goldEarned: p.goldEarned || 0,
+        visionScore: p.visionScore || 0,
+        damageDealt: p.totalDamageDealtToChampions || 0,
+        damageTaken: p.totalDamageTaken || 0,
+        champExperience: p.champExperience || 0,
+        neutralMinionsKilled: p.neutralMinionsKilled || 0,
+        damageDealtToObjectives: p.damageDealtToBuildings || 0,
+        turretKills: p.turretTakedowns || 0,
+        detectorWardsPlaced: p.detectorWardsPlaced || 0,
+        wardsPlaced: p.wardsPlaced || 0,
+        wardsCleared: p.wardsCleared || 0,
+        teamPosition: p.teamPosition || 'TOP',
+      }));
 
       for (const p of match.ally_participants) {
         const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
@@ -121,6 +139,7 @@ export async function POST(request: NextRequest) {
         };
 
         const opponentData = opponent ? {
+          teamPosition: opponent.teamPosition || 'TOP',
           kills: opponent.kills || 0,
           deaths: opponent.deaths || 0,
           assists: opponent.assists || 0,
@@ -131,7 +150,7 @@ export async function POST(request: NextRequest) {
           neutralMinionsKilled: opponent.neutralMinionsKilled || 0,
         } : null;
 
-        const score = calculateScoreV2(playerData, opponentData, teamTotals, durationMinutes, role, objectives);
+        const score = calculateScoreV3(playerData, opponentData, teamTotals, durationMinutes, role, objectives, teamParticipantsForV3);
 
         const { error: updateErr } = await supabase
           .from('ally_participants')

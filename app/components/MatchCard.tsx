@@ -64,8 +64,8 @@ export default function MatchCard({ match, allChampions }: MatchCardProps) {
     <a
       {...linkProps}
       className={`block relative rounded-2xl border-2 overflow-hidden shadow-lg ${match.we_won
-        ? `bg-gradient-to-r from-emerald-50 to-white border-emerald-200/80 ${hasLink ? 'hover:border-emerald-400 hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(16,185,129,0.15)]' : ''}`
-        : `bg-gradient-to-r from-rose-50 to-white border-rose-200/80 ${hasLink ? 'hover:border-rose-400 hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(244,63,94,0.15)]' : ''}`
+        ? `bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-900/20 dark:to-[#091428] border-emerald-200/80 dark:border-emerald-800/50 ${hasLink ? 'hover:border-emerald-400 hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(16,185,129,0.15)]' : ''}`
+        : `bg-gradient-to-r from-rose-50 to-white dark:from-rose-900/20 dark:to-[#091428] border-rose-200/80 dark:border-rose-800/50 ${hasLink ? 'hover:border-rose-400 hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(244,63,94,0.15)]' : ''}`
         } transition-all duration-300 ${hasLink ? 'cursor-pointer shadow-xl' : 'cursor-default'}`}
     >
       <div className="p-6">
@@ -95,7 +95,7 @@ export default function MatchCard({ match, allChampions }: MatchCardProps) {
                       <div className="w-14 h-14 rounded-xl border border-blue-100 bg-blue-50 flex items-center justify-center text-xs text-blue-300">?</div>
                     )}
                     {(isMVP || isINT) && (
-                      <div className={`absolute -bottom-3 text-[14px] rounded-full w-6 h-6 flex items-center justify-center shadow-md z-10 border bg-white ${isMVP ? 'border-[#f1c40f]' : 'border-[#0984e3]'}`} title={isMVP ? `MVP (Score: ${pick?.score})` : `INT MVP (Score: ${pick?.score})`}>
+                      <div className={`absolute -bottom-3 text-[14px] rounded-full w-6 h-6 flex items-center justify-center shadow-md z-10 border bg-white dark:bg-[#091428] ${isMVP ? 'border-[#f1c40f]' : 'border-[#0984e3]'}`} title={isMVP ? `MVP (Score: ${pick?.score})` : `INT MVP (Score: ${pick?.score})`}>
                         {isMVP ? '🏆' : '😈'}
                       </div>
                     )}
@@ -145,7 +145,7 @@ export default function MatchCard({ match, allChampions }: MatchCardProps) {
                       <div className="w-14 h-14 rounded-xl border border-blue-100 bg-blue-50 flex items-center justify-center text-xs text-blue-300">?</div>
                     )}
                     {(isMVP || isINT) && (
-                      <div className={`absolute -bottom-3 text-[14px] rounded-full w-6 h-6 flex items-center justify-center shadow-md z-10 border bg-white ${isMVP ? 'border-[#f1c40f]' : 'border-[#0984e3]'}`} title={isMVP ? `MVP (Score: ${pick?.score})` : `INT MVP (Score: ${pick?.score})`}>
+                      <div className={`absolute -bottom-3 text-[14px] rounded-full w-6 h-6 flex items-center justify-center shadow-md z-10 border bg-white dark:bg-[#091428] ${isMVP ? 'border-[#f1c40f]' : 'border-[#0984e3]'}`} title={isMVP ? `MVP (Score: ${pick?.score})` : `INT MVP (Score: ${pick?.score})`}>
                         {isMVP ? '🏆' : '😈'}
                       </div>
                     )}
@@ -174,20 +174,20 @@ export default function MatchCard({ match, allChampions }: MatchCardProps) {
       </div>
 
       {/* Footer */}
-      <div className="bg-blue-50/50 border-t border-blue-100 px-6 py-4 flex justify-between items-center text-sm">
-        <div className="flex-1 text-left text-slate-500 font-medium truncate">
+      <div className="bg-blue-50/50 dark:bg-[#091428]/50 border-t border-blue-100 dark:border-[#322814] px-6 py-4 flex justify-between items-center text-sm">
+        <div className="flex-1 text-left text-slate-500 dark:text-slate-400 font-medium truncate">
           {new Date(match.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-          <span className="mx-2 text-slate-300">|</span>
-          <span className="text-slate-700">{match.match_type?.replace('_', ' ').toUpperCase()}</span>
+          <span className="mx-2 text-slate-300 dark:text-slate-600">|</span>
+          <span className="text-slate-700 dark:text-slate-300">{match.match_type?.replace('_', ' ').toUpperCase()}</span>
           {match.enemy_team_name && (
             <>
-              <span className="mx-2 text-slate-300">|</span>
-              <span className="text-[#0f172a] font-bold">vs {match.enemy_team_name}</span>
+              <span className="mx-2 text-slate-300 dark:text-slate-600">|</span>
+              <span className="text-foreground font-bold">vs {match.enemy_team_name}</span>
             </>
           )}
         </div>
         <div className="flex-1 flex justify-end">
-          <div className="font-mono text-slate-600 font-bold bg-white px-3 py-1 rounded-md shadow-sm border border-blue-100">
+          <div className="font-mono text-slate-600 dark:text-slate-300 font-bold bg-white dark:bg-[#1e2328] px-3 py-1 rounded-md shadow-sm border border-blue-100 dark:border-[#322814]">
             {formatDuration(match.duration_minutes, match.duration_seconds || 0)}
           </div>
         </div>

@@ -47,7 +47,7 @@ export default function DurationChart({ title, matches }: DurationChartProps) {
   };
 
   return (
-    <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col w-full max-w-sm">
+    <div className="bg-background p-6 rounded-2xl border border-blue-100 dark:border-[#322814] shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col w-full max-w-sm">
       <h3 className="text-slate-500 font-bold text-xs uppercase tracking-widest text-center mb-8">{title}</h3>
       
       <div className="flex justify-between items-end h-44 gap-2 mt-2 mb-2">

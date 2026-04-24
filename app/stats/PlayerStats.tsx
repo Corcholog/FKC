@@ -157,13 +157,13 @@ export default function PlayerStats({
   }, [selectedPlayerId])
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-8 py-8 bg-[#f4faff] text-slate-900">
-      
-      <div className="mb-8 border-b border-slate-200 pb-6 flex flex-col items-center text-center">
-        <h1 className="text-4xl font-black text-slate-900 drop-shadow-sm">
+    <div className="w-full max-w-6xl mx-auto px-8 py-8 text-foreground">
+
+      <div className="mb-8 border-b border-slate-200 dark:border-[#322814] pb-6 flex flex-col items-center text-center">
+        <h1 className="text-4xl font-black text-foreground drop-shadow-sm">
           Estadísticas de {activePlayer?.name || 'Jugador'}
         </h1>
-        <p className="text-sm font-semibold text-slate-500 uppercase tracking-wide mt-2">
+        <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mt-2">
           Haz clic en las tarjetas de arriba para ver el historial de otro jugador
         </p>
       </div>
@@ -177,10 +177,10 @@ export default function PlayerStats({
           No hay partidas registradas para este jugador.
         </div>
       ) : (
-        <div className="overflow-hidden bg-white border border-blue-100 rounded-2xl shadow-xl shadow-blue-900/5">
+        <div className="overflow-hidden bg-card border border-blue-100 dark:border-[#322814] rounded-2xl shadow-xl shadow-blue-900/5">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
+              <tr className="bg-slate-50 dark:bg-[#091428] border-b border-slate-200 dark:border-[#322814] text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">
                 <th className="p-4 font-black">Champion</th>
                 <th className="p-4 font-black text-center">Games</th>
                 <th className="p-4 font-black text-center">W - L</th>
@@ -190,9 +190,9 @@ export default function PlayerStats({
                 <th className="p-4 font-black text-center">CS/Min</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-[#322814]">
               {stats.map((stat, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-[#1e2328]/50 transition-colors">
                   <td className="p-4 flex items-center gap-3">
                     <Image 
                       src={getChampionIcon(stat.championName) || '/placeholder-icon.png'} 
@@ -200,14 +200,14 @@ export default function PlayerStats({
                       width={40} height={40}
                       className="w-10 h-10 rounded-md shadow-sm border border-slate-200"
                     />
-                    <span className="font-bold text-slate-900">{stat.championName}</span>
+                    <span className="font-bold text-foreground">{stat.championName}</span>
                   </td>
                   
                   <td className="p-4 text-center font-black text-lg text-yellow-600">
                     {stat.games}
                   </td>
                   
-                  <td className="p-4 text-center text-slate-500 font-semibold text-sm">
+                  <td className="p-4 text-center text-slate-500 dark:text-slate-400 font-semibold text-sm">
                     <span className="text-green-500">{stat.wins}W</span>
                     <span className="mx-1 text-slate-300">-</span>
                     <span className="text-red-500">{stat.losses}L</span>
@@ -219,7 +219,7 @@ export default function PlayerStats({
                     </span>
                   </td>
 
-                  <td className="p-4 text-center text-slate-600 font-semibold text-sm">
+                  <td className="p-4 text-center text-slate-600 dark:text-slate-300 font-semibold text-sm">
                     {stat.kills} / <span className="text-red-400">{stat.deaths}</span> / {stat.assists}
                   </td>
 

@@ -262,7 +262,7 @@ export default async function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f4faff] text-slate-900 pb-20 pt-16">
+    <main className="min-h-screen bg-background text-foreground pb-20 pt-16">
 
       {/* Navigation Bar */}
       <Navbar />
@@ -271,7 +271,7 @@ export default async function Home() {
       <Countdown />
 
       {/* Hero Banner */}
-      <div className="relative h-[700px] flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#74b9ff]/80 to-[#f4faff]">
+      <div className="relative h-[700px] flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#74b9ff]/80 to-[#f4faff] dark:from-[#010a13]/80 dark:to-[#091428]">
         <Image src="/hero_banner.jpeg" alt="Hero Banner" fill className="object-cover opacity-[0.15] mix-blend-multiply" priority />
         <div className="relative text-center z-10 px-6 mt-10 flex flex-col items-center">
           <Image
@@ -280,8 +280,8 @@ export default async function Home() {
             width={120} height={120}
             className="w-32 h-32 mb-6 rounded-3xl border-2 border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.12)] object-cover hover:scale-105 transition duration-500"
           />
-          <h1 className="text-7xl font-black tracking-wider text-slate-900 drop-shadow-sm mb-4">FAKE CLAN</h1>
-          <p className="text-2xl font-bold text-slate-600 bg-white/50 backdrop-blur-sm px-6 py-2 rounded-full border border-white/60 shadow-sm">"Que ganas de mejorar la puta madre" - Joshy</p>
+          <h1 className="text-7xl font-black tracking-wider text-foreground drop-shadow-sm mb-4">FAKE CLAN</h1>
+          <p className="text-2xl font-bold text-slate-600 dark:text-slate-300 bg-white/50 dark:bg-white/5 backdrop-blur-sm px-6 py-2 rounded-full border border-white/60 dark:border-white/10 shadow-sm">"Que ganas de mejorar la puta madre" - Joshy</p>
           <div className="mt-10 mx-auto w-full max-w-4xl">
             <Image src="/player_roster.jpeg" alt="Team Roster" width={800} height={320} className="w-full h-80 object-cover rounded-xl border-4 border-white shadow-[0_20px_50px_rgba(8,112,184,0.15)] bg-white" />
           </div>
@@ -295,7 +295,7 @@ export default async function Home() {
           {rosterStats.length > 0 ? rosterStats.map((stat: any) => (
             <div
   key={stat.id}
-  className="bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-yellow-400 transition flex flex-col"
+  className="bg-card border border-zinc-200 dark:border-[#322814] rounded-2xl overflow-hidden hover:border-yellow-400 transition flex flex-col"
 >
   {/* IMAGE TOP */}
   <div className="h-[300px] relative overflow-hidden">
@@ -314,27 +314,27 @@ export default async function Home() {
       <div className="text-yellow-600 font-bold text-xs tracking-widest uppercase">
         {stat.role}
       </div>
-      <div className="text-3xl font-black mt-1 text-slate-900 uppercase tracking-wider">
+      <div className="text-3xl font-black mt-1 text-foreground uppercase tracking-wider">
         {stat.name}
       </div>
     </div>
 
     {/* Overall Stats */}
-    <div className="grid grid-cols-3 gap-1 mb-4 border-t border-b border-slate-200 py-3">
+    <div className="grid grid-cols-3 gap-1 mb-4 border-t border-b border-slate-200 dark:border-[#322814] py-3">
       <div className="text-center">
-        <p className="text-[10px] text-slate-500 uppercase font-bold">Winrate</p>
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">Winrate</p>
         <p className={`text-lg font-bold ${getColorWR(stat.winrate)}`}>
           {stat.totalGames > 0 ? `${stat.winrate}%` : '-'}
         </p>
       </div>
       <div className="text-center">
-        <p className="text-[10px] text-slate-500 uppercase font-bold">KDA</p>
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">KDA</p>
         <p className={`text-lg font-bold ${getColorKDA(stat.overallKda)}`}>
           {stat.totalGames > 0 ? stat.overallKda.toFixed(2) : '-'}
         </p>
       </div>
       <div className="text-center">
-        <p className="text-[10px] text-slate-500 uppercase font-bold">Avg Score</p>
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">Avg Score</p>
         <p className={`text-lg font-bold ${stat.avgScore > 0 ? getColorAvgScore(stat.avgScore) : 'text-slate-400'}`}>
           {stat.avgScore > 0 ? Math.round(stat.avgScore) : '-'}
         </p>
@@ -343,11 +343,11 @@ export default async function Home() {
 
     {/* MVP Stats */}
     <div className="grid grid-cols-2 gap-2 mb-4">
-      <div className="text-center bg-emerald-50 rounded-lg py-2">
+      <div className="text-center bg-emerald-50 dark:bg-emerald-900/20 rounded-lg py-2">
         <p className="text-[9px] text-emerald-600 uppercase font-bold">MVPs</p>
         <p className="text-lg font-bold text-emerald-600">{stat.mvpCount}</p>
       </div>
-      <div className="text-center bg-rose-50 rounded-lg py-2">
+      <div className="text-center bg-rose-50 dark:bg-rose-900/20 rounded-lg py-2">
         <p className="text-[9px] text-rose-600 uppercase font-bold">INTs</p>
         <p className="text-lg font-bold text-rose-600">{stat.intMvpCount}</p>
       </div>
@@ -355,7 +355,7 @@ export default async function Home() {
 
     {/* Top Champions */}
     <div className="flex flex-col flex-1">
-      <p className="text-[10px] text-slate-500 uppercase font-bold mb-2 text-center">
+      <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold mb-2 text-center">
         Top Picks
       </p>
 
@@ -364,7 +364,7 @@ export default async function Home() {
           {stat.topChampions.map((champ: any, idx: number) => (
             <div
               key={idx}
-              className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200"
+              className="flex items-center gap-3 bg-slate-50 dark:bg-[#1e2328] p-2 rounded-lg border border-slate-200 dark:border-[#322814]"
             >
               <Image
                 src={getChampionIcon(champ.name) || '/placeholder-icon.png'}
@@ -374,10 +374,10 @@ export default async function Home() {
                 className="w-7 h-7 rounded border border-slate-300"
               />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-900 truncate leading-none mb-1">
+                <p className="text-sm font-semibold text-foreground truncate leading-none mb-1">
                   {champ.name}
                 </p>
-                <p className="text-[10px] text-slate-500 leading-none">
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-none">
                   {champ.games} G •
                   <span className={`font-bold ml-1 ${getColorWR(champ.winrate)}`}>
                     {champ.winrate.toFixed(0)}%
@@ -399,25 +399,25 @@ export default async function Home() {
   </div>
 </div>
           )) : (
-            <p className="col-span-5 text-center text-zinc-500 py-10">No players added yet.</p>
+            <p className="col-span-5 text-center text-zinc-500 dark:text-zinc-400 py-10">No players added yet.</p>
           )}
         </div>
       </div>
 
       {/* Team Performance */}
-<div className="bg-[#eaf4fc] py-16 border-y border-[#bae6fd] shadow-inner relative z-20">
+<div className="bg-blue-50 dark:bg-[#091428] py-16 border-y border-[#bae6fd] dark:border-[#322814] shadow-inner relative z-20">
   <div className="max-w-7xl mx-auto px-6">
-    <h2 className="text-4xl font-black mb-10 text-center text-[#0f172a] drop-shadow-sm">Team Performance</h2>
+    <h2 className="text-4xl font-black mb-10 text-center text-foreground drop-shadow-sm">Team Performance</h2>
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap justify-center gap-8 text-center">
         {standardMatchTypes.map(type => (
-          <div key={type} className="w-full sm:w-48 bg-white p-8 rounded-[2rem] border border-blue-100 shadow-xl shadow-blue-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200">
+          <div key={type} className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border border-blue-100 dark:border-[#322814] shadow-xl shadow-blue-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200">
             <div className="text-5xl font-black text-[#0984e3] drop-shadow-sm">{calculateWinrate(type)}</div>
             <div className="mt-3 text-slate-500 font-black text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
           </div>
         ))}
         {/* Overall WR Box (Estilo Dorado/Destacado) */}
-        <div className="w-full sm:w-48 bg-white p-8 rounded-[2rem] border-2 border-[#f1c40f]/60 shadow-xl shadow-yellow-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-yellow-900/10">
+        <div className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border-2 border-[#f1c40f]/60 shadow-xl shadow-yellow-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-yellow-900/10">
           <div className="text-5xl font-black text-[#f39c12] drop-shadow-sm">{calculateWinrate()}</div>
           <div className="mt-3 text-[#f39c12] font-black tracking-widest text-xs uppercase">OVERALL WR</div>
         </div>
@@ -426,12 +426,12 @@ export default async function Home() {
       {competitiveMatchTypes.length > 0 && (
         <div className="flex flex-wrap justify-center gap-8 text-center pt-4">
           {/* Competitive WR Box (Estilo Púrpura) */}
-          <div className="w-full sm:w-48 bg-white p-8 rounded-[2rem] border-2 border-purple-200 shadow-xl shadow-purple-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-purple-900/10">
+          <div className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border-2 border-purple-200 dark:border-purple-900 shadow-xl shadow-purple-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-purple-900/10">
             <div className="text-5xl font-black text-purple-600 drop-shadow-sm">{calculateWinrate(excludeTypes, true)}</div>
             <div className="mt-3 text-purple-600/80 font-black tracking-widest text-xs uppercase">COMPETITIVE WR</div>
           </div>
           {competitiveMatchTypes.map(type => (
-            <div key={type} className="w-full sm:w-48 bg-white p-8 rounded-[2rem] border border-blue-100 shadow-xl shadow-blue-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200">
+            <div key={type} className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border border-blue-100 dark:border-[#322814] shadow-xl shadow-blue-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200">
               <div className="text-5xl font-black text-[#0984e3] drop-shadow-sm">{calculateWinrate(type)}</div>
               <div className="mt-3 text-slate-500 font-black text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
             </div>
@@ -461,8 +461,8 @@ export default async function Home() {
           {recentMatches.length > 0 ? recentMatches.map((match: any) => (
             <MatchCard key={match.id} match={match} allChampions={allChampions} />
           )) : (
-            <div className="bg-white border border-blue-100 rounded-2xl p-12 text-center shadow-sm">
-              <p className="text-slate-500 text-lg mb-4">No matches recorded yet.</p>
+            <div className="bg-card border border-blue-100 dark:border-[#322814] rounded-2xl p-12 text-center shadow-sm">
+              <p className="text-slate-500 dark:text-slate-400 text-lg mb-4">No matches recorded yet.</p>
               <Link href="/admin" className="inline-block px-6 py-3 bg-[#f1c40f] text-slate-900 font-bold rounded-lg hover:bg-yellow-400 transition shadow-md">
                 Import Matches
               </Link>

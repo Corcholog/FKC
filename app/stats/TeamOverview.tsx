@@ -161,7 +161,7 @@ export default function TeamOverview({
 
   return (
     <div className="w-full max-w-[1400px] mx-auto px-4 py-8">
-      <h2 className="text-3xl font-black text-slate-900 mb-8 px-4 drop-shadow-sm">Starting Roster</h2>
+      <h2 className="text-3xl font-black text-foreground mb-8 px-4 drop-shadow-sm">Starting Roster</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         {teamStats.map((stat, idx) => {
@@ -171,27 +171,26 @@ export default function TeamOverview({
             <div 
               key={idx} 
               onClick={() => onPlayerSelect(stat.player.id)}
-              className={`cursor-pointer bg-white border rounded-2xl overflow-hidden shadow-xl flex flex-col transition-all duration-300 ${
-                isSelected 
-                  ? 'border-blue-400 ring-4 ring-blue-100 shadow-blue-900/15 scale-[1.02]' 
-                  : 'border-blue-100 shadow-blue-900/5 hover:-translate-y-1 hover:border-blue-200'
+              className={`cursor-pointer bg-card border rounded-2xl overflow-hidden shadow-xl flex flex-col transition-all duration-300 ${
+                isSelected
+                  ? 'border-blue-400 ring-4 ring-blue-100 dark:ring-blue-900 shadow-blue-900/15 scale-[1.02]'
+                  : 'border-blue-100 dark:border-[#322814] shadow-blue-900/5 hover:-translate-y-1 hover:border-blue-200'
               }`}
             >
               
-              <div className={`p-4 border-b text-center transition-colors ${isSelected ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
+              <div className={`p-4 border-b text-center transition-colors ${isSelected ? 'bg-blue-50 dark:bg-[#091428] border-blue-200 dark:border-[#322814]' : 'bg-slate-50 dark:bg-[#1e2328] border-slate-200 dark:border-[#322814]'}`}>
                 <span className="text-xs uppercase tracking-widest text-yellow-600 font-bold block mb-1">
                   {stat.player.role}
                 </span>
-                {/* INVERTIDO: Nombre real grande, IGN chico */}
-                <h3 className="text-2xl font-black text-slate-900 truncate" title={stat.player.name}>
+                <h3 className="text-2xl font-black text-foreground truncate" title={stat.player.name}>
                   {stat.player.name}
                 </h3>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-1">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mt-1">
                   {stat.player.ign}
                 </p>
               </div>
 
-              <div className="p-5 flex-1 border-b border-slate-100">
+              <div className="p-5 flex-1 border-b border-slate-100 dark:border-[#322814]">
                 <div className="flex justify-between items-center mb-4">
                   <div className="text-center">
                     <p className="text-[10px] font-bold text-slate-400 uppercase">Winrate</p>
@@ -206,17 +205,17 @@ export default function TeamOverview({
                     </p>
                   </div>
                 </div>
-                <div className="text-center text-xs text-slate-500 font-bold pb-2">
+                <div className="text-center text-xs text-slate-500 dark:text-slate-400 font-bold pb-2">
                   {stat.wins}W - {stat.losses}L ({stat.totalGames} Games)
                 </div>
               </div>
 
-              <div className="p-4 bg-white">
-                <p className="text-[10px] text-slate-400 uppercase font-bold mb-3 text-center">Top Picks</p>
+              <div className="p-4 bg-card">
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold mb-3 text-center">Top Picks</p>
                 {stat.topChampions.length > 0 ? (
                   <div className="space-y-2">
                     {stat.topChampions.map((champ, cIdx) => (
-                      <div key={cIdx} className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      <div key={cIdx} className="flex items-center gap-3 bg-slate-50 dark:bg-[#1e2328] p-2 rounded-lg border border-slate-100 dark:border-[#322814]">
                         <Image 
                           src={getChampionIcon(champ.name) || '/placeholder-icon.png'} 
                           alt={champ.name}
@@ -224,8 +223,8 @@ export default function TeamOverview({
                           className="w-8 h-8 rounded border border-slate-200 shadow-sm"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-slate-900 truncate leading-none mb-1">{champ.name}</p>
-                          <p className="text-[10px] text-slate-500 leading-none">
+                          <p className="text-sm font-semibold text-foreground truncate leading-none mb-1">{champ.name}</p>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-none">
                             {champ.games} G • 
                             <span className={`font-bold ml-1 ${getColorWR(champ.winrate)}`}>
                               {champ.winrate.toFixed(0)}%

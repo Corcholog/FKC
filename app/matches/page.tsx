@@ -161,7 +161,7 @@ const allChampions = [
   }
 
   return (
-    <main className="min-h-screen bg-[#f4faff] text-slate-900 pb-20 pt-16">
+    <main className="min-h-screen bg-background text-foreground pb-20 pt-16">
       
       {/* Navigation Bar */}
       <Navbar />
@@ -169,8 +169,8 @@ const allChampions = [
       <div className="max-w-7xl mx-auto px-6 py-16">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
           <div>
-            <h1 className="text-5xl font-black mb-2 text-[#0f172a]">Match History</h1>
-            <p className="text-slate-500 font-semibold">Total matches: {totalMatches}</p>
+            <h1 className="text-5xl font-black mb-2 text-foreground">Match History</h1>
+            <p className="text-slate-500 dark:text-slate-400 font-semibold">Total matches: {totalMatches}</p>
           </div>
 
           {/* Filters */}
@@ -189,8 +189,8 @@ const allChampions = [
                   onClick={() => handleTypeFilter(f.id)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${
                     typeFilter === f.id 
-                      ? 'bg-[#f1c40f] text-slate-900 border-yellow-500 shadow-md' 
-                      : 'bg-white text-slate-600 border-blue-200 hover:border-[#f1c40f] hover:text-[#f39c12]'
+                      ? 'bg-[#f1c40f] text-slate-900 border-yellow-500 shadow-md'
+                      : 'bg-card text-slate-600 dark:text-slate-300 border-blue-200 dark:border-[#322814] hover:border-[#f1c40f] hover:text-[#f39c12]'
                   }`}
                 >
                   {f.label}
@@ -211,7 +211,7 @@ const allChampions = [
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${
                     resultFilter === f.id 
                       ? f.activeClass
-                      : `bg-white text-slate-600 border-blue-200 ${f.colorClass}`
+                      : `bg-card text-slate-600 dark:text-slate-300 border-blue-200 dark:border-[#322814] ${f.colorClass}`
                   }`}
                 >
                   {f.label}
@@ -230,7 +230,7 @@ const allChampions = [
               <MatchCard key={match.id} match={match} allChampions={allChampions} />
             ))
           ) : (
-            <div className="text-center py-12 text-slate-500 font-medium bg-white border border-blue-100 rounded-2xl shadow-sm">No matches found</div>
+            <div className="text-center py-12 text-slate-500 dark:text-slate-400 font-medium bg-card border border-blue-100 dark:border-[#322814] rounded-2xl shadow-sm">No matches found</div>
           )}
         </div>
 
@@ -253,7 +253,7 @@ const allChampions = [
                   className={`w-10 h-10 rounded-lg font-bold transition-all shadow-sm ${
                     currentPage === page
                       ? 'bg-[#f1c40f] text-slate-900 border border-yellow-500'
-                      : 'bg-white text-slate-600 border border-blue-200 hover:border-[#f1c40f] hover:text-[#f39c12]'
+                      : 'bg-card text-slate-600 dark:text-slate-300 border border-blue-200 dark:border-[#322814] hover:border-[#f1c40f] hover:text-[#f39c12]'
                   }`}
                 >
                   {page}
@@ -272,7 +272,7 @@ const allChampions = [
         )}
 
         {/* Page Info */}
-        <div className="mt-4 text-center text-sm font-semibold text-slate-500">
+        <div className="mt-4 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">
           Page {currentPage} of {totalPages} ({totalMatches} total matches)
         </div>
       </div>

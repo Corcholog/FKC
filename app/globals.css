@@ -84,9 +84,9 @@
 }
 
 .dark {
-  --background: #f4faff;
-  --foreground: #0f172a;
-  --card: #ffffff;
+  --background: #010a13;
+  --foreground: #f0e6d2;
+  --card: #091428;
   --card-foreground: #f0e6d2;
   --popover: #091428;
   --popover-foreground: #f0e6d2;
@@ -98,9 +98,9 @@
   --muted-foreground: #a09b8c;
   --accent: #1e2328;
   --accent-foreground: #f0e6d2;
-  --destructive: #c80000;
+  --destructive: #ff4444;
   --border: #322814;
-  --input: #322814;
+  --input: #1e2328;
   --ring: #c89b3c;
   --chart-1: #c89b3c;
   --chart-2: #091428;

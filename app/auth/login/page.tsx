@@ -47,9 +47,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f4faff] text-slate-900 flex items-center justify-center p-8">
-      <div className="max-w-md w-full bg-white p-8 rounded-2xl border border-blue-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-        <h1 className="text-2xl font-black mb-6 text-[#0f172a] text-center">Login to Admin</h1>
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-8">
+      <div className="max-w-md w-full bg-card p-8 rounded-2xl border border-blue-100 dark:border-[#322814] shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+        <h1 className="text-2xl font-black mb-6 text-foreground text-center">Login to Admin</h1>
         {message && (
           <div className={`p-4 mb-4 rounded ${message.includes('failed') ? 'bg-rose-100 text-rose-600 border border-rose-200' : 'bg-emerald-100 text-emerald-600 border border-emerald-200'}`}>
             {message}
@@ -57,22 +57,22 @@ export default function LoginPage() {
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-bold text-slate-600 mb-1">Email</label>
+            <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-2 bg-blue-50/50 border border-blue-200 rounded-lg focus:border-[#f1c40f] focus:ring-1 focus:ring-[#f1c40f] outline-none transition-all"
+              className="w-full p-2 bg-blue-50/50 dark:bg-[#1e2328] border border-blue-200 dark:border-[#322814] rounded-lg focus:border-[#f1c40f] focus:ring-1 focus:ring-[#f1c40f] outline-none transition-all dark:text-[#f0e6d2]"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-bold text-slate-600 mb-1">Password</label>
+            <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-2 bg-blue-50/50 border border-blue-200 rounded-lg focus:border-[#f1c40f] focus:ring-1 focus:ring-[#f1c40f] outline-none transition-all"
+              className="w-full p-2 bg-blue-50/50 dark:bg-[#1e2328] border border-blue-200 dark:border-[#322814] rounded-lg focus:border-[#f1c40f] focus:ring-1 focus:ring-[#f1c40f] outline-none transition-all dark:text-[#f0e6d2]"
               required
             />
           </div>

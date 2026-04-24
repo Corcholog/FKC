@@ -413,31 +413,31 @@ export default function AdminForm({ players }: { players: Player[] }) {
 return (
   <>
     <Navbar />
-    <div className="w-full max-w-6xl mx-auto px-8 pt-24 pb-8 bg-[#f4faff] text-slate-900">
+    <div className="w-full max-w-6xl mx-auto px-8 pt-24 pb-8 text-foreground">
       {/* Header and Logout */}
       <div className="flex justify-between items-center mb-10">
-        <h1 className="text-4xl font-black text-[#0f172a]">Match Admin</h1>
+        <h1 className="text-4xl font-black text-foreground">Match Admin</h1>
         <button onClick={handleLogout} className="px-6 py-2 bg-rose-500 text-white font-bold rounded-lg shadow-sm hover:bg-rose-600 transition-all">Logout</button>
       </div>
 
       {/* Tabs */}
-      <div className="flex justify-between items-center mb-8 border-b border-blue-200 pb-4">
+      <div className="flex justify-between items-center mb-8 border-b border-blue-200 dark:border-[#322814] pb-4">
         <div className="flex gap-4">
           <button 
             onClick={() => setActiveTab('auto')}
-            className={`px-6 py-3 rounded-lg font-bold transition-all shadow-sm ${activeTab === 'auto' ? 'bg-[#0984e3] text-white shadow-md' : 'bg-white border border-blue-100 text-slate-500 hover:bg-blue-50'}`}
+            className={`px-6 py-3 rounded-lg font-bold transition-all shadow-sm ${activeTab === 'auto' ? 'bg-[#0984e3] text-white shadow-md' : 'bg-card border border-blue-100 dark:border-[#322814] text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-[#1e2328]'}`}
           >
             Auto Import (Flex)
           </button>
           <button 
             onClick={() => setActiveTab('import-id')}
-            className={`px-6 py-3 rounded-lg font-bold transition-all shadow-sm ${activeTab === 'import-id' ? 'bg-purple-600 text-white shadow-md' : 'bg-white border border-blue-100 text-slate-500 hover:bg-blue-50'}`}
+            className={`px-6 py-3 rounded-lg font-bold transition-all shadow-sm ${activeTab === 'import-id' ? 'bg-purple-600 text-white shadow-md' : 'bg-card border border-blue-100 dark:border-[#322814] text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-[#1e2328]'}`}
           >
             Import by ID
           </button>
           <button 
             onClick={() => setActiveTab('manual')}
-            className={`px-6 py-3 rounded-lg font-bold transition-all shadow-sm ${activeTab === 'manual' ? 'bg-[#f1c40f] text-slate-900 border border-yellow-500 shadow-md' : 'bg-white border border-blue-100 text-slate-500 hover:bg-blue-50'}`}
+            className={`px-6 py-3 rounded-lg font-bold transition-all shadow-sm ${activeTab === 'manual' ? 'bg-[#f1c40f] text-slate-900 border border-yellow-500 shadow-md' : 'bg-card border border-blue-100 dark:border-[#322814] text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-[#1e2328]'}`}
           >
             Manual Input
           </button>
@@ -463,16 +463,16 @@ return (
 
       {/* AUTO IMPORT SECTION */}
       {activeTab === 'auto' && (
-        <section className="bg-white border border-blue-100 p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+        <section className="bg-card border border-blue-100 dark:border-[#322814] p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
           <h2 className="text-2xl font-black mb-4 text-[#0984e3]">Fetch & Insert Directly to DB</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-bold text-slate-600 mb-1">Riot ID (Name#Tag)</label>
-              <input type="text" value={importSummonerName} onChange={(e) => setImportSummonerName(e.target.value)} className="w-full p-3 bg-blue-50/50 border border-blue-200 rounded-lg focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] outline-none transition-all" />
+              <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">Riot ID (Name#Tag)</label>
+              <input type="text" value={importSummonerName} onChange={(e) => setImportSummonerName(e.target.value)} className="w-full p-3 bg-blue-50/50 dark:bg-[#1e2328] border border-blue-200 dark:border-[#322814] rounded-lg focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] outline-none transition-all dark:text-[#f0e6d2]" />
             </div>
             <div>
-              <label className="block text-sm font-bold text-slate-600 mb-1">Target Valid Matches</label>
-              <input type="number" value={importCount} onChange={(e) => setImportCount(Number(e.target.value))} min="1" max="50" className="w-full p-3 bg-blue-50/50 border border-blue-200 rounded-lg focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] outline-none transition-all" />
+              <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">Target Valid Matches</label>
+              <input type="number" value={importCount} onChange={(e) => setImportCount(Number(e.target.value))} min="1" max="50" className="w-full p-3 bg-blue-50/50 dark:bg-[#1e2328] border border-blue-200 dark:border-[#322814] rounded-lg focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] outline-none transition-all dark:text-[#f0e6d2]" />
             </div>
             <div className="flex items-end">
               <button 
@@ -492,10 +492,10 @@ return (
           
           {/* ADD THIS NEW BLOCK: Skipped Matches Log */}
           {skippedLogs.length > 0 && (
-            <div className="mt-4 border border-blue-200 bg-white rounded-xl overflow-hidden shadow-sm">
-              <div className="bg-blue-50/80 p-3 border-b border-blue-100 flex justify-between items-center">
-                <h3 className="font-black text-slate-700">Skipped Matches ({skippedLogs.length})</h3>
-                <span className="text-xs font-bold text-slate-500">Missing Full Roster</span>
+            <div className="mt-4 border border-blue-200 dark:border-[#322814] bg-card rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-blue-50/80 dark:bg-[#091428] p-3 border-b border-blue-100 dark:border-[#322814] flex justify-between items-center">
+                <h3 className="font-black text-slate-700 dark:text-slate-200">Skipped Matches ({skippedLogs.length})</h3>
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Missing Full Roster</span>
               </div>
               <div className="max-h-60 overflow-y-auto p-4 space-y-3">
                 {skippedLogs.map((log, idx) => (
@@ -522,15 +522,15 @@ return (
 
       {/* IMPORT BY ID SECTION */}
       {activeTab === 'import-id' && (
-        <section className="bg-white border border-blue-100 p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+        <section className="bg-card border border-blue-100 dark:border-[#322814] p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
           <h2 className="text-2xl font-black mb-4 text-purple-600">Fetch Single Match by ID</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-bold text-slate-600 mb-1">Target Match ID</label>
+              <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">Target Match ID</label>
               <input type="text" value={importMatchId} onChange={(e) => setImportMatchId(e.target.value)} placeholder="e.g. 1587489137" className="w-full p-3 bg-blue-50/50 border border-blue-200 rounded-lg focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none transition-all" />
             </div>
             <div>
-              <label className="block text-sm font-bold text-slate-600 mb-1">Our Perspective (Riot ID)</label>
+              <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">Our Perspective (Riot ID)</label>
               <input type="text" value={importMatchIdRiotId} onChange={(e) => setImportMatchIdRiotId(e.target.value)} className="w-full p-3 bg-blue-50/50 border border-blue-200 rounded-lg focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none transition-all" />
             </div>
             <div className="flex items-end">
@@ -558,26 +558,26 @@ return (
           <div className="space-y-12">
             {/* Match Information */}
             <section>
-              <h2 className="text-2xl font-black mb-4 text-[#0f172a]">Match Information</h2>
+              <h2 className="text-2xl font-black mb-4 text-foreground">Match Information</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1">Date & Time</label>
+                  <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">Date & Time</label>
                   <input 
                     type="datetime-local" 
                     value={formData.date} 
                     onChange={(e) => updateFormData('date', e.target.value)} 
-                    className="w-full p-3 bg-white border border-blue-200 rounded-lg outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all" 
+                    className="w-full p-3 bg-card border border-blue-200 dark:border-[#322814] rounded-lg outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all dark:text-[#f0e6d2]" 
                     required 
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1">Match Type</label>
+                  <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">Match Type</label>
                   <input 
                     type="text" 
                     value={formData.match_type} 
                     onChange={(e) => updateFormData('match_type', e.target.value.toLowerCase().replace(/\s+/g, '_'))} 
                     list="match-type-suggestions"
-                    className="w-full p-3 bg-white border border-blue-200 rounded-lg outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all"
+                    className="w-full p-3 bg-card border border-blue-200 dark:border-[#322814] rounded-lg outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all dark:text-[#f0e6d2]"
                     placeholder="e.g. flex, tournament, clash"
                   />
                   <datalist id="match-type-suggestions">
@@ -589,8 +589,8 @@ return (
                   </datalist>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1">Our Side</label>
-                  <div className="flex gap-6 font-medium text-slate-700">
+                  <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">Our Side</label>
+                  <div className="flex gap-6 font-medium text-slate-700 dark:text-slate-300">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="radio" name="our_side" value="Blue" checked={formData.our_side === 'Blue'} onChange={(e) => updateFormData('our_side', e.target.value as 'Blue' | 'Red')} className="accent-[#0984e3]" />
                       Blue
@@ -602,11 +602,11 @@ return (
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1">We Won</label>
+                  <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">We Won</label>
                   <input type="checkbox" checked={formData.we_won} onChange={(e) => updateFormData('we_won', e.target.checked)} className="w-5 h-5 accent-emerald-500 cursor-pointer rounded" />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1">Duration</label>
+                  <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">Duration</label>
                   <div className="flex gap-3">
                     <div className="flex-1">
                       <input 
@@ -632,22 +632,22 @@ return (
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1">Enemy Team Name</label>
-                  <input type="text" value={formData.enemy_team_name} onChange={(e) => updateFormData('enemy_team_name', e.target.value)} className="w-full p-3 bg-white border border-blue-200 rounded-lg outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all" />
+                  <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">Enemy Team Name</label>
+                  <input type="text" value={formData.enemy_team_name} onChange={(e) => updateFormData('enemy_team_name', e.target.value)} className="w-full p-3 bg-card border border-blue-200 dark:border-[#322814] rounded-lg outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all dark:text-[#f0e6d2]" />
                 </div>
               </div>
               <div className="mt-4">
-                <label className="block text-sm font-bold text-slate-600 mb-1">Notes</label>
-                <textarea value={formData.notes} onChange={(e) => updateFormData('notes', e.target.value)} className="w-full p-3 bg-white border border-blue-200 rounded-lg outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all" rows={3} />
+                <label className="block text-sm font-bold text-slate-600 dark:text-slate-300 mb-1">Notes</label>
+                <textarea value={formData.notes} onChange={(e) => updateFormData('notes', e.target.value)} className="w-full p-3 bg-card border border-blue-200 dark:border-[#322814] rounded-lg outline-none focus:border-[#0984e3] focus:ring-1 focus:ring-[#0984e3] transition-all dark:text-[#f0e6d2]" rows={3} />
               </div>
             </section>
             
             {/* Bans Section with Icon Preview */}
-            <section className="bg-white p-6 rounded-2xl border border-blue-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-              <h2 className="text-2xl font-black mb-6 text-[#0f172a]">Bans</h2>
+            <section className="bg-card p-6 rounded-2xl border border-blue-100 dark:border-[#322814] shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+              <h2 className="text-2xl font-black mb-6 text-foreground">Bans</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Our Bans */}
-                <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800">
                   <h3 className="text-lg font-bold mb-3 text-emerald-600">Our Bans</h3>
                   <div className="grid grid-cols-5 gap-3">
                     {formData.our_bans.map((ban, index) => (
@@ -658,7 +658,7 @@ return (
                           value={ban} 
                           onChange={(e) => updateBans('our', index, e.target.value)} 
                           placeholder={`Ban ${index + 1}`} 
-                          className="w-full px-2 py-3 bg-white border border-emerald-200 rounded-lg text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all font-medium text-slate-800 placeholder-slate-400" 
+                          className="w-full px-2 py-3 bg-card border border-emerald-200 dark:border-emerald-800 rounded-lg text-sm outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all font-medium text-slate-800 dark:text-[#f0e6d2] placeholder-slate-400" 
                         />
                         {getChampionIcon(ban) && (
                           <Image 
@@ -674,7 +674,7 @@ return (
                 </div>
 
                 {/* Enemy Bans */}
-                <div className="bg-rose-50/50 p-4 rounded-xl border border-rose-100">
+                <div className="bg-rose-50/50 dark:bg-rose-900/10 p-4 rounded-xl border border-rose-100 dark:border-rose-900">
                   <h3 className="text-lg font-bold mb-3 text-rose-600">Enemy Bans</h3>
                   <div className="grid grid-cols-5 gap-3">
                     {formData.enemy_bans.map((ban, index) => (
@@ -685,7 +685,7 @@ return (
                           value={ban} 
                           onChange={(e) => updateBans('enemy', index, e.target.value)} 
                           placeholder={`Ban ${index + 1}`} 
-                          className="w-full px-2 py-3 bg-white border border-rose-200 rounded-lg text-sm outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400 transition-all font-medium text-slate-800 placeholder-slate-400" 
+                          className="w-full px-2 py-3 bg-card border border-rose-200 dark:border-rose-900 rounded-lg text-sm outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400 transition-all font-medium text-slate-800 dark:text-[#f0e6d2] placeholder-slate-400" 
                         />
                         {getChampionIcon(ban) && (
                           <Image 
@@ -704,33 +704,33 @@ return (
             
             {/* Player Performance */}
             <section>
-                <h2 className="text-3xl font-black mb-8 text-[#0f172a]">Player Performance</h2>
+                <h2 className="text-3xl font-black mb-8 text-foreground">Player Performance</h2>
 
                 {/* Our Team */}
                 <div className="mb-12">
                   <h3 className="text-xl font-bold mb-4 text-[#0984e3]">Our Team</h3>
                   <div className="overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-xl border border-blue-200">
-                    <table className="w-full bg-white">
+                    <table className="w-full bg-card">
                       <thead>
-                        <tr className="border-b border-blue-200 bg-blue-50">
-                          <th className="p-3 text-left w-16 text-slate-600">Role</th>
-                          <th className="p-3 text-left min-w-[120px] text-slate-600">Player</th>
-                          <th className="p-3 text-left min-w-[140px] text-slate-600">Champion</th>
-                          <th className="p-3 text-center w-12 text-slate-600">K</th>
-                          <th className="p-3 text-center w-12 text-slate-600">D</th>
-                          <th className="p-3 text-center w-12 text-slate-600">A</th>
-                          <th className="p-3 text-center w-14 text-slate-600">CS</th>
-                          <th className="p-3 text-center w-14 text-slate-600 bg-emerald-50">Score</th>
+                        <tr className="border-b border-blue-200 dark:border-[#322814] bg-blue-50 dark:bg-[#091428]">
+                          <th className="p-3 text-left w-16 text-slate-600 dark:text-slate-300">Role</th>
+                          <th className="p-3 text-left min-w-[120px] text-slate-600 dark:text-slate-300">Player</th>
+                          <th className="p-3 text-left min-w-[140px] text-slate-600 dark:text-slate-300">Champion</th>
+                          <th className="p-3 text-center w-12 text-slate-600 dark:text-slate-300">K</th>
+                          <th className="p-3 text-center w-12 text-slate-600 dark:text-slate-300">D</th>
+                          <th className="p-3 text-center w-12 text-slate-600 dark:text-slate-300">A</th>
+                          <th className="p-3 text-center w-14 text-slate-600 dark:text-slate-300">CS</th>
+                          <th className="p-3 text-center w-14 text-slate-600 dark:text-slate-300 bg-emerald-50 dark:bg-emerald-900/20">Score</th>
                         </tr>
                       </thead>
                       <tbody>
                         {formData.our_participants.map((p, index) => {
                           const selectedPlayer = players.find(pl => pl.id === p.player_id)
                           return (
-                            <tr key={index} className="border-b border-blue-100 hover:bg-blue-50/50">
+                            <tr key={index} className="border-b border-blue-100 dark:border-[#322814] hover:bg-blue-50/50 dark:hover:bg-[#1e2328]/50">
                               <td className="p-3 font-bold text-[#f1c40f] text-sm">{p.role}</td>
                               <td className="p-3">
-                                <select value={p.player_id} onChange={(e) => updateOurParticipant(index, 'player_id', parseInt(e.target.value))} className="w-full bg-white border border-blue-200 rounded px-2 py-1.5 text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3]">
+                                <select value={p.player_id} onChange={(e) => updateOurParticipant(index, 'player_id', parseInt(e.target.value))} className="w-full bg-card border border-blue-200 dark:border-[#322814] rounded px-2 py-1.5 text-sm font-medium text-slate-700 dark:text-[#f0e6d2] outline-none focus:border-[#0984e3]">
                                   {players.map(player => (
                                     <option key={player.id} value={player.id}>
                                       {player.name} ({player.ign})
@@ -752,13 +752,13 @@ return (
                                         }
                                       }
                                     }
-                                  }} className="flex-1 bg-white border border-blue-200 rounded px-2 py-1.5 text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3]" placeholder="Champion" />
+                                  }} className="flex-1 bg-card border border-blue-200 dark:border-[#322814] rounded px-2 py-1.5 text-sm font-medium text-slate-700 dark:text-[#f0e6d2] outline-none focus:border-[#0984e3]" placeholder="Champion" />
                                 </div>
                               </td>
-                              <td className="p-3"><input type="number" min="0" value={p.kills === 0 ? '' : p.kills} onChange={(e) => updateOurParticipant(index, 'kills', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
-                              <td className="p-3"><input type="number" min="0" value={p.deaths === 0 ? '' : p.deaths} onChange={(e) => updateOurParticipant(index, 'deaths', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
-                              <td className="p-3"><input type="number" min="0" value={p.assists === 0 ? '' : p.assists} onChange={(e) => updateOurParticipant(index, 'assists', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
-                              <td className="p-3"><input type="number" min="0" value={p.cs === 0 ? '' : p.cs} onChange={(e) => updateOurParticipant(index, 'cs', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-blue-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                              <td className="p-3"><input type="number" min="0" value={p.kills === 0 ? '' : p.kills} onChange={(e) => updateOurParticipant(index, 'kills', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-card border border-blue-200 dark:border-[#322814] rounded py-1.5 text-center text-sm font-medium text-slate-700 dark:text-[#f0e6d2] outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                              <td className="p-3"><input type="number" min="0" value={p.deaths === 0 ? '' : p.deaths} onChange={(e) => updateOurParticipant(index, 'deaths', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-card border border-blue-200 dark:border-[#322814] rounded py-1.5 text-center text-sm font-medium text-slate-700 dark:text-[#f0e6d2] outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                              <td className="p-3"><input type="number" min="0" value={p.assists === 0 ? '' : p.assists} onChange={(e) => updateOurParticipant(index, 'assists', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-card border border-blue-200 dark:border-[#322814] rounded py-1.5 text-center text-sm font-medium text-slate-700 dark:text-[#f0e6d2] outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                              <td className="p-3"><input type="number" min="0" value={p.cs === 0 ? '' : p.cs} onChange={(e) => updateOurParticipant(index, 'cs', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-card border border-blue-200 dark:border-[#322814] rounded py-1.5 text-center text-sm font-medium text-slate-700 dark:text-[#f0e6d2] outline-none focus:border-[#0984e3] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
                               <td className="p-3 text-center">
                                 <span className={`inline-block px-2 py-1 rounded font-bold text-sm ${p.score >= 70 ? 'bg-emerald-100 text-emerald-700' : p.score >= 50 ? 'bg-blue-100 text-blue-700' : p.score >= 30 ? 'bg-yellow-100 text-yellow-700' : 'bg-rose-100 text-rose-700'}`}>
                                   {Math.round(p.score)}
@@ -776,20 +776,20 @@ return (
                 <div>
                   <h3 className="text-xl font-bold mb-4 text-rose-500">Enemy Team</h3>
                   <div className="overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-xl border border-rose-200">
-                    <table className="w-full bg-white">
+                    <table className="w-full bg-card">
                       <thead>
-                        <tr className="border-b border-rose-200 bg-rose-50">
-                          <th className="p-3 text-left w-16 text-slate-600">Role</th>
-                          <th className="p-3 text-left min-w-[140px] text-slate-600">Champion</th>
-                          <th className="p-3 text-center w-12 text-slate-600">K</th>
-                          <th className="p-3 text-center w-12 text-slate-600">D</th>
-                          <th className="p-3 text-center w-12 text-slate-600">A</th>
-                          <th className="p-3 text-center w-14 text-slate-600">CS</th>
+                        <tr className="border-b border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-900/10">
+                          <th className="p-3 text-left w-16 text-slate-600 dark:text-slate-300">Role</th>
+                          <th className="p-3 text-left min-w-[140px] text-slate-600 dark:text-slate-300">Champion</th>
+                          <th className="p-3 text-center w-12 text-slate-600 dark:text-slate-300">K</th>
+                          <th className="p-3 text-center w-12 text-slate-600 dark:text-slate-300">D</th>
+                          <th className="p-3 text-center w-12 text-slate-600 dark:text-slate-300">A</th>
+                          <th className="p-3 text-center w-14 text-slate-600 dark:text-slate-300">CS</th>
                         </tr>
                       </thead>
                       <tbody>
                         {formData.enemy_participants.map((p, index) => (
-                          <tr key={index} className="border-b border-rose-100 hover:bg-rose-50/50">
+                          <tr key={index} className="border-b border-rose-100 dark:border-rose-900/50 hover:bg-rose-50/50 dark:hover:bg-rose-900/10">
                             <td className="p-3 font-bold text-[#f1c40f] text-sm">{p.role}</td>
                             <td className="p-3">
                               <div className="flex items-center gap-2">
@@ -805,13 +805,13 @@ return (
                                       }
                                     }
                                   }
-                                }} className="flex-1 bg-white border border-rose-200 rounded px-2 py-1.5 text-sm font-medium text-slate-700 outline-none focus:border-rose-400" placeholder="Champion" />
+                                }} className="flex-1 bg-card border border-rose-200 dark:border-rose-900 rounded px-2 py-1.5 text-sm font-medium text-slate-700 dark:text-[#f0e6d2] outline-none focus:border-rose-400" placeholder="Champion" />
                               </div>
                             </td>
-                            <td className="p-3"><input type="number" min="0" value={p.kills === 0 ? '' : p.kills} onChange={(e) => updateEnemyParticipant(index, 'kills', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-rose-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-rose-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
-                            <td className="p-3"><input type="number" min="0" value={p.deaths === 0 ? '' : p.deaths} onChange={(e) => updateEnemyParticipant(index, 'deaths', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-rose-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-rose-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
-                            <td className="p-3"><input type="number" min="0" value={p.assists === 0 ? '' : p.assists} onChange={(e) => updateEnemyParticipant(index, 'assists', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-rose-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-rose-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
-                            <td className="p-3"><input type="number" min="0" value={p.cs === 0 ? '' : p.cs} onChange={(e) => updateEnemyParticipant(index, 'cs', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-white border border-rose-200 rounded py-1.5 text-center text-sm font-medium text-slate-700 outline-none focus:border-rose-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                            <td className="p-3"><input type="number" min="0" value={p.kills === 0 ? '' : p.kills} onChange={(e) => updateEnemyParticipant(index, 'kills', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-card border border-rose-200 dark:border-rose-900 rounded py-1.5 text-center text-sm font-medium text-slate-700 dark:text-[#f0e6d2] outline-none focus:border-rose-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                            <td className="p-3"><input type="number" min="0" value={p.deaths === 0 ? '' : p.deaths} onChange={(e) => updateEnemyParticipant(index, 'deaths', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-card border border-rose-200 dark:border-rose-900 rounded py-1.5 text-center text-sm font-medium text-slate-700 dark:text-[#f0e6d2] outline-none focus:border-rose-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                            <td className="p-3"><input type="number" min="0" value={p.assists === 0 ? '' : p.assists} onChange={(e) => updateEnemyParticipant(index, 'assists', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-card border border-rose-200 dark:border-rose-900 rounded py-1.5 text-center text-sm font-medium text-slate-700 dark:text-[#f0e6d2] outline-none focus:border-rose-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
+                            <td className="p-3"><input type="number" min="0" value={p.cs === 0 ? '' : p.cs} onChange={(e) => updateEnemyParticipant(index, 'cs', parseInt(e.target.value) || 0)} placeholder="0" className="w-full bg-card border border-rose-200 dark:border-rose-900 rounded py-1.5 text-center text-sm font-medium text-slate-700 dark:text-[#f0e6d2] outline-none focus:border-rose-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" /></td>
                           </tr>
                         ))}
                       </tbody>

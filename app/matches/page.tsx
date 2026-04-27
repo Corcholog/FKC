@@ -55,6 +55,8 @@ export default function MatchesPage() {
   // Filters
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [resultFilter, setResultFilter] = useState<string>('all')
+  const [championFilters, setChampionFilters] = useState<string[]>([])
+  const [championSearch, setChampionSearch] = useState<string>('')
 
   const supabase = createClient()
 
@@ -97,7 +99,12 @@ export default function MatchesPage() {
       resultMatches = match.we_won === false
     }
 
-    return typeMatches && resultMatches
+    let championMatches = true
+    if (championFilters.length > 0) {
+      championMatches = championFilters.every(champ => match.ally_participants.some(p => p.champion === champ))
+    }
+
+    return typeMatches && resultMatches && championMatches
   })
 
   // Pagination logic
@@ -114,6 +121,23 @@ export default function MatchesPage() {
 
   const handleResultFilter = (val: string) => {
     setResultFilter(val)
+    setCurrentPage(1)
+  }
+
+  const handleChampionSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setChampionSearch(val)
+    
+    const isMatch = allChampions.find(c => c.toLowerCase() === val.toLowerCase())
+    if (isMatch && !championFilters.includes(isMatch)) {
+      setChampionFilters(prev => [...prev, isMatch])
+      setCurrentPage(1)
+      setChampionSearch('')
+    }
+  }
+
+  const removeChampionFilter = (champ: string) => {
+    setChampionFilters(prev => prev.filter(c => c !== champ))
     setCurrentPage(1)
   }
 
@@ -217,6 +241,65 @@ const allChampions = [
                   {f.label}
                 </button>
               ))}
+            </div>
+
+            {/* Champion Filter */}
+            <div className="flex flex-col gap-2 mt-1">
+              <input
+                type="text"
+                list="champions-list"
+                value={championSearch}
+                onChange={handleChampionSearch}
+                placeholder="Search Ally Champion..."
+                className="bg-card text-slate-600 dark:text-slate-300 border border-blue-200 dark:border-[#322814] rounded-lg px-3 py-1.5 text-xs font-bold transition-all shadow-sm w-max focus:outline-none focus:border-[#f1c40f] placeholder:font-normal"
+              />
+              <datalist id="champions-list">
+                {allChampions.filter(c => !championFilters.includes(c)).map(c => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+
+              {/* Active Champion Filters */}
+              {championFilters.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    {championFilters.map(champ => (
+                      <span 
+                        key={champ} 
+                        className="inline-flex items-center gap-1.5 bg-slate-800 dark:bg-slate-700 text-slate-100 border border-slate-600 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm"
+                      >
+                        {getChampionIcon(champ) && (
+                          <img 
+                            src={getChampionIcon(champ) as string} 
+                            alt={champ} 
+                            className="w-4 h-4 rounded-full object-cover"
+                          />
+                        )}
+                        {champ}
+                        <button 
+                          onClick={() => removeChampionFilter(champ)}
+                          className="hover:text-red-400 focus:outline-none flex items-center justify-center transition-colors"
+                          aria-label={`Remove ${champ} filter`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Winrate for Combination */}
+                  {resultFilter === 'all' && (
+                    <div className="flex items-center gap-2 bg-[#f1c40f]/10 border border-[#f1c40f]/30 px-3 py-1 rounded-md">
+                      <span className="text-xs font-bold text-[#d4ac0d]">
+                        Winrate: {totalMatches > 0 ? Math.round((filteredMatches.filter(m => m.we_won).length / totalMatches) * 100) : 0}%
+                      </span>
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                        ({filteredMatches.filter(m => m.we_won).length}W - {totalMatches - filteredMatches.filter(m => m.we_won).length}L)
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

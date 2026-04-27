@@ -16,11 +16,19 @@ const mapRiotRole = (riotRole: string): string => {
 
 export async function POST(request: NextRequest) {
   try {
-    let { matchId, gameName = "Corshus", tagLine = "2108" } = await request.json();
+    let { matchId, gameName = "we1rdcat", tagLine = "uwu" } = await request.json();
 
     if (!matchId) return NextResponse.json({ error: "matchId is required" }, { status: 400 });
 
     matchId = matchId.includes('_') ? matchId : `LA2_${matchId}`;
+
+    // DEBUG
+    console.log('--- IMPORT-MATCH DEBUG ---');
+    console.log('API Key exists:', !!RIOT_API_KEY);
+    console.log('API Key prefix:', RIOT_API_KEY ? RIOT_API_KEY.substring(0, 10) : 'undefined');
+    console.log('GameName:', gameName);
+    console.log('TagLine:', tagLine);
+    console.log('Account URL:', `https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`);
 
     // 1. Get PUUID
     const accountRes = await fetch(

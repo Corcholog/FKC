@@ -8,6 +8,7 @@ const links = [
   { href: '/', label: 'Home' },
   { href: '/stats', label: 'Player Stats' },
   { href: '/matches', label: 'Matches' },
+  { href: '/soloq', label: 'Ladder ranks' },
   { href: '/admin', label: 'Admin Panel' },
 ]
 

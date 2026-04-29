@@ -85,6 +85,8 @@ export default function AdminForm({ players }: { players: Player[] }) {
   const [importSummonerName, setImportSummonerName] = useState('')
   const [importCount, setImportCount] = useState(10)
   const [isImporting, setIsImporting] = useState(false)
+  const [isUpdatingSoloQ, setIsUpdatingSoloQ] = useState(false)
+  const [isInitRanks, setIsInitRanks] = useState(false)
   const [importMessage, setImportMessage] = useState('')
   const [skippedLogs, setSkippedLogs] = useState<{ date: string, players: string[] }[]>([])
 
@@ -410,6 +412,37 @@ export default function AdminForm({ players }: { players: Player[] }) {
       setIsImporting(false)
     }
   }
+
+  const handleUpdateSoloQ = async () => {
+    setIsUpdatingSoloQ(true);
+    setImportMessage('Updating SoloQ stats for all players. This may take a while...');
+    try {
+      const res = await fetch('/api/import-soloq', { method: 'POST' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Unknown error');
+      setImportMessage(`✅ SoloQ Update Complete! Added ${result.addedCount} new matches.`);
+    } catch (err: any) {
+      setImportMessage(`❌ SoloQ Update Failed: ${err.message}`);
+    } finally {
+      setIsUpdatingSoloQ(false);
+    }
+  }
+
+  const handleInitRanks = async () => {
+    setIsInitRanks(true);
+    setImportMessage('Initializing SoloQ Ranks for all players...');
+    try {
+      const res = await fetch('/api/init-ranks', { method: 'POST' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Unknown error');
+      setImportMessage(`✅ Ranks Initialized! Updated ${result.updatedCount} players.`);
+    } catch (err: any) {
+      setImportMessage(`❌ Init Ranks Failed: ${err.message}`);
+    } finally {
+      setIsInitRanks(false);
+    }
+  }
+
 return (
   <>
     <Navbar />
@@ -442,23 +475,39 @@ return (
             Manual Input
           </button>
         </div>
-        <button 
-          onClick={async () => {
-            if (!confirm('Recalculate all scores? This may take a few minutes.')) return;
-            setLoading(true);
-            try {
-              const res = await fetch('/api/matches/recalculate-scores', { method: 'POST', body: JSON.stringify({force: true}) });
-              const result = await res.json();
-              alert(result.success ? `Done! Updated ${result.updated} scores.` : `Error: ${result.error}`);
-            } finally {
-              setLoading(false);
-            }
-          }}
-          disabled={loading}
-          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all shadow-sm"
-        >
-          {loading ? 'Processing...' : 'Recalculate Database Scores'}
-        </button>
+          <div className="flex gap-4">
+            <button 
+              onClick={handleUpdateSoloQ}
+              disabled={isUpdatingSoloQ || isInitRanks}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 border border-blue-600 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all shadow-sm"
+            >
+              {isUpdatingSoloQ ? 'Updating...' : 'Update SoloQ'}
+            </button>
+            <button 
+              onClick={handleInitRanks}
+              disabled={isUpdatingSoloQ || isInitRanks}
+              className="px-4 py-2 bg-purple-500 hover:bg-purple-600 border border-purple-600 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all shadow-sm"
+            >
+              {isInitRanks ? 'Initializing...' : 'Initialize Ranks'}
+            </button>
+            <button 
+              onClick={async () => {
+                if (!confirm('Recalculate all scores? This may take a few minutes.')) return;
+                setLoading(true);
+                try {
+                  const res = await fetch('/api/matches/recalculate-scores', { method: 'POST', body: JSON.stringify({force: true}) });
+                  const result = await res.json();
+                  alert(result.success ? `Done! Updated ${result.updated} scores.` : `Error: ${result.error}`);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-all shadow-sm"
+            >
+              {loading ? 'Processing...' : 'Recalculate Database Scores'}
+            </button>
+          </div>
       </div>
 
       {/* AUTO IMPORT SECTION */}

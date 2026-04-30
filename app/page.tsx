@@ -6,6 +6,8 @@ import Navbar from '@/app/components/Navbar'
 import DurationChart from '@/app/components/DurationChart'
 import MatchCard from '@/app/components/MatchCard'
 import Countdown from '@/app/components/Countdown'
+import PlayerLinks from '@/app/components/PlayerLinks'
+import RosterSection from '@/app/components/RosterSection'
 
 type Player = {
   id: number
@@ -34,11 +36,9 @@ const getColorAvgScore = (score: number) => {
   if (score >= 60) return 'text-blue-500'
   if (score >= 40) return 'text-green-500'
   if (score >= 25) return 'text-yellow-500'
+  if (score >= 25) return 'text-yellow-500'
   return 'text-rose-500'
 }
-
-const ROLE_ORDER = ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUPPORT']
-
 
 export default async function Home() {
   const supabase = await createClient()
@@ -85,110 +85,11 @@ export default async function Home() {
     `)
   const allPerformances = allPerformancesData || []
 
-  // Group performances by match to determine MVP and INT per match
-  const matchPerformances: Record<number, any[]> = {}
-  allPerformances.forEach((row: any) => {
-    const matchId = row.matches?.id
-    if (matchId) {
-      if (!matchPerformances[matchId]) matchPerformances[matchId] = []
-      matchPerformances[matchId].push(row)
-    }
-  })
-
-  const playerMvpIntCounts: Record<number, { mvpCount: number; intMvpCount: number }> = {}
-  Object.values(matchPerformances).forEach(playersInMatch => {
-    const scoredPlayers = playersInMatch.filter((p: any) => typeof p.score === 'number' && p.score > 0)
-    if (scoredPlayers.length < 2) return
-
-    const sorted = [...scoredPlayers].sort((a, b) => b.score - a.score)
-    const mvpPlayerId = sorted[0].player_id
-    const intPlayerId = sorted[sorted.length - 1].player_id
-
-    if (mvpPlayerId) {
-      playerMvpIntCounts[mvpPlayerId] = playerMvpIntCounts[mvpPlayerId] || { mvpCount: 0, intMvpCount: 0 }
-      playerMvpIntCounts[mvpPlayerId].mvpCount++
-    }
-    if (intPlayerId && intPlayerId !== mvpPlayerId) {
-      playerMvpIntCounts[intPlayerId] = playerMvpIntCounts[intPlayerId] || { mvpCount: 0, intMvpCount: 0 }
-      playerMvpIntCounts[intPlayerId].intMvpCount++
-    }
-  })
-
-  // Calculate stats for the Roster cards
-  const rosterStats = playerList.map(player => {
-    const playerMatches = allPerformances.filter(p => p.player_id === player.id)
-
-    let wins = 0
-    let kills = 0
-    let deaths = 0
-    let assists = 0
-    let totalScore = 0
-    const mvpCount = playerMvpIntCounts[player.id]?.mvpCount || 0
-    const intMvpCount = playerMvpIntCounts[player.id]?.intMvpCount || 0
-    const champStats: Record<string, { games: number, wins: number, kills: number, deaths: number, assists: number }> = {}
-
-    playerMatches.forEach((row: any) => {
-      if (row.matches.we_won) wins++
-      kills += row.kills || 0
-      deaths += row.deaths || 0
-      assists += row.assists || 0
-
-      const score = row.score
-      if (typeof score === 'number' && score > 0) {
-        totalScore += score
-      }
-
-      if (!champStats[row.champion]) {
-        champStats[row.champion] = { games: 0, wins: 0, kills: 0, deaths: 0, assists: 0 }
-      }
-      champStats[row.champion].games++
-      if (row.matches.we_won) champStats[row.champion].wins++
-      champStats[row.champion].kills += row.kills || 0
-      champStats[row.champion].deaths += row.deaths || 0
-      champStats[row.champion].assists += row.assists || 0
-    })
-
-    const totalGames = playerMatches.length
-    const winrate = totalGames > 0 ? (wins / totalGames) * 100 : 0
-    const overallKda = deaths === 0 ? (kills + assists) : (kills + assists) / deaths
-    
-    const gamesWithScore = playerMatches.filter((p: any) => typeof p.score === 'number' && p.score > 0).length
-    const avgScore = gamesWithScore > 0 ? totalScore / gamesWithScore : 0
-
-    // Calculate individual KDA and slice top 5
-    const topChampions = Object.entries(champStats)
-      .map(([name, stats]) => {
-        const champWinrate = (stats.wins / stats.games) * 100
-        const champKda = stats.deaths === 0
-          ? (stats.kills + stats.assists)
-          : (stats.kills + stats.assists) / stats.deaths
-
-        return {
-          name,
-          games: stats.games,
-          winrate: champWinrate,
-          kda: isNaN(champKda) ? 0 : Number(champKda.toFixed(2))
-        }
-      })
-      .sort((a, b) => b.games - a.games)
-      .slice(0, 5)
-
-    return {
-      ...player,
-      totalGames,
-      wins,
-      losses: totalGames - wins,
-      winrate: Number(winrate.toFixed(1)),
-      overallKda: Number(overallKda.toFixed(2)),
-      avgScore: Number(avgScore.toFixed(1)),
-      mvpCount,
-      intMvpCount,
-      topChampions
-    }
-  })
-
-  // Ensure strict role order mapping
-  rosterStats.sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role))
+  // Fetch all soloq matches
+  const { data: allSoloQData } = await supabase
+    .from('soloq_matches')
+    .select('*')
+  const soloqPerformances = allSoloQData || []
 
   // Complete Champion List
   const allChampions = [
@@ -211,16 +112,6 @@ export default async function Home() {
     "Wukong", "Xayah", "Xerath", "Xin Zhao", "Yasuo", "Yone", "Yorick", "Yunara", "Yuumi", "Zaahen",
     "Zac", "Zed", "Zeri", "Ziggs", "Zilean", "Zoe", "Zyra"
   ].sort()
-
-  const getChampionIcon = (name: string): string | null => {
-    if (!name?.trim()) return null
-    const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
-    const match = allChampions.find(c => normalize(c) === normalize(name))
-    if (!match) return null
-  const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath", "FiddleSticks" : "Fiddlesticks", "Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz", "Wukong":"MonkeyKing" }
-    const key = overrides[match] ?? match.replace(/[^a-zA-Z0-9]/g, '')
-    return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
-  }
 
   const calculateWinrate = (matchType?: string | string[], isExclude: boolean = false): string => {
     if (!allMatches.length) return '0%'
@@ -267,186 +158,80 @@ export default async function Home() {
       {/* Navigation Bar */}
       <Navbar />
 
-      {/* LEIF Countdown */}
-      <Countdown />
+      {/* Hero Banner + Countdown Row */}
+      <div className="flex flex-col xl:flex-row w-full border-b border-blue-200 dark:border-[#322814]">
 
-      {/* Hero Banner */}
-      <div className="relative h-[700px] flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#74b9ff]/80 to-[#f4faff] dark:from-[#010a13]/80 dark:to-[#091428]">
-        <Image src="/hero_banner.jpeg" alt="Hero Banner" fill className="object-cover opacity-[0.15] mix-blend-multiply" priority />
-        <div className="relative text-center z-10 px-6 mt-10 flex flex-col items-center">
-          <Image
-            src="/icons/fkc_icon.jpg"
-            alt="FKC Logo"
-            width={120} height={120}
-            className="w-32 h-32 mb-6 rounded-3xl border-2 border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.12)] object-cover hover:scale-105 transition duration-500"
-          />
-          <h1 className="text-7xl font-black tracking-wider text-foreground drop-shadow-sm mb-4">FAKE CLAN</h1>
-          <p className="text-2xl font-bold text-slate-600 dark:text-slate-300 bg-white/50 dark:bg-white/5 backdrop-blur-sm px-6 py-2 rounded-full border border-white/60 dark:border-white/10 shadow-sm">"Que ganas de mejorar la puta madre" - Joshy</p>
-          <div className="mt-10 mx-auto w-full max-w-4xl">
-            <Image src="/player_roster.jpeg" alt="Team Roster" width={800} height={320} className="w-full h-80 object-cover rounded-xl border-4 border-white shadow-[0_20px_50px_rgba(8,112,184,0.15)] bg-white" />
+        {/* Hero Banner (70%) */}
+        <div className="relative w-full xl:w-[70%] h-[500px] xl:h-[600px] flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#74b9ff]/80 to-[#f4faff] dark:from-[#010a13]/80 dark:to-[#091428]">
+          <Image src="/hero_banner.jpeg" alt="Hero Banner" fill className="object-cover opacity-[0.55] mix-blend-multiply" priority />
+          <div className="relative text-center z-10 px-6 mt-10 flex flex-col items-center">
+            <Image
+              src="/icons/fkc_icon.jpg"
+              alt="FKC Logo"
+              width={120} height={120}
+              className="w-32 h-32 mb-6 rounded-3xl border-2 border-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.12)] object-cover hover:scale-105 transition duration-500"
+            />
+            <h1 className="text-5xl md:text-7xl font-black tracking-wider text-foreground drop-shadow-sm mb-6 md:mb-10 mt-4">FAKE CLAN</h1>
+            <p className="text-xl md:text-2xl font-bold text-slate-600 dark:text-slate-300 bg-white/50 dark:bg-white/5 backdrop-blur-sm px-6 py-2 rounded-full border border-white/60 dark:border-white/10 shadow-sm">"Que ganas de mejorar la puta madre" - Joshy</p>
           </div>
+        </div>
+
+        {/* Countdown (30%) */}
+        <div className="w-full xl:w-[30%] flex items-stretch">
+          <Countdown />
         </div>
       </div>
 
       {/* Roster with Integrated Stats */}
-      <div className="max-w-7xl mx-auto px-6 py-16">
-        <h2 className="text-4xl font-bold mb-10 text-center">Our Roster</h2>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-          {rosterStats.length > 0 ? rosterStats.map((stat: any) => (
-            <div
-  key={stat.id}
-  className="bg-card border border-zinc-200 dark:border-[#322814] rounded-2xl overflow-hidden hover:border-yellow-400 transition flex flex-col"
->
-  {/* IMAGE TOP */}
-  <div className="h-[300px] relative overflow-hidden">
-    <img
-      src={`/players/${stat.name.toLowerCase().replace(/\s+/g, '')}.jpg`}
-      alt=""
-      className="w-full h-full object-cover object-top transition duration-500 hover:scale-105"
-    />
-  </div>
-
-  {/* CONTENT */}
-  <div className="p-5 flex flex-col flex-1">
-
-    {/* NAME + ROLE */}
-    <div className="text-center mb-4">
-      <div className="text-yellow-600 font-bold text-xs tracking-widest uppercase">
-        {stat.role}
-      </div>
-      <div className="text-3xl font-black mt-1 text-foreground uppercase tracking-wider">
-        {stat.name}
-      </div>
-    </div>
-
-    {/* Overall Stats */}
-    <div className="grid grid-cols-3 gap-1 mb-4 border-t border-b border-slate-200 dark:border-[#322814] py-3">
-      <div className="text-center">
-        <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">Winrate</p>
-        <p className={`text-lg font-bold ${getColorWR(stat.winrate)}`}>
-          {stat.totalGames > 0 ? `${stat.winrate}%` : '-'}
-        </p>
-      </div>
-      <div className="text-center">
-        <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">KDA</p>
-        <p className={`text-lg font-bold ${getColorKDA(stat.overallKda)}`}>
-          {stat.totalGames > 0 ? stat.overallKda.toFixed(2) : '-'}
-        </p>
-      </div>
-      <div className="text-center">
-        <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold">Avg Score</p>
-        <p className={`text-lg font-bold ${stat.avgScore > 0 ? getColorAvgScore(stat.avgScore) : 'text-slate-400'}`}>
-          {stat.avgScore > 0 ? Math.round(stat.avgScore) : '-'}
-        </p>
-      </div>
-    </div>
-
-    {/* MVP Stats */}
-    <div className="grid grid-cols-2 gap-2 mb-4">
-      <div className="text-center bg-emerald-50 dark:bg-emerald-900/20 rounded-lg py-2">
-        <p className="text-[9px] text-emerald-600 uppercase font-bold">MVPs</p>
-        <p className="text-lg font-bold text-emerald-600">{stat.mvpCount}</p>
-      </div>
-      <div className="text-center bg-rose-50 dark:bg-rose-900/20 rounded-lg py-2">
-        <p className="text-[9px] text-rose-600 uppercase font-bold">INTs</p>
-        <p className="text-lg font-bold text-rose-600">{stat.intMvpCount}</p>
-      </div>
-    </div>
-
-    {/* Top Champions */}
-    <div className="flex flex-col flex-1">
-      <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold mb-2 text-center">
-        Top Picks
-      </p>
-
-      {stat.topChampions.length > 0 ? (
-        <div className="space-y-2 overflow-y-auto max-h-[270px] pr-1">
-          {stat.topChampions.map((champ: any, idx: number) => (
-            <div
-              key={idx}
-              className="flex items-center gap-3 bg-slate-50 dark:bg-[#1e2328] p-2 rounded-lg border border-slate-200 dark:border-[#322814]"
-            >
-              <Image
-                src={getChampionIcon(champ.name) || '/placeholder-icon.png'}
-                alt={champ.name}
-                width={28}
-                height={28}
-                className="w-7 h-7 rounded border border-slate-300"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate leading-none mb-1">
-                  {champ.name}
-                </p>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-none">
-                  {champ.games} G •
-                  <span className={`font-bold ml-1 ${getColorWR(champ.winrate)}`}>
-                    {champ.winrate.toFixed(0)}%
-                  </span> •
-                  <span className={`font-bold ml-1 ${getColorKDA(champ.kda)}`}>
-                    {champ.kda.toFixed(2)} KDA
-                  </span>
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs text-slate-400 text-center py-4">
-          No games yet
-        </p>
-      )}
-    </div>
-  </div>
-</div>
-          )) : (
-            <p className="col-span-5 text-center text-zinc-500 dark:text-zinc-400 py-10">No players added yet.</p>
-          )}
-        </div>
-      </div>
+      <RosterSection
+        playerList={playerList}
+        teamPerformances={allPerformances}
+        soloqPerformances={soloqPerformances}
+      />
 
       {/* Team Performance */}
-<div className="bg-blue-50 dark:bg-[#091428] py-16 border-y border-[#bae6fd] dark:border-[#322814] shadow-inner relative z-20">
-  <div className="max-w-7xl mx-auto px-6">
-    <h2 className="text-4xl font-black mb-10 text-center text-foreground drop-shadow-sm">Team Performance</h2>
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap justify-center gap-8 text-center">
-        {standardMatchTypes.map(type => (
-          <div key={type} className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border border-blue-100 dark:border-[#322814] shadow-xl shadow-blue-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200">
-            <div className="text-5xl font-black text-[#0984e3] drop-shadow-sm">{calculateWinrate(type)}</div>
-            <div className="mt-3 text-slate-500 font-black text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
-          </div>
-        ))}
-        {/* Overall WR Box (Estilo Dorado/Destacado) */}
-        <div className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border-2 border-[#f1c40f]/60 shadow-xl shadow-yellow-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-yellow-900/10">
-          <div className="text-5xl font-black text-[#f39c12] drop-shadow-sm">{calculateWinrate()}</div>
-          <div className="mt-3 text-[#f39c12] font-black tracking-widest text-xs uppercase">OVERALL WR</div>
-        </div>
-      </div>
-
-      {competitiveMatchTypes.length > 0 && (
-        <div className="flex flex-wrap justify-center gap-8 text-center pt-4">
-          {/* Competitive WR Box (Estilo Púrpura) */}
-          <div className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border-2 border-purple-200 dark:border-purple-900 shadow-xl shadow-purple-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-purple-900/10">
-            <div className="text-5xl font-black text-purple-600 drop-shadow-sm">{calculateWinrate(excludeTypes, true)}</div>
-            <div className="mt-3 text-purple-600/80 font-black tracking-widest text-xs uppercase">COMPETITIVE WR</div>
-          </div>
-          {competitiveMatchTypes.map(type => (
-            <div key={type} className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border border-blue-100 dark:border-[#322814] shadow-xl shadow-blue-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200">
-              <div className="text-5xl font-black text-[#0984e3] drop-shadow-sm">{calculateWinrate(type)}</div>
-              <div className="mt-3 text-slate-500 font-black text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
+      <div className="bg-blue-50 dark:bg-[#091428] py-16 border-y border-[#bae6fd] dark:border-[#322814] shadow-inner relative z-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <h2 className="text-4xl font-black mb-10 text-center text-foreground drop-shadow-sm">Team Performance</h2>
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-wrap justify-center gap-8 text-center">
+              {standardMatchTypes.map(type => (
+                <div key={type} className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border border-blue-100 dark:border-[#322814] shadow-xl shadow-blue-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200">
+                  <div className="text-5xl font-black text-[#0984e3] drop-shadow-sm">{calculateWinrate(type)}</div>
+                  <div className="mt-3 text-slate-500 font-black text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
+                </div>
+              ))}
+              {/* Overall WR Box (Estilo Dorado/Destacado) */}
+              <div className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border-2 border-[#f1c40f]/60 shadow-xl shadow-yellow-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-yellow-900/10">
+                <div className="text-5xl font-black text-[#f39c12] drop-shadow-sm">{calculateWinrate()}</div>
+                <div className="mt-3 text-[#f39c12] font-black tracking-widest text-xs uppercase">OVERALL WR</div>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
 
-      {/* Charts Row */}
-      <div className="flex flex-wrap justify-center gap-6 pt-8 mt-2">
-        <DurationChart title="Overall Winrate by Duration" matches={allMatches} />
-        <DurationChart title="Competitive Winrate by Duration" matches={competitiveMatches} />
+            {competitiveMatchTypes.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-8 text-center pt-4">
+                {/* Competitive WR Box (Estilo Púrpura) */}
+                <div className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border-2 border-purple-200 dark:border-purple-900 shadow-xl shadow-purple-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-purple-900/10">
+                  <div className="text-5xl font-black text-purple-600 drop-shadow-sm">{calculateWinrate(excludeTypes, true)}</div>
+                  <div className="mt-3 text-purple-600/80 font-black tracking-widest text-xs uppercase">COMPETITIVE WR</div>
+                </div>
+                {competitiveMatchTypes.map(type => (
+                  <div key={type} className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border border-blue-100 dark:border-[#322814] shadow-xl shadow-blue-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200">
+                    <div className="text-5xl font-black text-[#0984e3] drop-shadow-sm">{calculateWinrate(type)}</div>
+                    <div className="mt-3 text-slate-500 font-black text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Charts Row */}
+            <div className="flex flex-wrap justify-center gap-6 pt-8 mt-2">
+              <DurationChart title="Overall Winrate by Duration" matches={allMatches} />
+              <DurationChart title="Competitive Winrate by Duration" matches={competitiveMatches} />
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
-</div>
 
       {/* Recent Matches */}
       <div className="max-w-7xl mx-auto px-6 py-16">

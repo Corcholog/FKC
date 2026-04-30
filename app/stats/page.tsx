@@ -17,11 +17,12 @@ export default function StatsPage() {
       const { data, error } = await supabase
         .from('players')
         .select('*')
-        .order('name')
       
       if (data && data.length > 0) {
-        setPlayers(data)
-        setSelectedPlayerId(data[0].id)
+        const ROLE_ORDER = ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUPPORT']
+        const sortedData = [...data].sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role))
+        setPlayers(sortedData)
+        setSelectedPlayerId(sortedData[0].id)
       }
       setLoading(false)
     }

@@ -42,16 +42,16 @@ export default function Countdown() {
   }, [])
 
   return (
-    <div className="relative w-full py-10 bg-gradient-to-r from-[#0a1a2f] via-[#0f2c52] to-[#1b4f9c] border-y border-yellow-400 shadow-2xl overflow-hidden">
+    <div className="relative w-full h-full py-12 xl:py-0 flex items-center justify-center bg-gradient-to-br from-[#0a1a2f] via-[#0f2c52] to-[#1b4f9c] overflow-hidden">
 
       {/* subtle pattern */}
       <div className="absolute inset-0 opacity-10 bg-[url('/patterns/grid.svg')]" />
 
-      <div className="relative max-w-7xl mx-auto px-6">
-        <div className="flex items-center justify-center gap-12">
+      <div className="relative w-full px-6">
+        <div className="flex flex-col items-center justify-center gap-8">
 
           {/* LOGO */}
-          <div className="relative w-54 h-56 flex-shrink-0">
+          <div className="relative w-32 h-32 md:w-40 md:h-40 xl:w-48 xl:h-48 flex-shrink-0">
             <Image
               src="/icons/leif.jpg"
               alt="LEIF 2026"
@@ -61,12 +61,12 @@ export default function Countdown() {
           </div>
 
           {/* TEXT + COUNTDOWN */}
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-center w-full">
 
             {/* TITLE */}
             <div className="mb-4 text-center">
-              <h2 className="text-3xl font-black text-white tracking-wider drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]">
-                Liga E-sports Inter-Facultades
+              <h2 className="text-2xl lg:text-3xl font-black text-white tracking-wider drop-shadow-[0_0_10px_rgba(255,255,255,0.8)]">
+                Liga E-sports <br /> Inter-Facultades
               </h2>
               <p className="text-yellow-300 font-bold text-sm tracking-[0.3em] uppercase">
                 TEMPORADA 2026
@@ -87,52 +87,52 @@ export default function Countdown() {
                 </p>
 
                 {/* TIMER BOXES */}
-                <div className="flex gap-4">
+                <div className="flex gap-2 justify-center w-full">
 
                   {/* DAYS */}
-                  <div className="flex flex-col items-center">
-                    <div className="bg-black/60 border border-yellow-400 rounded-xl px-5 py-4 shadow-[0_0_15px_rgba(250,204,21,0.4)] min-w-[80px] text-center">
-                      <span className="text-3xl font-black text-white font-mono">
+                  <div className="flex flex-col items-center flex-1">
+                    <div className="bg-black/60 border border-yellow-400 rounded-xl w-full py-2 shadow-[0_0_15px_rgba(250,204,21,0.4)] text-center min-w-[50px]">
+                      <span className="text-xl lg:text-3xl font-black text-white font-mono">
                         {time.days}
                       </span>
                     </div>
-                    <span className="text-xs text-yellow-300 uppercase tracking-widest mt-1">
+                    <span className="text-[9px] lg:text-[10px] text-yellow-300 uppercase tracking-widest mt-1">
                       dias
                     </span>
                   </div>
 
                   {/* HOURS */}
-                  <div className="flex flex-col items-center">
-                    <div className="bg-black/60 border border-yellow-400 rounded-xl px-5 py-4 shadow-[0_0_15px_rgba(250,204,21,0.4)] min-w-[80px] text-center">
-                      <span className="text-3xl font-black text-white font-mono">
+                  <div className="flex flex-col items-center flex-1">
+                    <div className="bg-black/60 border border-yellow-400 rounded-xl w-full py-2 shadow-[0_0_15px_rgba(250,204,21,0.4)] text-center min-w-[50px]">
+                      <span className="text-xl lg:text-3xl font-black text-white font-mono">
                         {time.hours.toString().padStart(2, '0')}
                       </span>
                     </div>
-                    <span className="text-xs text-yellow-300 uppercase tracking-widest mt-1">
+                    <span className="text-[9px] lg:text-[10px] text-yellow-300 uppercase tracking-widest mt-1">
                       horas
                     </span>
                   </div>
 
                   {/* MINUTES */}
-                  <div className="flex flex-col items-center">
-                    <div className="bg-black/60 border border-yellow-400 rounded-xl px-5 py-4 shadow-[0_0_15px_rgba(250,204,21,0.4)] min-w-[80px] text-center">
-                      <span className="text-3xl font-black text-white font-mono">
+                  <div className="flex flex-col items-center flex-1">
+                    <div className="bg-black/60 border border-yellow-400 rounded-xl w-full py-2 shadow-[0_0_15px_rgba(250,204,21,0.4)] text-center min-w-[50px]">
+                      <span className="text-xl lg:text-3xl font-black text-white font-mono">
                         {time.minutes.toString().padStart(2, '0')}
                       </span>
                     </div>
-                    <span className="text-xs text-yellow-300 uppercase tracking-widest mt-1">
+                    <span className="text-[9px] lg:text-[10px] text-yellow-300 uppercase tracking-widest mt-1">
                       min
                     </span>
                   </div>
 
                   {/* SECONDS */}
-                  <div className="flex flex-col items-center">
-                    <div className="bg-black/60 border border-yellow-400 rounded-xl px-5 py-4 shadow-[0_0_20px_rgba(250,204,21,0.6)] min-w-[80px] text-center animate-pulse">
-                      <span className="text-3xl font-black text-white font-mono">
+                  <div className="flex flex-col items-center flex-1">
+                    <div className="bg-black/60 border border-yellow-400 rounded-xl w-full py-2 shadow-[0_0_15px_rgba(250,204,21,0.4)] text-center min-w-[50px]">
+                      <span className="text-xl lg:text-3xl font-black text-white font-mono">
                         {time.seconds.toString().padStart(2, '0')}
                       </span>
                     </div>
-                    <span className="text-xs text-yellow-300 uppercase tracking-widest mt-1">
+                    <span className="text-[9px] lg:text-[10px] text-yellow-300 uppercase tracking-widest mt-1">
                       seg
                     </span>
                   </div>

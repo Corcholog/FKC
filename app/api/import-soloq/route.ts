@@ -22,27 +22,18 @@ export async function POST() {
   try {
     const supabase = await createClient();
     const { data: players, error: playersError } = await supabase.from('players').select('*');
-    
+
     if (playersError || !players) {
       throw new Error('Could not fetch players');
     }
 
     // Start of season date (As requested: Today's exact date)
     const startTime = Math.floor(new Date('2026-04-29T00:00:00Z').getTime() / 1000);
-    
+
     let totalAddedCount = 0;
 
     for (const player of players) {
       let puuid = player.puuid;
-
-      // HARDCODE FOR GAUCI
-      if (player.name === 'Gauci') {
-        const accRes = await fetchWithRetry(`https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent('pør casi un G6')}/FKC`);
-        if (accRes.ok) {
-          const accData = await accRes.json();
-          puuid = accData.puuid;
-        }
-      }
 
       if (!puuid) continue;
 
@@ -70,13 +61,13 @@ export async function POST() {
         .from('soloq_matches')
         .select('match_id')
         .eq('player_id', player.id);
-        
+
       const existingMatchIds = new Set(existingMatches?.map(m => m.match_id) || []);
 
       while (hasMore) {
         const url = `https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?queue=420&startTime=${startTime}&start=${startIdx}&count=${count}`;
         const matchesRes = await fetchWithRetry(url);
-        
+
         if (!matchesRes.ok) {
           if (matchesRes.status === 429) throw new Error("Rate limit exceeded permanently");
           break; // Stop fetching matches for this player on other errors
@@ -92,9 +83,9 @@ export async function POST() {
 
         for (const matchId of matchIds) {
           if (existingMatchIds.has(matchId)) {
-             // We've hit a match we already processed, meaning all subsequent older matches are also likely processed.
-             // But just in case, we continue the loop. We could also break early here to save calls.
-             continue;
+            // We've hit a match we already processed, meaning all subsequent older matches are also likely processed.
+            // But just in case, we continue the loop. We could also break early here to save calls.
+            continue;
           }
 
           newMatchesFound = true;
@@ -105,6 +96,13 @@ export async function POST() {
 
           const matchData = await matchDataRes.json();
           if (!matchData.info || !matchData.info.participants) continue;
+
+          const isRemake = matchData.info.gameDuration < 300 || matchData.info.participants.some((p: any) => p.gameEndedInEarlySurrender);
+
+          if (isRemake) {
+            existingMatchIds.add(matchId);
+            continue;
+          }
 
           const targetParticipant = matchData.info.participants.find((p: any) => p.puuid === puuid);
           if (!targetParticipant) continue;

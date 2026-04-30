@@ -60,13 +60,13 @@ export async function POST(request: NextRequest) {
 
     const targetPlayer = matchData.info.participants.find((p: any) => p.puuid === puuid);
     let ourTeamId = 100;
-    
+
     if (targetPlayer) {
       ourTeamId = targetPlayer.teamId;
     }
 
     const durationMinutes = Math.max(1, Math.floor((matchData.info.gameDuration || 1800) / 60));
-    
+
     const ourRiotParticipants = matchData.info.participants.filter((p: any) => p.teamId === ourTeamId);
     const enemyRiotParticipants = matchData.info.participants.filter((p: any) => p.teamId !== ourTeamId);
 
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
 
       if (isAlly) {
         const opponent = enemyRiotParticipants.find((e: any) => e.teamPosition === p.teamPosition) || null;
-        
+
         const playerData = {
           kills: p.kills || 0,
           deaths: p.deaths || 0,
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
 
       return data;
     };
-    
+
     const our_participants = ourRiotParticipants.map((p: any) => mapParticipant(p, true));
     const enemy_participants = enemyRiotParticipants.map((p: any) => mapParticipant(p, false));
 

@@ -58,9 +58,9 @@ export async function POST(request: NextRequest) {
 
       // If we hit the 100/2min limit mid-batch, bail out immediately and send what we have
       if (matchDataRes.status === 429) {
-        return NextResponse.json({ 
-          success: true, 
-          matches: parsedMatches, 
+        return NextResponse.json({
+          success: true,
+          matches: parsedMatches,
           rateLimited: true // Signals the frontend to wait 2 mins!
         });
       }
@@ -75,8 +75,8 @@ export async function POST(request: NextRequest) {
 
       const ourTeamId = targetPlayer.teamId;
 
-const durationMinutes = Math.max(1, Math.floor((matchData.info.gameDuration || 1800) / 60));
-       
+      const durationMinutes = Math.max(1, Math.floor((matchData.info.gameDuration || 1800) / 60));
+
       const ourRiotParticipants = matchData.info.participants.filter((p: any) => p.teamId === ourTeamId);
       const enemyRiotParticipants = matchData.info.participants.filter((p: any) => p.teamId !== ourTeamId);
 
@@ -127,7 +127,7 @@ const durationMinutes = Math.max(1, Math.floor((matchData.info.gameDuration || 1
 
         if (isAlly) {
           const opponent = enemyRiotParticipants.find((e: any) => e.teamPosition === p.teamPosition) || null;
-          
+
           const playerData = {
             kills: p.kills || 0,
             deaths: p.deaths || 0,
@@ -189,10 +189,10 @@ const durationMinutes = Math.max(1, Math.floor((matchData.info.gameDuration || 1
       });
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      matches: parsedMatches, 
-      rateLimited: false 
+    return NextResponse.json({
+      success: true,
+      matches: parsedMatches,
+      rateLimited: false
     });
 
   } catch (error: any) {

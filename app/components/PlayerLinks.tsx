@@ -11,15 +11,10 @@ const PLAYER_LINKS: Record<string, { opgg: string, dpm: string, log: string }> =
     dpm: "https://dpm.lol/volv%C3%A9%20camila-MISSU",
     log: "https://www.leagueofgraphs.com/summoner/las/volv%C3%A9%20camila-MISSU"
   },
-  "pør casi un G6#fkc": {
-    opgg: "https://op.gg/lol/summoners/las/p%C3%B8r%20casi%20un%20G6-FKC",
-    dpm: "https://dpm.lol/p%C3%B8r%20casi%20un%20G6-FKC",
-    log: "https://www.leagueofgraphs.com/summoner/las/p%C3%B8r+casi+un+G6-FKC"
-  },
   "LEIF CHAMPION#fkc": {
-    opgg: "https://op.gg/lol/summoners/las/p%C3%B8r%20casi%20un%20G6-FKC",
-    dpm: "https://dpm.lol/p%C3%B8r%20casi%20un%20G6-FKC",
-    log: "https://www.leagueofgraphs.com/summoner/las/p%C3%B8r+casi+un+G6-FKC"
+    opgg: "https://op.gg/lol/summoners/las/LEIF%20CHAMPION-fkc",
+    dpm: "https://dpm.lol/leif%20champion-fkc",
+    log: "https://www.leagueofgraphs.com/summoner/las/LEIF+CHAMPION-fkc"
   },
   "l étrange cas#fkc": {
     opgg: "https://op.gg/lol/summoners/las/l%20%C3%A9trange%20cas-fkc",

@@ -22,7 +22,7 @@ export async function POST() {
   try {
     const supabase = await createClient();
     const { data: players, error: playersError } = await supabase.from('players').select('*');
-    
+
     if (playersError || !players) {
       throw new Error('Could not fetch players');
     }
@@ -33,18 +33,6 @@ export async function POST() {
       let puuid = player.puuid;
 
       console.log(`[Init Ranks] Processing ${player.name} (IGN: ${player.ign})...`);
-
-      // HARDCODE FOR GAUCI
-      if (player.name === 'Gauci') {
-        const accRes = await fetchWithRetry(`https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent('pør casi un G6')}/FKC`);
-        if (accRes.ok) {
-          const accData = await accRes.json();
-          puuid = accData.puuid;
-          console.log(`[Init Ranks] Hardcoded Gauci PUUID fetched: ${puuid}`);
-        } else {
-          console.error(`[Init Ranks] Failed to fetch Gauci override PUUID. Status: ${accRes.status}`);
-        }
-      }
 
       if (!puuid) {
         console.log(`[Init Ranks] Missing PUUID for ${player.name}, skipping.`);

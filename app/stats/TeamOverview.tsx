@@ -17,9 +17,9 @@ type PlayerSummary = {
   losses: number
   winrate: number
   overallKda: number
-  topChampions: { 
-    name: string; 
-    games: number; 
+  topChampions: {
+    name: string;
+    games: number;
     winrate: number;
     kda: number;
   }[]
@@ -27,7 +27,7 @@ type PlayerSummary = {
 
 const getChampionIcon = (champion: string): string | undefined => {
   if (!champion?.trim()) return undefined
-  const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath", "FiddleSticks" : "Fiddlesticks", "Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz", "Wukong":"MonkeyKing" }
+  const overrides: Record<string, string> = { "Bel'Veth": "Belveth", "Cho'Gath": "Chogath", "Kai'Sa": "Kaisa", "Kha'Zix": "Khazix", "K'Sante": "KSante", "Rek'Sai": "RekSai", "Vel'Koz": "Velkoz", "Wukong": "MonkeyKing", "LeBlanc": "Leblanc", "RenataGlasc": "Renata" }
   const trimmed = champion.trim()
   const key = overrides[trimmed] ?? trimmed.replace(/[^a-zA-Z0-9]/g, '')
   return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
@@ -50,14 +50,14 @@ const getColorKDA = (kda: number) => {
 const ROLE_ORDER = ['Top', 'Jungle', 'Mid', 'ADC', 'Support']
 
 // NUEVO: Recibimos selectedPlayerId y onPlayerSelect como props
-export default function TeamOverview({ 
-  players, 
-  selectedPlayerId, 
-  onPlayerSelect 
-}: { 
-  players: Player[], 
-  selectedPlayerId: number, 
-  onPlayerSelect: (id: number) => void 
+export default function TeamOverview({
+  players,
+  selectedPlayerId,
+  onPlayerSelect
+}: {
+  players: Player[],
+  selectedPlayerId: number,
+  onPlayerSelect: (id: number) => void
 }) {
   const [teamStats, setTeamStats] = useState<PlayerSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,12 +86,12 @@ export default function TeamOverview({
 
       const summaries: PlayerSummary[] = players.map(player => {
         const playerMatches = data.filter((row: any) => row.player_id === player.id)
-        
+
         let wins = 0
         let totalKills = 0
         let totalDeaths = 0
         let totalAssists = 0
-        
+
         const champStats: Record<string, { games: number, wins: number, kills: number, deaths: number, assists: number }> = {}
 
         playerMatches.forEach((row: any) => {
@@ -103,10 +103,10 @@ export default function TeamOverview({
           if (!champStats[row.champion]) {
             champStats[row.champion] = { games: 0, wins: 0, kills: 0, deaths: 0, assists: 0 }
           }
-          
+
           champStats[row.champion].games++
           if (row.matches.we_won) champStats[row.champion].wins++
-          
+
           champStats[row.champion].kills += row.kills || 0
           champStats[row.champion].deaths += row.deaths || 0
           champStats[row.champion].assists += row.assists || 0
@@ -114,15 +114,15 @@ export default function TeamOverview({
 
         const totalGames = playerMatches.length
         const winrate = totalGames > 0 ? (wins / totalGames) * 100 : 0
-        const overallKda = totalDeaths === 0 
-          ? (totalKills + totalAssists) 
+        const overallKda = totalDeaths === 0
+          ? (totalKills + totalAssists)
           : (totalKills + totalAssists) / totalDeaths
 
         const topChampions = Object.entries(champStats)
           .map(([name, stats]) => {
             const champWinrate = (stats.wins / stats.games) * 100
-            const champKda = stats.deaths === 0 
-              ? (stats.kills + stats.assists) 
+            const champKda = stats.deaths === 0
+              ? (stats.kills + stats.assists)
               : (stats.kills + stats.assists) / stats.deaths
 
             return {
@@ -162,22 +162,21 @@ export default function TeamOverview({
   return (
     <div className="w-full max-w-[1400px] mx-auto px-4 py-8">
       <h2 className="text-3xl font-black text-foreground mb-8 px-4 drop-shadow-sm">Starting Roster</h2>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         {teamStats.map((stat, idx) => {
           const isSelected = selectedPlayerId === stat.player.id;
-          
+
           return (
-            <div 
-              key={idx} 
+            <div
+              key={idx}
               onClick={() => onPlayerSelect(stat.player.id)}
-              className={`cursor-pointer bg-card border rounded-sm overflow-hidden shadow-xl flex flex-col transition-all duration-300 ${
-                isSelected
+              className={`cursor-pointer bg-card border rounded-sm overflow-hidden shadow-xl flex flex-col transition-all duration-300 ${isSelected
                   ? 'border-blue-400 ring-2 ring-blue-400 shadow-blue-900/15 scale-[1.02]'
                   : 'border-blue-100 dark:border-[#322814] shadow-blue-900/5 hover:-translate-y-1 hover:border-blue-300 dark:hover:border-blue-800'
-              }`}
+                }`}
             >
-              
+
               <div className={`p-4 border-b text-center transition-colors ${isSelected ? 'bg-blue-50 dark:bg-[#091428] border-blue-200 dark:border-[#322814]' : 'bg-slate-50 dark:bg-[#1e2328] border-slate-200 dark:border-[#322814]'}`}>
                 <span className="text-xs uppercase tracking-widest text-yellow-600 font-bold block mb-1">
                   {stat.player.role}
@@ -216,8 +215,8 @@ export default function TeamOverview({
                   <div className="space-y-2">
                     {stat.topChampions.map((champ, cIdx) => (
                       <div key={cIdx} className="flex items-center gap-3 bg-slate-50 dark:bg-[#1e2328] p-2 border border-slate-100 dark:border-[#322814]">
-                        <Image 
-                          src={getChampionIcon(champ.name) || '/placeholder-icon.png'} 
+                        <Image
+                          src={getChampionIcon(champ.name) || '/placeholder-icon.png'}
                           alt={champ.name}
                           width={32} height={32}
                           className="w-8 h-8 border border-slate-200 dark:border-slate-600 shadow-sm"
@@ -225,10 +224,10 @@ export default function TeamOverview({
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-foreground truncate leading-none mb-1">{champ.name}</p>
                           <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-none">
-                            {champ.games} G • 
+                            {champ.games} G •
                             <span className={`font-bold ml-1 ${getColorWR(champ.winrate)}`}>
                               {champ.winrate.toFixed(0)}%
-                            </span> • 
+                            </span> •
                             <span className={`font-bold ml-1 ${getColorKDA(champ.kda)}`}>
                               {champ.kda.toFixed(2)} KDA
                             </span>

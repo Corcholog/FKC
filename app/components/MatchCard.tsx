@@ -22,7 +22,7 @@ export default function MatchCard({ match, allChampions }: MatchCardProps) {
     const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
     const matchChamp = allChampions.find(c => normalize(c) === normalize(name))
     if (!matchChamp) return null
-    const overrides: Record<string, string> = { "Bel'Veth": "Belveth", "Cho'Gath": "Chogath", "Kai'Sa": "Kaisa", "Kha'Zix": "Khazix", "K'Sante": "KSante", "Rek'Sai": "RekSai", "Vel'Koz": "Velkoz", "Wukong": "MonkeyKing" }
+    const overrides: Record<string, string> = { "Bel'Veth": "Belveth", "Cho'Gath": "Chogath", "Kai'Sa": "Kaisa", "Kha'Zix": "Khazix", "K'Sante": "KSante", "Rek'Sai": "RekSai", "Vel'Koz": "Velkoz", "Wukong": "MonkeyKing", "LeBlanc": "Leblanc", "RenataGlasc": "Renata" }
     const key = overrides[matchChamp] ?? matchChamp.replace(/[^a-zA-Z0-9]/g, '')
     return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
   }

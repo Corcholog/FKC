@@ -38,7 +38,7 @@ const getColorKDA = (kda: number) => {
 }
 
 const getColorCS = (cs: number, role: string) => {
-  if (role === 'Support') return 'text-slate-400' 
+  if (role === 'Support') return 'text-slate-400'
   if (cs >= 8.0) return 'text-blue-400'
   if (cs >= 6.0) return 'text-green-400'
   return 'text-red-400'
@@ -46,19 +46,19 @@ const getColorCS = (cs: number, role: string) => {
 
 const getChampionIcon = (champion: string): string | undefined => {
   if (!champion?.trim()) return undefined
-  const overrides: Record<string, string> = { "Bel'Veth":"Belveth","Cho'Gath":"Chogath", "FiddleSticks" : "Fiddlesticks", "Kai'Sa":"Kaisa","Kha'Zix":"Khazix","K'Sante":"KSante","Rek'Sai":"RekSai","Vel'Koz":"Velkoz", "Wukong":"MonkeyKing" }
+  const overrides: Record<string, string> = { "Bel'Veth": "Belveth", "Cho'Gath": "Chogath", "FiddleSticks": "Fiddlesticks", "Kai'Sa": "Kaisa", "Kha'Zix": "Khazix", "K'Sante": "KSante", "Rek'Sai": "RekSai", "Vel'Koz": "Velkoz", "Wukong": "MonkeyKing", "LeBlanc": "Leblanc", "RenataGlasc": "Renata" }
   const trimmed = champion.trim()
   const key = overrides[trimmed] ?? trimmed.replace(/[^a-zA-Z0-9]/g, '')
   return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
 }
 
 // Limpiamos las props: ya no necesitamos onPlayerSelect
-export default function PlayerStats({ 
-  players, 
-  selectedPlayerId 
-}: { 
-  players: Player[], 
-  selectedPlayerId: number 
+export default function PlayerStats({
+  players,
+  selectedPlayerId
+}: {
+  players: Player[],
+  selectedPlayerId: number
 }) {
   const [stats, setStats] = useState<ChampionStat[]>([])
   const [loading, setLoading] = useState(false)
@@ -68,7 +68,7 @@ export default function PlayerStats({
 
   useEffect(() => {
     if (!selectedPlayerId) return
-    
+
     const fetchPlayerStats = async () => {
       setLoading(true)
       const supabase = createClient()
@@ -118,13 +118,13 @@ export default function PlayerStats({
         aggregated[champ].deaths += row.deaths
         aggregated[champ].assists += row.assists
         aggregated[champ].cs += row.cs
-        
+
         aggregated[champ].totalMinutes += match.duration_minutes + (match.duration_seconds / 60)
       })
 
       const finalStats: ChampionStat[] = Object.values(aggregated).map((stat: any) => {
-        const kda = stat.deaths === 0 
-          ? (stat.kills + stat.assists) 
+        const kda = stat.deaths === 0
+          ? (stat.kills + stat.assists)
           : (stat.kills + stat.assists) / stat.deaths
 
         const csPerMin = stat.totalMinutes > 0 ? stat.cs / stat.totalMinutes : 0
@@ -194,19 +194,19 @@ export default function PlayerStats({
               {stats.map((stat, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-[#1e2328]/50 transition-colors">
                   <td className="p-4 flex items-center gap-3">
-                    <Image 
-                      src={getChampionIcon(stat.championName) || '/placeholder-icon.png'} 
+                    <Image
+                      src={getChampionIcon(stat.championName) || '/placeholder-icon.png'}
                       alt={stat.championName}
                       width={40} height={40}
                       className="w-10 h-10 border border-slate-200 dark:border-slate-600 shadow-sm"
                     />
                     <span className="font-bold text-foreground">{stat.championName}</span>
                   </td>
-                  
+
                   <td className="p-4 text-center font-black text-lg text-yellow-600">
                     {stat.games}
                   </td>
-                  
+
                   <td className="p-4 text-center text-slate-500 dark:text-slate-400 font-semibold text-sm">
                     <span className="text-green-500">{stat.wins}W</span>
                     <span className="mx-1 text-slate-300">-</span>

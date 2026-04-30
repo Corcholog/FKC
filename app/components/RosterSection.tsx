@@ -85,7 +85,7 @@ const getChampionIcon = (name: string): string | null => {
   const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
   const match = allChampions.find(c => normalize(c) === normalize(name))
   if (!match) return null
-  const overrides: Record<string, string> = { "Bel'Veth": "Belveth", "Cho'Gath": "Chogath", "FiddleSticks": "Fiddlesticks", "Kai'Sa": "Kaisa", "Kha'Zix": "Khazix", "K'Sante": "KSante", "Rek'Sai": "RekSai", "Vel'Koz": "Velkoz", "Wukong": "MonkeyKing" }
+  const overrides: Record<string, string> = { "Bel'Veth": "Belveth", "Cho'Gath": "Chogath", "Kai'Sa": "Kaisa", "Kha'Zix": "Khazix", "K'Sante": "KSante", "Rek'Sai": "RekSai", "Vel'Koz": "Velkoz", "Wukong": "MonkeyKing", "LeBlanc": "Leblanc", "RenataGlasc": "Renata" }
   const key = overrides[match] ?? match.replace(/[^a-zA-Z0-9]/g, '')
   return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
 }
@@ -143,7 +143,7 @@ export default function RosterSection({ playerList, teamPerformances, soloqPerfo
       const mvpCount = playerMvpIntCounts[player.id]?.mvpCount || 0;
       const intMvpCount = playerMvpIntCounts[player.id]?.intMvpCount || 0;
       const champStats: Record<string, { games: number, wins: number, kills: number, deaths: number, assists: number }> = {};
-      
+
       let gamesWithScore = 0;
       let totalGames = 0;
 
@@ -223,7 +223,7 @@ export default function RosterSection({ playerList, teamPerformances, soloqPerfo
   return (
     <div className="max-w-7xl mx-auto px-6 py-16">
       <h2 className="text-4xl font-bold mb-6 text-center">Our Roster</h2>
-      
+
       {/* Mode Toggle */}
       <div className="flex justify-center mb-10">
         <div className="inline-flex bg-card border border-blue-200 dark:border-[#322814] p-1 shadow-sm">
@@ -231,11 +231,10 @@ export default function RosterSection({ playerList, teamPerformances, soloqPerfo
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`px-6 py-2 text-sm font-bold transition-all capitalize ${
-                mode === m
+              className={`px-6 py-2 text-sm font-bold transition-all capitalize ${mode === m
                   ? 'bg-[#f1c40f] text-slate-900 shadow-md border border-[#f39c12]'
                   : 'text-slate-600 dark:text-slate-300 hover:text-[#f39c12]'
-              }`}
+                }`}
             >
               {m === 'team' ? 'Team Stats' : m === 'soloq' ? 'SoloQ Stats' : 'Mixed Stats'}
             </button>
@@ -247,11 +246,10 @@ export default function RosterSection({ playerList, teamPerformances, soloqPerfo
         {rosterStats.length > 0 ? rosterStats.map((stat: any) => (
           <div
             key={stat.id}
-            className={`bg-card overflow-hidden flex flex-col transition-all duration-300 ${
-              mode === 'soloq'
+            className={`bg-card overflow-hidden flex flex-col transition-all duration-300 ${mode === 'soloq'
                 ? `border-2 hover:scale-[1.02] ${getTierBorderColor(stat.soloq_tier)}`
                 : 'border border-zinc-200 dark:border-[#322814] hover:border-yellow-400 dark:hover:border-[#c8aa6e]'
-            }`}
+              }`}
           >
             {/* IMAGE TOP */}
             <div className="h-[300px] relative overflow-hidden">

@@ -59,6 +59,18 @@ export default function MatchesPage() {
   const [championSearch, setChampionSearch] = useState<string>('')
   const [enemyChampionFilters, setEnemyChampionFilters] = useState<string[]>([])
   const [enemyChampionSearch, setEnemyChampionSearch] = useState<string>('')
+  const [sortBy, setSortBy] = useState<string>('date')
+
+  const clearFilters = () => {
+    setTypeFilter('all')
+    setResultFilter('all')
+    setChampionFilters([])
+    setEnemyChampionFilters([])
+    setSortBy('date')
+    setCurrentPage(1)
+  }
+
+  const hasActiveFilters = typeFilter !== 'all' || resultFilter !== 'all' || championFilters.length > 0 || enemyChampionFilters.length > 0 || sortBy !== 'date'
 
   const supabase = createClient()
 
@@ -114,11 +126,72 @@ export default function MatchesPage() {
     return typeMatches && resultMatches && championMatches && enemyChampionMatches
   })
 
-  // Pagination logic
-  const totalMatches = filteredMatches.length
-  const totalPages = Math.max(1, Math.ceil(totalMatches / MATCHES_PER_PAGE))
+  // Pagination and Sorting logic
+  const filteredCount = filteredMatches.length
+  
+  const sortedMatches = [...filteredMatches].sort((a, b) => {
+    if (sortBy === 'duration') {
+      const durationA = (a.duration_minutes * 60) + a.duration_seconds;
+      const durationB = (b.duration_minutes * 60) + b.duration_seconds;
+      return durationB - durationA; // Longest first
+    } else if (sortBy === 'kills') {
+      const killsA = a.ally_participants.reduce((sum, p) => sum + p.kills, 0);
+      const killsB = b.ally_participants.reduce((sum, p) => sum + p.kills, 0);
+      return killsB - killsA;
+    } else if (sortBy === 'deaths') {
+      const deathsA = a.ally_participants.reduce((sum, p) => sum + p.deaths, 0);
+      const deathsB = b.ally_participants.reduce((sum, p) => sum + p.deaths, 0);
+      return deathsB - deathsA;
+    }
+    // Default is date (already ordered by db but fallback if sorting was changed)
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredCount / MATCHES_PER_PAGE))
   const offset = (currentPage - 1) * MATCHES_PER_PAGE
-  const displayedMatches = filteredMatches.slice(offset, offset + MATCHES_PER_PAGE)
+  const displayedMatches = sortedMatches.slice(offset, offset + MATCHES_PER_PAGE)
+
+  // Calculate Combination Stats
+  let winrate = 0;
+  let avgDurationStr = "0:00";
+  let avgKills = 0;
+  let avgDeaths = 0;
+  let avgAssists = 0;
+  
+  if (filteredCount > 0) {
+    const wins = filteredMatches.filter(m => m.we_won).length;
+    winrate = Math.round((wins / filteredCount) * 100);
+    
+    let totalSeconds = 0;
+    let totalKills = 0;
+    let totalDeaths = 0;
+    let totalAssists = 0;
+    
+    filteredMatches.forEach(m => {
+      totalSeconds += (m.duration_minutes * 60) + m.duration_seconds;
+      m.ally_participants.forEach(p => {
+         totalKills += p.kills;
+         totalDeaths += p.deaths;
+         totalAssists += p.assists;
+      });
+    });
+
+    const avgSeconds = Math.round(totalSeconds / filteredCount);
+    avgDurationStr = `${Math.floor(avgSeconds / 60)}:${(avgSeconds % 60).toString().padStart(2, '0')}`;
+    avgKills = totalKills / filteredCount;
+    avgDeaths = totalDeaths / filteredCount;
+    avgAssists = totalAssists / filteredCount;
+  }
+
+  let wrColorClass = "bg-[#f1c40f]/10 border-[#f1c40f]/30";
+  let wrTextClass = "text-[#d4ac0d]";
+  if (winrate >= 60) {
+    wrColorClass = "bg-emerald-500/10 border-emerald-500/30";
+    wrTextClass = "text-emerald-500";
+  } else if (winrate <= 40) {
+    wrColorClass = "bg-rose-500/10 border-rose-500/30";
+    wrTextClass = "text-rose-500";
+  }
 
   // Reset pagination when using filters
   const handleTypeFilter = (val: string) => {
@@ -218,11 +291,40 @@ export default function MatchesPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
           <div>
             <h1 className="text-5xl font-black mb-2 text-foreground">Match History</h1>
-            <p className="text-slate-500 dark:text-slate-400 font-semibold">Total matches: {totalMatches}</p>
+            <p className="text-slate-500 dark:text-slate-400 font-semibold">
+              Showing {filteredCount} of {allMatches.length} total matches
+            </p>
           </div>
 
           {/* Filters */}
           <div className="flex flex-col gap-3">
+            {/* Controls (Sort & Clear) */}
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Sort By:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
+                  className="bg-card text-slate-600 dark:text-slate-300 border border-blue-200 dark:border-[#322814] rounded-sm px-2 py-1 text-xs font-bold shadow-sm focus:outline-none focus:border-[#f1c40f]"
+                >
+                  <option value="date">Date (Newest)</option>
+                  <option value="duration">Game Duration</option>
+                  <option value="kills">Most Kills</option>
+                  <option value="deaths">Most Deaths</option>
+                </select>
+              </div>
+
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="text-xs font-bold text-red-500 hover:text-red-400 transition-colors flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded-sm border border-red-500/20 shadow-sm"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                  Clear All Filters
+                </button>
+              )}
+            </div>
+
             {/* Match Type */}
             <div className="flex flex-wrap gap-2">
               {[
@@ -362,15 +464,39 @@ export default function MatchesPage() {
               </div>
             </div>
 
-            {/* Winrate for Combination */}
-            {resultFilter === 'all' && (championFilters.length > 0 || enemyChampionFilters.length > 0) && (
-              <div className="flex items-center gap-2 bg-[#f1c40f]/10 border border-[#f1c40f]/30 px-3 py-1 rounded-sm w-max mt-2">
-                <span className="text-xs font-bold text-[#d4ac0d]">
-                  Winrate: {totalMatches > 0 ? Math.round((filteredMatches.filter(m => m.we_won).length / totalMatches) * 100) : 0}%
-                </span>
-                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                  ({filteredMatches.filter(m => m.we_won).length}W - {totalMatches - filteredMatches.filter(m => m.we_won).length}L)
-                </span>
+            {/* Advanced Stats for Combination */}
+            {resultFilter === 'all' && (championFilters.length > 0 || enemyChampionFilters.length > 0) && filteredCount > 0 && (
+              <div className={`flex flex-wrap items-center gap-4 px-4 py-2 rounded-sm w-max mt-2 border ${wrColorClass}`}>
+                <div className="flex flex-col">
+                  <span className={`text-sm font-black ${wrTextClass}`}>
+                    {winrate}% WR
+                  </span>
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    ({filteredMatches.filter(m => m.we_won).length}W - {filteredCount - filteredMatches.filter(m => m.we_won).length}L)
+                  </span>
+                </div>
+                
+                <div className="w-px h-8 bg-slate-200 dark:bg-slate-700"></div>
+                
+                <div className="flex flex-col">
+                  <span className="text-sm font-black text-slate-700 dark:text-slate-200">
+                    {avgDurationStr}
+                  </span>
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    Avg Duration
+                  </span>
+                </div>
+
+                <div className="w-px h-8 bg-slate-200 dark:bg-slate-700"></div>
+                
+                <div className="flex flex-col">
+                  <span className="text-sm font-black text-slate-700 dark:text-slate-200">
+                    {avgDeaths === 0 ? (avgKills + avgAssists).toFixed(2) : ((avgKills + avgAssists) / avgDeaths).toFixed(2)} KDA
+                  </span>
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    Avg Team KDA
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -427,7 +553,7 @@ export default function MatchesPage() {
 
         {/* Page Info */}
         <div className="mt-4 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">
-          Page {currentPage} of {totalPages} ({totalMatches} total matches)
+          Page {currentPage} of {totalPages} ({filteredCount} matches)
         </div>
       </div>
     </main>

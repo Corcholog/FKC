@@ -5,7 +5,6 @@ import Link from 'next/link'
 import Navbar from '@/app/components/Navbar'
 import DurationChart from '@/app/components/DurationChart'
 import MatchCard from '@/app/components/MatchCard'
-import Countdown from '@/app/components/Countdown'
 import PlayerLinks from '@/app/components/PlayerLinks'
 import RosterSection from '@/app/components/RosterSection'
 
@@ -158,11 +157,11 @@ export default async function Home() {
       {/* Navigation Bar */}
       <Navbar />
 
-      {/* Hero Banner + Countdown Row */}
-      <div className="flex flex-col xl:flex-row w-full border-b border-blue-200 dark:border-[#322814]">
+      {/* Hero Banner Row */}
+      <div className="flex flex-col w-full border-b border-blue-200 dark:border-[#322814]">
 
-        {/* Hero Banner (70%) */}
-        <div className="relative w-full xl:w-[70%] h-[500px] xl:h-[600px] flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#74b9ff]/80 to-[#f4faff] dark:from-[#010a13]/80 dark:to-[#091428]">
+        {/* Hero Banner (100%) */}
+        <div className="relative w-full h-[500px] xl:h-[600px] flex items-center justify-center overflow-hidden bg-gradient-to-b from-[#74b9ff]/80 to-[#f4faff] dark:from-[#010a13]/80 dark:to-[#091428]">
           <Image src="/hero_banner.jpeg" alt="Hero Banner" fill className="object-cover opacity-[0.55] mix-blend-multiply" priority />
           <div className="relative text-center z-10 px-6 mt-10 flex flex-col items-center">
             <Image
@@ -174,11 +173,6 @@ export default async function Home() {
             <h1 className="text-5xl md:text-7xl font-black tracking-wider text-foreground drop-shadow-sm mb-6 md:mb-10 mt-4">FAKE CLAN</h1>
             <p className="text-xl md:text-2xl font-bold text-slate-600 dark:text-slate-300 bg-white/50 dark:bg-white/5 backdrop-blur-sm px-6 py-2 rounded-full border border-white/60 dark:border-white/10 shadow-sm">"Que ganas de mejorar la puta madre" - Joshy</p>
           </div>
-        </div>
-
-        {/* Countdown (30%) */}
-        <div className="w-full xl:w-[30%] flex items-stretch">
-          <Countdown />
         </div>
       </div>
 

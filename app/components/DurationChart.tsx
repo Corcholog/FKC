@@ -29,7 +29,7 @@ export default function DurationChart({ title, matches }: DurationChartProps) {
     const wins = bucket.filter((m) => m.we_won).length;
     const losses = total - wins;
     const winrate = total > 0 ? (wins / total) * 100 : 0;
-    
+
     return {
       label: b.label,
       total,
@@ -55,27 +55,27 @@ export default function DurationChart({ title, matches }: DurationChartProps) {
       <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-400/5 dark:bg-blue-600/5 rounded-full blur-xl group-hover:bg-blue-400/10 dark:group-hover:bg-blue-600/10 transition-colors"></div>
 
       <h3 className="text-slate-500 font-bold text-xs uppercase tracking-widest text-center mb-8 relative z-10 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">{title}</h3>
-      
-      <div className="flex justify-between items-end h-44 gap-2 mt-2 mb-2 relative z-10">
+
+      <div className="flex justify-between items-end h-44 gap-2 mt-6 mb-2 relative z-10">
         {data.map((b, i) => (
           <div key={i} className="flex flex-col items-center flex-1 group relative">
             {/* Tooltip on Hover */}
             <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-10 pointer-events-none font-bold shadow-md">
               {b.total > 0 ? `${b.wins}W - ${b.losses}L` : 'No Games'}
             </div>
-            
+
             {/* Y-Axis scale visualizer background */}
             <div className="w-full bg-blue-50/50 dark:bg-blue-950/20 relative flex flex-col justify-end h-36 border-b-2 border-slate-200 dark:border-[#322814] hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors group/bar">
-               {b.total > 0 && (
-                 <div 
-                   className={`w-full transition-all duration-700 ${getColor(b.winrate)} group-hover/bar:brightness-110 shadow-[0_0_10px_rgba(0,0,0,0.5)]`}
-                   style={{ height: `${b.winrate}%`, minHeight: b.winrate > 0 ? '4px' : '0' }}
-                 >
+              {b.total > 0 && (
+                <div
+                  className={`w-full transition-all duration-700 ${getColor(b.winrate)} group-hover/bar:brightness-110 shadow-[0_0_10px_rgba(0,0,0,0.5)]`}
+                  style={{ height: `${b.winrate}%`, minHeight: b.winrate > 0 ? '4px' : '0' }}
+                >
                   {/* Inner text showing percentage */}
                   {b.winrate >= 20 && (
-                     <span className="text-[10px] font-black text-black/70 flex justify-center mt-2 mix-blend-color-burn">
-                       {Math.round(b.winrate)}%
-                     </span>
+                    <span className="text-[10px] font-black text-black/70 flex justify-center mt-2 mix-blend-color-burn">
+                      {Math.round(b.winrate)}%
+                    </span>
                   )}
                 </div>
               )}

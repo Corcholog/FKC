@@ -47,10 +47,16 @@ export default function DurationChart({ title, matches }: DurationChartProps) {
   };
 
   return (
-    <div className="bg-background p-6 rounded-2xl border border-blue-100 dark:border-[#322814] shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col w-full max-w-sm">
-      <h3 className="text-slate-500 font-bold text-xs uppercase tracking-widest text-center mb-8">{title}</h3>
+    <div className="relative bg-gradient-to-b from-card to-blue-50/50 dark:to-[#0a101e] p-6 border border-blue-200/50 dark:border-[#1e2328] shadow-lg flex flex-col w-full max-w-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] dark:hover:shadow-[0_0_20px_rgba(59,130,246,0.1)] hover:border-blue-300 dark:hover:border-blue-800 group overflow-hidden">
+      {/* Hextech styling */}
+      <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-400 dark:via-blue-500 to-transparent opacity-30 group-hover:opacity-100 transition-opacity"></div>
+      <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-blue-300 dark:border-blue-700 opacity-50 group-hover:opacity-100 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-all"></div>
+      <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-blue-300 dark:border-blue-700 opacity-50 group-hover:opacity-100 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-all"></div>
+      <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-400/5 dark:bg-blue-600/5 rounded-full blur-xl group-hover:bg-blue-400/10 dark:group-hover:bg-blue-600/10 transition-colors"></div>
+
+      <h3 className="text-slate-500 font-bold text-xs uppercase tracking-widest text-center mb-8 relative z-10 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">{title}</h3>
       
-      <div className="flex justify-between items-end h-44 gap-2 mt-2 mb-2">
+      <div className="flex justify-between items-end h-44 gap-2 mt-2 mb-2 relative z-10">
         {data.map((b, i) => (
           <div key={i} className="flex flex-col items-center flex-1 group relative">
             {/* Tooltip on Hover */}
@@ -59,12 +65,12 @@ export default function DurationChart({ title, matches }: DurationChartProps) {
             </div>
             
             {/* Y-Axis scale visualizer background */}
-            <div className="w-full bg-blue-50/50 rounded-t-lg relative flex flex-col justify-end h-36 border-b-2 border-slate-200 hover:bg-blue-50 transition-colors">
-              {b.total > 0 && (
-                <div 
-                  className={`w-full rounded-t-lg transition-all duration-700 ${getColor(b.winrate)} group-hover:brightness-110 shadow-[0_0_10px_rgba(0,0,0,0.5)]`}
-                  style={{ height: `${b.winrate}%`, minHeight: b.winrate > 0 ? '4px' : '0' }}
-                >
+            <div className="w-full bg-blue-50/50 dark:bg-blue-950/20 relative flex flex-col justify-end h-36 border-b-2 border-slate-200 dark:border-[#322814] hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors group/bar">
+               {b.total > 0 && (
+                 <div 
+                   className={`w-full transition-all duration-700 ${getColor(b.winrate)} group-hover/bar:brightness-110 shadow-[0_0_10px_rgba(0,0,0,0.5)]`}
+                   style={{ height: `${b.winrate}%`, minHeight: b.winrate > 0 ? '4px' : '0' }}
+                 >
                   {/* Inner text showing percentage */}
                   {b.winrate >= 20 && (
                      <span className="text-[10px] font-black text-black/70 flex justify-center mt-2 mix-blend-color-burn">
@@ -75,8 +81,8 @@ export default function DurationChart({ title, matches }: DurationChartProps) {
               )}
             </div>
             {/* Label */}
-            <div className="text-[10px] text-slate-500 font-bold mt-4 whitespace-nowrap tracking-wider">{b.label}</div>
-            <div className="text-[10px] text-slate-400 font-medium mt-1">{b.total} G</div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold mt-4 whitespace-nowrap tracking-wider">{b.label}</div>
+            <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1">{b.total} G</div>
           </div>
         ))}
       </div>

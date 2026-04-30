@@ -171,10 +171,10 @@ export default function TeamOverview({
             <div 
               key={idx} 
               onClick={() => onPlayerSelect(stat.player.id)}
-              className={`cursor-pointer bg-card border rounded-2xl overflow-hidden shadow-xl flex flex-col transition-all duration-300 ${
+              className={`cursor-pointer bg-card border rounded-sm overflow-hidden shadow-xl flex flex-col transition-all duration-300 ${
                 isSelected
-                  ? 'border-blue-400 ring-4 ring-blue-100 dark:ring-blue-900 shadow-blue-900/15 scale-[1.02]'
-                  : 'border-blue-100 dark:border-[#322814] shadow-blue-900/5 hover:-translate-y-1 hover:border-blue-200'
+                  ? 'border-blue-400 ring-2 ring-blue-400 shadow-blue-900/15 scale-[1.02]'
+                  : 'border-blue-100 dark:border-[#322814] shadow-blue-900/5 hover:-translate-y-1 hover:border-blue-300 dark:hover:border-blue-800'
               }`}
             >
               
@@ -215,12 +215,12 @@ export default function TeamOverview({
                 {stat.topChampions.length > 0 ? (
                   <div className="space-y-2">
                     {stat.topChampions.map((champ, cIdx) => (
-                      <div key={cIdx} className="flex items-center gap-3 bg-slate-50 dark:bg-[#1e2328] p-2 rounded-lg border border-slate-100 dark:border-[#322814]">
+                      <div key={cIdx} className="flex items-center gap-3 bg-slate-50 dark:bg-[#1e2328] p-2 border border-slate-100 dark:border-[#322814]">
                         <Image 
                           src={getChampionIcon(champ.name) || '/placeholder-icon.png'} 
                           alt={champ.name}
                           width={32} height={32}
-                          className="w-8 h-8 rounded border border-slate-200 shadow-sm"
+                          className="w-8 h-8 border border-slate-200 dark:border-slate-600 shadow-sm"
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-foreground truncate leading-none mb-1">{champ.name}</p>

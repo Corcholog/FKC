@@ -177,7 +177,7 @@ export default function PlayerStats({
           No hay partidas registradas para este jugador.
         </div>
       ) : (
-        <div className="overflow-hidden bg-card border border-blue-100 dark:border-[#322814] rounded-2xl shadow-xl shadow-blue-900/5">
+        <div className="overflow-hidden bg-card border border-blue-100 dark:border-[#322814] rounded-none shadow-xl shadow-blue-900/5">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 dark:bg-[#091428] border-b border-slate-200 dark:border-[#322814] text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">
@@ -198,7 +198,7 @@ export default function PlayerStats({
                       src={getChampionIcon(stat.championName) || '/placeholder-icon.png'} 
                       alt={stat.championName}
                       width={40} height={40}
-                      className="w-10 h-10 rounded-md shadow-sm border border-slate-200"
+                      className="w-10 h-10 border border-slate-200 dark:border-slate-600 shadow-sm"
                     />
                     <span className="font-bold text-foreground">{stat.championName}</span>
                   </td>

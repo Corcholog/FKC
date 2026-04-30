@@ -226,14 +226,14 @@ export default function RosterSection({ playerList, teamPerformances, soloqPerfo
       
       {/* Mode Toggle */}
       <div className="flex justify-center mb-10">
-        <div className="inline-flex bg-card border border-blue-200 dark:border-[#322814] rounded-xl p-1 shadow-sm">
+        <div className="inline-flex bg-card border border-blue-200 dark:border-[#322814] p-1 shadow-sm">
           {(['team', 'soloq', 'mixed'] as Mode[]).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`px-6 py-2 rounded-lg text-sm font-bold transition-all capitalize ${
+              className={`px-6 py-2 text-sm font-bold transition-all capitalize ${
                 mode === m
-                  ? 'bg-[#f1c40f] text-slate-900 shadow-md'
+                  ? 'bg-[#f1c40f] text-slate-900 shadow-md border border-[#f39c12]'
                   : 'text-slate-600 dark:text-slate-300 hover:text-[#f39c12]'
               }`}
             >
@@ -247,10 +247,10 @@ export default function RosterSection({ playerList, teamPerformances, soloqPerfo
         {rosterStats.length > 0 ? rosterStats.map((stat: any) => (
           <div
             key={stat.id}
-            className={`bg-card rounded-2xl overflow-hidden flex flex-col transition-all duration-300 ${
+            className={`bg-card overflow-hidden flex flex-col transition-all duration-300 ${
               mode === 'soloq'
                 ? `border-2 hover:scale-[1.02] ${getTierBorderColor(stat.soloq_tier)}`
-                : 'border border-zinc-200 dark:border-[#322814] hover:border-yellow-400'
+                : 'border border-zinc-200 dark:border-[#322814] hover:border-yellow-400 dark:hover:border-[#c8aa6e]'
             }`}
           >
             {/* IMAGE TOP */}
@@ -318,13 +318,13 @@ export default function RosterSection({ playerList, teamPerformances, soloqPerfo
               {/* MVP Stats */}
               {mode === 'team' && (
                 <div className="grid grid-cols-2 gap-2 mb-4">
-                  <div className="text-center bg-emerald-50 dark:bg-emerald-900/20 rounded-lg py-2">
-                    <p className="text-[9px] text-emerald-600 uppercase font-bold">MVPs</p>
-                    <p className="text-lg font-bold text-emerald-600">{stat.mvpCount}</p>
+                  <div className="text-center bg-emerald-50 dark:bg-[#0f1f1a] border border-emerald-100 dark:border-emerald-900/50 py-2">
+                    <p className="text-[9px] text-emerald-600 dark:text-emerald-500 uppercase font-bold">MVPs</p>
+                    <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{stat.mvpCount}</p>
                   </div>
-                  <div className="text-center bg-rose-50 dark:bg-rose-900/20 rounded-lg py-2">
-                    <p className="text-[9px] text-rose-600 uppercase font-bold">INTs</p>
-                    <p className="text-lg font-bold text-rose-600">{stat.intMvpCount}</p>
+                  <div className="text-center bg-rose-50 dark:bg-[#1f1216] border border-rose-100 dark:border-rose-900/50 py-2">
+                    <p className="text-[9px] text-rose-600 dark:text-rose-500 uppercase font-bold">INTs</p>
+                    <p className="text-lg font-bold text-rose-600 dark:text-rose-400">{stat.intMvpCount}</p>
                   </div>
                 </div>
               )}
@@ -340,14 +340,14 @@ export default function RosterSection({ playerList, teamPerformances, soloqPerfo
                     {stat.topChampions.map((champ: any, idx: number) => (
                       <div
                         key={idx}
-                        className="flex items-center gap-3 bg-slate-50 dark:bg-[#1e2328] p-2 rounded-lg border border-slate-200 dark:border-[#322814]"
+                        className="flex items-center gap-3 bg-slate-50 dark:bg-[#1e2328] p-2 border border-slate-200 dark:border-[#322814]"
                       >
                         <Image
                           src={getChampionIcon(champ.name) || '/placeholder-icon.png'}
                           alt={champ.name}
                           width={28}
                           height={28}
-                          className="w-7 h-7 rounded border border-slate-300"
+                          className="w-7 h-7 border border-slate-300 dark:border-slate-600"
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-foreground truncate leading-none mb-1">

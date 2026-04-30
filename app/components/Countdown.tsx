@@ -56,7 +56,7 @@ export default function Countdown() {
               src="/icons/leif.jpg"
               alt="LEIF 2026"
               fill
-              className="object-contain rounded-xl shadow-[0_0_25px_rgba(255,215,0,0.4)]"
+              className="object-contain border-2 border-yellow-400 shadow-[0_0_25px_rgba(255,215,0,0.4)]"
             />
           </div>
 
@@ -74,7 +74,9 @@ export default function Countdown() {
             </div>
 
             {isExpired ? (
-              <div className="bg-black/40 backdrop-blur-md px-10 py-5 rounded-2xl border-2 border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)]">
+              <div className="relative bg-black/40 backdrop-blur-md px-10 py-5 border-2 border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.6)]">
+                <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-yellow-400"></div>
+                <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-yellow-400"></div>
                 <p className="text-3xl font-black text-yellow-400 animate-pulse text-center">
                   🧀 Se pudrio el queso!
                 </p>
@@ -91,7 +93,9 @@ export default function Countdown() {
 
                   {/* DAYS */}
                   <div className="flex flex-col items-center flex-1">
-                    <div className="bg-black/60 border border-yellow-400 rounded-xl w-full py-2 shadow-[0_0_15px_rgba(250,204,21,0.4)] text-center min-w-[50px]">
+                    <div className="relative bg-black/60 border border-yellow-400/50 w-full py-2 shadow-[0_0_15px_rgba(250,204,21,0.3)] text-center min-w-[50px]">
+                      <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-yellow-400"></div>
+                      <div className="absolute bottom-0 right-0 w-1.5 h-1.5 border-b border-r border-yellow-400"></div>
                       <span className="text-xl lg:text-3xl font-black text-white font-mono">
                         {time.days}
                       </span>
@@ -103,7 +107,9 @@ export default function Countdown() {
 
                   {/* HOURS */}
                   <div className="flex flex-col items-center flex-1">
-                    <div className="bg-black/60 border border-yellow-400 rounded-xl w-full py-2 shadow-[0_0_15px_rgba(250,204,21,0.4)] text-center min-w-[50px]">
+                    <div className="relative bg-black/60 border border-yellow-400/50 w-full py-2 shadow-[0_0_15px_rgba(250,204,21,0.3)] text-center min-w-[50px]">
+                      <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-yellow-400"></div>
+                      <div className="absolute bottom-0 right-0 w-1.5 h-1.5 border-b border-r border-yellow-400"></div>
                       <span className="text-xl lg:text-3xl font-black text-white font-mono">
                         {time.hours.toString().padStart(2, '0')}
                       </span>
@@ -115,7 +121,9 @@ export default function Countdown() {
 
                   {/* MINUTES */}
                   <div className="flex flex-col items-center flex-1">
-                    <div className="bg-black/60 border border-yellow-400 rounded-xl w-full py-2 shadow-[0_0_15px_rgba(250,204,21,0.4)] text-center min-w-[50px]">
+                    <div className="relative bg-black/60 border border-yellow-400/50 w-full py-2 shadow-[0_0_15px_rgba(250,204,21,0.3)] text-center min-w-[50px]">
+                      <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-yellow-400"></div>
+                      <div className="absolute bottom-0 right-0 w-1.5 h-1.5 border-b border-r border-yellow-400"></div>
                       <span className="text-xl lg:text-3xl font-black text-white font-mono">
                         {time.minutes.toString().padStart(2, '0')}
                       </span>
@@ -127,7 +135,9 @@ export default function Countdown() {
 
                   {/* SECONDS */}
                   <div className="flex flex-col items-center flex-1">
-                    <div className="bg-black/60 border border-yellow-400 rounded-xl w-full py-2 shadow-[0_0_15px_rgba(250,204,21,0.4)] text-center min-w-[50px]">
+                    <div className="relative bg-black/60 border border-yellow-400/50 w-full py-2 shadow-[0_0_15px_rgba(250,204,21,0.3)] text-center min-w-[50px]">
+                      <div className="absolute top-0 left-0 w-1.5 h-1.5 border-t border-l border-yellow-400"></div>
+                      <div className="absolute bottom-0 right-0 w-1.5 h-1.5 border-b border-r border-yellow-400"></div>
                       <span className="text-xl lg:text-3xl font-black text-white font-mono">
                         {time.seconds.toString().padStart(2, '0')}
                       </span>

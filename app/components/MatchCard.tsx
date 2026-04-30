@@ -63,7 +63,7 @@ export default function MatchCard({ match, allChampions }: MatchCardProps) {
   return (
     <a
       {...linkProps}
-      className={`block relative rounded-2xl border-2 overflow-hidden shadow-lg ${match.we_won
+      className={`block relative border-2 overflow-hidden shadow-lg ${match.we_won
         ? `bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-900/20 dark:to-[#091428] border-emerald-200/80 dark:border-emerald-800/50 ${hasLink ? 'hover:border-emerald-400 hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(16,185,129,0.15)]' : ''}`
         : `bg-gradient-to-r from-rose-50 to-white dark:from-rose-900/20 dark:to-[#091428] border-rose-200/80 dark:border-rose-800/50 ${hasLink ? 'hover:border-rose-400 hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(244,63,94,0.15)]' : ''}`
         } transition-all duration-300 ${hasLink ? 'cursor-pointer shadow-xl' : 'cursor-default'}`}
@@ -90,12 +90,12 @@ export default function MatchCard({ match, allChampions }: MatchCardProps) {
                 return (
                   <div key={role} className="relative flex flex-col items-center">
                     {icon ? (
-                      <Image src={icon} alt={champ} width={56} height={56} className="w-14 h-14 rounded-xl border border-blue-300/50 shadow-md object-cover" />
+                      <Image src={icon} alt={champ} width={56} height={56} className="w-14 h-14 border border-blue-300/50 dark:border-blue-800/50 shadow-md object-cover" />
                     ) : (
-                      <div className="w-14 h-14 rounded-xl border border-blue-100 bg-blue-50 flex items-center justify-center text-xs text-blue-300">?</div>
+                      <div className="w-14 h-14 border border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-[#010a13] flex items-center justify-center text-xs text-blue-300 dark:text-blue-600">?</div>
                     )}
                     {(isMVP || isINT) && (
-                      <div className={`absolute -bottom-3 text-[14px] rounded-full w-6 h-6 flex items-center justify-center shadow-md z-10 border bg-white dark:bg-[#091428] ${isMVP ? 'border-[#f1c40f]' : 'border-[#0984e3]'}`} title={isMVP ? `MVP (Score: ${pick?.score})` : `INT MVP (Score: ${pick?.score})`}>
+                      <div className={`absolute -bottom-3 text-[14px] w-6 h-6 flex items-center justify-center shadow-md z-10 border bg-white dark:bg-[#091428] ${isMVP ? 'border-[#f1c40f]' : 'border-[#0984e3]'}`} title={isMVP ? `MVP (Score: ${pick?.score})` : `INT MVP (Score: ${pick?.score})`}>
                         {isMVP ? '🏆' : '😈'}
                       </div>
                     )}
@@ -110,9 +110,9 @@ export default function MatchCard({ match, allChampions }: MatchCardProps) {
                 {blueBans.slice(0, 5).map((ban: string, i: number) => {
                   const icon = getChampionIcon(ban)
                   return icon ? (
-                    <Image key={i} src={icon} alt={ban} width={32} height={32} className="w-8 h-8 rounded-lg border border-blue-200/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition shadow-sm" />
+                    <Image key={i} src={icon} alt={ban} width={32} height={32} className="w-8 h-8 border border-blue-200/50 dark:border-blue-800/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition shadow-sm" />
                   ) : (
-                    <div key={i} className="w-8 h-8 rounded-lg border border-blue-100 bg-blue-50 flex items-center justify-center text-[10px] text-blue-300">
+                    <div key={i} className="w-8 h-8 border border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-[#010a13] flex items-center justify-center text-[10px] text-blue-300 dark:text-blue-600">
                       {ban?.substring(0, 2) || '?'}
                     </div>
                   )
@@ -140,12 +140,12 @@ export default function MatchCard({ match, allChampions }: MatchCardProps) {
                 return (
                   <div key={role} className="relative flex flex-col items-center">
                     {icon ? (
-                      <Image src={icon} alt={champ} width={56} height={56} className="w-14 h-14 rounded-xl border border-rose-300/50 shadow-md object-cover" />
+                      <Image src={icon} alt={champ} width={56} height={56} className="w-14 h-14 border border-rose-300/50 dark:border-rose-800/50 shadow-md object-cover" />
                     ) : (
-                      <div className="w-14 h-14 rounded-xl border border-blue-100 bg-blue-50 flex items-center justify-center text-xs text-blue-300">?</div>
+                      <div className="w-14 h-14 border border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-[#010a13] flex items-center justify-center text-xs text-blue-300 dark:text-blue-600">?</div>
                     )}
                     {(isMVP || isINT) && (
-                      <div className={`absolute -bottom-3 text-[14px] rounded-full w-6 h-6 flex items-center justify-center shadow-md z-10 border bg-white dark:bg-[#091428] ${isMVP ? 'border-[#f1c40f]' : 'border-[#0984e3]'}`} title={isMVP ? `MVP (Score: ${pick?.score})` : `INT MVP (Score: ${pick?.score})`}>
+                      <div className={`absolute -bottom-3 text-[14px] w-6 h-6 flex items-center justify-center shadow-md z-10 border bg-white dark:bg-[#091428] ${isMVP ? 'border-[#f1c40f]' : 'border-[#0984e3]'}`} title={isMVP ? `MVP (Score: ${pick?.score})` : `INT MVP (Score: ${pick?.score})`}>
                         {isMVP ? '🏆' : '😈'}
                       </div>
                     )}
@@ -160,9 +160,9 @@ export default function MatchCard({ match, allChampions }: MatchCardProps) {
                 {redBans.slice(0, 5).map((ban: string, i: number) => {
                   const icon = getChampionIcon(ban)
                   return icon ? (
-                    <Image key={i} src={icon} alt={ban} width={32} height={32} className="w-8 h-8 rounded-lg border border-rose-200/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition shadow-sm" />
+                    <Image key={i} src={icon} alt={ban} width={32} height={32} className="w-8 h-8 border border-rose-200/50 dark:border-rose-800/50 object-cover grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition shadow-sm" />
                   ) : (
-                    <div key={i} className="w-8 h-8 rounded-lg border border-blue-100 bg-blue-50 flex items-center justify-center text-[10px] text-blue-300">
+                    <div key={i} className="w-8 h-8 border border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-[#010a13] flex items-center justify-center text-[10px] text-blue-300 dark:text-blue-600">
                       {ban?.substring(0, 2) || '?'}
                     </div>
                   )
@@ -187,7 +187,7 @@ export default function MatchCard({ match, allChampions }: MatchCardProps) {
           )}
         </div>
         <div className="flex-1 flex justify-end">
-          <div className="font-mono text-slate-600 dark:text-slate-300 font-bold bg-white dark:bg-[#1e2328] px-3 py-1 rounded-md shadow-sm border border-blue-100 dark:border-[#322814]">
+          <div className="font-mono text-slate-600 dark:text-slate-300 font-bold bg-white dark:bg-[#1e2328] px-3 py-1 shadow-sm border border-blue-100 dark:border-[#322814]">
             {formatDuration(match.duration_minutes, match.duration_seconds || 0)}
           </div>
         </div>

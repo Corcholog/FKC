@@ -190,35 +190,49 @@ export default async function Home() {
       />
 
       {/* Team Performance */}
-      <div className="bg-blue-50 dark:bg-[#091428] py-16 border-y border-[#bae6fd] dark:border-[#322814] shadow-inner relative z-20">
+      <div className="bg-blue-50 dark:bg-black py-16 border-y border-[#bae6fd] dark:border-[#322814] shadow-inner relative z-20">
         <div className="max-w-7xl mx-auto px-6">
           <h2 className="text-4xl font-black mb-10 text-center text-foreground drop-shadow-sm">Team Performance</h2>
           <div className="flex flex-col gap-6">
             <div className="flex flex-wrap justify-center gap-8 text-center">
               {standardMatchTypes.map(type => (
-                <div key={type} className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border border-blue-100 dark:border-[#322814] shadow-xl shadow-blue-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200">
-                  <div className="text-5xl font-black text-[#0984e3] drop-shadow-sm">{calculateWinrate(type)}</div>
-                  <div className="mt-3 text-slate-500 font-black text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
+                <div key={type} className="relative w-full sm:w-48 bg-gradient-to-b from-card to-blue-50/50 dark:to-[#0a101e] p-8 border border-blue-200/50 dark:border-[#1e2328] shadow-lg flex flex-col justify-center transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] dark:hover:shadow-[0_0_20px_rgba(59,130,246,0.1)] hover:border-blue-300 dark:hover:border-blue-800 group overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-400 dark:via-blue-500 to-transparent opacity-30 group-hover:opacity-100 transition-opacity"></div>
+                  <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-blue-300 dark:border-blue-700 opacity-50 group-hover:opacity-100 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-all"></div>
+                  <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-blue-300 dark:border-blue-700 opacity-50 group-hover:opacity-100 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-all"></div>
+                  <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-400/5 dark:bg-blue-600/5 rounded-full blur-xl group-hover:bg-blue-400/10 dark:group-hover:bg-blue-600/10 transition-colors"></div>
+                  <div className="text-5xl font-black text-blue-600 dark:text-blue-400 drop-shadow-md relative z-10 group-hover:scale-105 transition-transform duration-300">{calculateWinrate(type)}</div>
+                  <div className="mt-3 text-slate-500 dark:text-slate-400 font-bold text-xs tracking-widest uppercase relative z-10 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">{type.replace(/_/g, ' ')}</div>
                 </div>
               ))}
               {/* Overall WR Box (Estilo Dorado/Destacado) */}
-              <div className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border-2 border-[#f1c40f]/60 shadow-xl shadow-yellow-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-yellow-900/10">
-                <div className="text-5xl font-black text-[#f39c12] drop-shadow-sm">{calculateWinrate()}</div>
-                <div className="mt-3 text-[#f39c12] font-black tracking-widest text-xs uppercase">OVERALL WR</div>
+              <div className="relative w-full sm:w-48 bg-gradient-to-b from-card to-yellow-50 dark:to-[#1a150b] p-8 border-2 border-[#f1c40f] dark:border-[#c8aa6e] shadow-[0_0_15px_rgba(241,196,15,0.15)] dark:shadow-[0_0_15px_rgba(200,170,110,0.1)] flex flex-col justify-center transition-all hover:-translate-y-1">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#f1c40f] dark:via-[#c8aa6e] to-transparent"></div>
+                <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-[#f1c40f] dark:border-[#c8aa6e]"></div>
+                <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-[#f1c40f] dark:border-[#c8aa6e]"></div>
+                <div className="text-5xl font-black text-[#f39c12] dark:text-[#f0e6d2] drop-shadow-md">{calculateWinrate()}</div>
+                <div className="mt-3 text-[#f39c12] dark:text-[#c8aa6e] font-black tracking-widest text-xs uppercase">OVERALL WR</div>
               </div>
             </div>
 
             {competitiveMatchTypes.length > 0 && (
               <div className="flex flex-wrap justify-center gap-8 text-center pt-4">
                 {/* Competitive WR Box (Estilo Púrpura) */}
-                <div className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border-2 border-purple-200 dark:border-purple-900 shadow-xl shadow-purple-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-purple-900/10">
-                  <div className="text-5xl font-black text-purple-600 drop-shadow-sm">{calculateWinrate(excludeTypes, true)}</div>
-                  <div className="mt-3 text-purple-600/80 font-black tracking-widest text-xs uppercase">COMPETITIVE WR</div>
+                <div className="relative w-full sm:w-48 bg-gradient-to-b from-card to-purple-50 dark:to-[#160f24] p-8 border-2 border-purple-400 dark:border-purple-800 shadow-[0_0_15px_rgba(168,85,247,0.15)] dark:shadow-[0_0_15px_rgba(168,85,247,0.1)] flex flex-col justify-center transition-all hover:-translate-y-1">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-400 dark:via-purple-600 to-transparent"></div>
+                  <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-purple-400 dark:border-purple-600"></div>
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-purple-400 dark:border-purple-600"></div>
+                  <div className="text-5xl font-black text-purple-600 dark:text-purple-400 drop-shadow-md">{calculateWinrate(excludeTypes, true)}</div>
+                  <div className="mt-3 text-purple-600 dark:text-purple-400 font-black tracking-widest text-xs uppercase">COMPETITIVE WR</div>
                 </div>
                 {competitiveMatchTypes.map(type => (
-                  <div key={type} className="w-full sm:w-48 bg-card p-8 rounded-[2rem] border border-blue-100 dark:border-[#322814] shadow-xl shadow-blue-900/5 flex flex-col justify-center transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-900/10 hover:border-blue-200">
-                    <div className="text-5xl font-black text-[#0984e3] drop-shadow-sm">{calculateWinrate(type)}</div>
-                    <div className="mt-3 text-slate-500 font-black text-xs tracking-widest uppercase">{type.replace(/_/g, ' ')}</div>
+                  <div key={type} className="relative w-full sm:w-48 bg-gradient-to-b from-card to-blue-50/50 dark:to-[#0a101e] p-8 border border-blue-200/50 dark:border-[#1e2328] shadow-lg flex flex-col justify-center transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] dark:hover:shadow-[0_0_20px_rgba(59,130,246,0.1)] hover:border-blue-300 dark:hover:border-blue-800 group overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-400 dark:via-blue-500 to-transparent opacity-30 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-blue-300 dark:border-blue-700 opacity-50 group-hover:opacity-100 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-all"></div>
+                    <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-blue-300 dark:border-blue-700 opacity-50 group-hover:opacity-100 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-all"></div>
+                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-400/5 dark:bg-blue-600/5 rounded-full blur-xl group-hover:bg-blue-400/10 dark:group-hover:bg-blue-600/10 transition-colors"></div>
+                    <div className="text-5xl font-black text-blue-600 dark:text-blue-400 drop-shadow-md relative z-10 group-hover:scale-105 transition-transform duration-300">{calculateWinrate(type)}</div>
+                    <div className="mt-3 text-slate-500 dark:text-slate-400 font-bold text-xs tracking-widest uppercase relative z-10 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">{type.replace(/_/g, ' ')}</div>
                   </div>
                 ))}
               </div>

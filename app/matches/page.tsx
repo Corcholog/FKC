@@ -211,7 +211,7 @@ const allChampions = [
                 <button 
                   key={f.id}
                   onClick={() => handleTypeFilter(f.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${
+                  className={`px-3 py-1.5 rounded-none text-xs font-bold transition-all border shadow-sm ${
                     typeFilter === f.id 
                       ? 'bg-[#f1c40f] text-slate-900 border-yellow-500 shadow-md'
                       : 'bg-card text-slate-600 dark:text-slate-300 border-blue-200 dark:border-[#322814] hover:border-[#f1c40f] hover:text-[#f39c12]'
@@ -232,7 +232,7 @@ const allChampions = [
                 <button 
                   key={f.id}
                   onClick={() => handleResultFilter(f.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${
+                  className={`px-3 py-1.5 rounded-none text-xs font-bold transition-all border shadow-sm ${
                     resultFilter === f.id 
                       ? f.activeClass
                       : `bg-card text-slate-600 dark:text-slate-300 border-blue-200 dark:border-[#322814] ${f.colorClass}`
@@ -251,7 +251,7 @@ const allChampions = [
                 value={championSearch}
                 onChange={handleChampionSearch}
                 placeholder="Search Ally Champion..."
-                className="bg-card text-slate-600 dark:text-slate-300 border border-blue-200 dark:border-[#322814] rounded-lg px-3 py-1.5 text-xs font-bold transition-all shadow-sm w-max focus:outline-none focus:border-[#f1c40f] placeholder:font-normal"
+                className="bg-card text-slate-600 dark:text-slate-300 border border-blue-200 dark:border-[#322814] rounded-none px-3 py-1.5 text-xs font-bold transition-all shadow-sm w-max focus:outline-none focus:border-[#f1c40f] placeholder:font-normal"
               />
               <datalist id="champions-list">
                 {allChampions.filter(c => !championFilters.includes(c)).map(c => (
@@ -266,13 +266,13 @@ const allChampions = [
                     {championFilters.map(champ => (
                       <span 
                         key={champ} 
-                        className="inline-flex items-center gap-1.5 bg-slate-800 dark:bg-slate-700 text-slate-100 border border-slate-600 px-2.5 py-1 rounded-md text-xs font-bold shadow-sm"
+                        className="inline-flex items-center gap-1.5 bg-slate-800 dark:bg-slate-700 text-slate-100 border border-slate-600 px-2.5 py-1 rounded-sm text-xs font-bold shadow-sm"
                       >
                         {getChampionIcon(champ) && (
                           <img 
                             src={getChampionIcon(champ) as string} 
                             alt={champ} 
-                            className="w-4 h-4 rounded-full object-cover"
+                            className="w-4 h-4 border border-slate-500 object-cover"
                           />
                         )}
                         {champ}
@@ -289,7 +289,7 @@ const allChampions = [
 
                   {/* Winrate for Combination */}
                   {resultFilter === 'all' && (
-                    <div className="flex items-center gap-2 bg-[#f1c40f]/10 border border-[#f1c40f]/30 px-3 py-1 rounded-md">
+                    <div className="flex items-center gap-2 bg-[#f1c40f]/10 border border-[#f1c40f]/30 px-3 py-1 rounded-sm">
                       <span className="text-xs font-bold text-[#d4ac0d]">
                         Winrate: {totalMatches > 0 ? Math.round((filteredMatches.filter(m => m.we_won).length / totalMatches) * 100) : 0}%
                       </span>
@@ -313,7 +313,7 @@ const allChampions = [
               <MatchCard key={match.id} match={match} allChampions={allChampions} />
             ))
           ) : (
-            <div className="text-center py-12 text-slate-500 dark:text-slate-400 font-medium bg-card border border-blue-100 dark:border-[#322814] rounded-2xl shadow-sm">No matches found</div>
+            <div className="text-center py-12 text-slate-500 dark:text-slate-400 font-medium bg-card border border-blue-100 dark:border-[#322814] rounded-sm shadow-sm">No matches found</div>
           )}
         </div>
 
@@ -323,7 +323,7 @@ const allChampions = [
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="px-6 py-2 bg-[#f1c40f] hover:bg-[#f39c12] disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed text-slate-900 shadow-md font-bold rounded-lg transition-all"
+              className="px-6 py-2 bg-[#f1c40f] hover:bg-[#f39c12] disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed text-slate-900 shadow-md font-bold rounded-none transition-all"
             >
               ← Previous
             </button>
@@ -333,7 +333,7 @@ const allChampions = [
                 <button
                   key={page}
                   onClick={() => setCurrentPage(page)}
-                  className={`w-10 h-10 rounded-lg font-bold transition-all shadow-sm ${
+                  className={`w-10 h-10 rounded-none font-bold transition-all shadow-sm ${
                     currentPage === page
                       ? 'bg-[#f1c40f] text-slate-900 border border-yellow-500'
                       : 'bg-card text-slate-600 dark:text-slate-300 border border-blue-200 dark:border-[#322814] hover:border-[#f1c40f] hover:text-[#f39c12]'
@@ -347,7 +347,7 @@ const allChampions = [
             <button
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
-              className="px-6 py-2 bg-[#f1c40f] hover:bg-[#f39c12] disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed text-slate-900 shadow-md font-bold rounded-lg transition-all"
+              className="px-6 py-2 bg-[#f1c40f] hover:bg-[#f39c12] disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed text-slate-900 shadow-md font-bold rounded-none transition-all"
             >
               Next →
             </button>

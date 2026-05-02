@@ -35,6 +35,18 @@ export async function POST() {
     for (const player of players) {
       let puuid = player.puuid;
 
+      // HARDCODE FOR CORCHO
+      if (player.name === 'Corcho') {
+        const accRes = await fetchWithRetry(`https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent('Corcho')}/FKC`);
+        if (accRes.ok) {
+          const accData = await accRes.json();
+          puuid = accData.puuid;
+          console.log(`[Import SoloQ] Hardcoded Corcho PUUID fetched: ${puuid}`);
+        } else {
+          console.error(`[Import SoloQ] Failed to fetch Corcho override PUUID. Status: ${accRes.status}`);
+        }
+      }
+
       if (!puuid) continue;
 
       // 1. Fetch Ranked Stats using PUUID

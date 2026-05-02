@@ -34,6 +34,17 @@ export async function POST() {
 
       console.log(`[Init Ranks] Processing ${player.name} (IGN: ${player.ign})...`);
 
+      if (player.name === 'Corcho') {
+        const accRes = await fetchWithRetry(`https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent('Corcho')}/FKC`);
+        if (accRes.ok) {
+          const accData = await accRes.json();
+          puuid = accData.puuid;
+          console.log(`[Init Ranks] Hardcoded Corcho PUUID fetched: ${puuid}`);
+        } else {
+          console.error(`[Init Ranks] Failed to fetch Corcho override PUUID. Status: ${accRes.status}`);
+        }
+      }
+
       if (!puuid) {
         console.log(`[Init Ranks] Missing PUUID for ${player.name}, skipping.`);
         continue;

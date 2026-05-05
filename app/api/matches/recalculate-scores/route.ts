@@ -5,11 +5,18 @@ import { calculateScoreV3 } from '@/lib/score';
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+type PlayerScore = {
+  id: number;
+  score: number;
+};
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
+
     let body = {};
-    try { body = await request.json(); } catch(e) {}
+    try { body = await request.json(); } catch (e) {}
+
     const { force = true } = body as { force?: boolean };
 
     const { data: matches, error } = await supabase
@@ -18,7 +25,7 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    if (matches.length === 0) {
+    if (!matches || matches.length === 0) {
       return NextResponse.json({ success: true, message: 'No matches found' });
     }
 
@@ -32,14 +39,21 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      if (!force && match.ally_participants.length > 0 && match.ally_participants.every((p: any) => p.score !== null && p.score > 0)) {
+      if (
+        !force &&
+        match.ally_participants.length > 0 &&
+        match.ally_participants.every((p: any) => p.score !== null && p.score > 0)
+      ) {
         skipped.push({ id: match.id, reason: 'Already calculated' });
         continue;
       }
 
-      const fullMatchId = match.match_id.includes('_') ? match.match_id : `LA2_${match.match_id}`;
+      const fullMatchId = match.match_id.includes('_')
+        ? match.match_id
+        : `LA2_${match.match_id}`;
 
       await delay(200);
+
       const matchDataRes = await fetch(
         `https://americas.api.riotgames.com/lol/match/v5/matches/${fullMatchId}`,
         { headers: { 'X-Riot-Token': RIOT_API_KEY! } }
@@ -58,13 +72,17 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const durationMinutes = Math.max(1, Math.floor((matchData?.info?.gameDuration || 1800) / 60));
+      const durationMinutes = Math.max(
+        1,
+        Math.floor((matchData?.info?.gameDuration || 1800) / 60)
+      );
 
-      const ourTeamId = riotParticipants.find((p: any) =>
-        match.ally_participants.some((ap: any) =>
-          ap.champion.toLowerCase() === p.championName.toLowerCase()
-        )
-      )?.teamId || 100;
+      const ourTeamId =
+        riotParticipants.find((p: any) =>
+          match.ally_participants.some((ap: any) =>
+            ap.champion.toLowerCase() === p.championName.toLowerCase()
+          )
+        )?.teamId || 100;
 
       const ourParticipants = riotParticipants.filter((p: any) => p.teamId === ourTeamId);
       const enemyParticipants = riotParticipants.filter((p: any) => p.teamId !== ourTeamId);
@@ -100,8 +118,15 @@ export async function POST(request: NextRequest) {
         teamPosition: p.teamPosition || 'TOP',
       }));
 
+      // =========================
+      // 1. CALCULAR SCORES
+      // =========================
+      const computedScores: PlayerScore[] = [];
+
       for (const p of match.ally_participants) {
-        const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const normalize = (s: string) =>
+          s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
         const riotData = ourParticipants.find((rp: any) =>
           normalize(rp.championName) === normalize(p.champion)
         );
@@ -111,13 +136,14 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const opponent = enemyParticipants.find((e: any) => e.teamPosition === riotData.teamPosition) || null;
-        
-        const role = p.role === 'Support' ? 'Support' 
-          : p.role === 'Jungle' ? 'Jungle'
-          : p.role === 'Mid' ? 'Mid'
-          : p.role === 'ADC' ? 'ADC'
-          : 'Top';
+        const opponent =
+          enemyParticipants.find((e: any) => e.teamPosition === riotData.teamPosition) || null;
+
+        const role =
+          p.role === 'Support' ? 'Support' :
+          p.role === 'Jungle' ? 'Jungle' :
+          p.role === 'Mid' ? 'Mid' :
+          p.role === 'ADC' ? 'ADC' : 'Top';
 
         const playerData = {
           kills: riotData.kills || 0,
@@ -150,15 +176,43 @@ export async function POST(request: NextRequest) {
           neutralMinionsKilled: opponent.neutralMinionsKilled || 0,
         } : null;
 
-        const score = calculateScoreV3(playerData, opponentData, teamTotals, durationMinutes, role, objectives, teamParticipantsForV3);
+        const rawScore = calculateScoreV3(
+          playerData,
+          opponentData,
+          teamTotals,
+          durationMinutes,
+          role,
+          objectives,
+          teamParticipantsForV3
+        );
 
+        computedScores.push({
+          id: p.id,
+          score: isFinite(rawScore) ? rawScore : 0
+        });
+      }
+
+      // =========================
+      // 2. NORMALIZAR
+      // =========================
+      const maxScore = Math.max(...computedScores.map(p => p.score), 1);
+
+      const normalizedScores = computedScores.map(p => ({
+        id: p.id,
+        score: Math.round((p.score / maxScore) * 100)
+      }));
+
+      // =========================
+      // 3. GUARDAR
+      // =========================
+      for (const p of normalizedScores) {
         const { error: updateErr } = await supabase
           .from('ally_participants')
-          .update({ score })
+          .update({ score: p.score })
           .eq('id', p.id);
 
         if (updateErr) {
-          logs.push(`Failed update ${p.champion}: ${updateErr.message}`);
+          logs.push(`Failed update ${p.id}: ${updateErr.message}`);
         } else {
           updatedRows++;
         }

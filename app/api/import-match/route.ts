@@ -155,6 +155,10 @@ export async function POST(request: NextRequest) {
     };
 
     const our_participants = ourRiotParticipants.map((p: any) => mapParticipant(p, true));
+    const maxScore = Math.max(...our_participants.map((p: { score: any; }) => p.score || 0), 1);
+    our_participants.forEach((p: { score: number; }) => {
+      p.score = Math.round((p.score / maxScore) * 100);
+    });
     const enemy_participants = enemyRiotParticipants.map((p: any) => mapParticipant(p, false));
 
     const ourTeamData = matchData.info.teams.find((t: any) => t.teamId === ourTeamId);

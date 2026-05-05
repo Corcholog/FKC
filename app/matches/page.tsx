@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import Navbar from '@/app/components/Navbar'
 import MatchCard from '@/app/components/MatchCard'
-
+import { useRef } from 'react'
 type Match = {
   id: number
   date: string
@@ -61,6 +61,9 @@ export default function MatchesPage() {
   const [enemyChampionSearch, setEnemyChampionSearch] = useState<string>('')
   const [sortBy, setSortBy] = useState<string>('date')
 
+
+
+  const matchesRef = useRef<HTMLDivElement | null>(null)
   const clearFilters = () => {
     setTypeFilter('all')
     setResultFilter('all')
@@ -93,6 +96,13 @@ export default function MatchesPage() {
 
     fetchAllMatches()
   }, [])
+
+  useEffect(() => {
+  matchesRef.current?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  })
+}, [currentPage])
 
   // In-memory filtering
   const filteredMatches = allMatches.filter(match => {
@@ -282,14 +292,14 @@ export default function MatchesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground pb-20 pt-16">
+    <main ref = {matchesRef} className="min-h-screen bg-background text-foreground pb-20 pt-16">
 
       {/* Navigation Bar */}
       <Navbar />
 
       <div className="max-w-7xl mx-auto px-6 py-16">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
-          <div>
+          <div >
             <h1 className="text-5xl font-black mb-2 text-foreground">Match History</h1>
             <p className="text-slate-500 dark:text-slate-400 font-semibold">
               Showing {filteredCount} of {allMatches.length} total matches
@@ -503,7 +513,7 @@ export default function MatchesPage() {
         </div>
 
         {/* Matches List */}
-        <div className="grid gap-6 relative z-10">
+        <div  className="grid gap-6 relative z-10">
           {loading ? (
             <div className="text-center py-12 text-slate-500">Loading matches...</div>
           ) : displayedMatches.length > 0 ? (

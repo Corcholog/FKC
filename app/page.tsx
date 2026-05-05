@@ -112,17 +112,27 @@ export default async function Home() {
     "Zac", "Zed", "Zeri", "Ziggs", "Zilean", "Zoe", "Zyra"
   ].sort()
 
+    // Normalize scrim type names for display
+  const normalizeMatchType = (type: string) => {
+  if (type === 'scrim_bo1' || type === 'scrim_bo3') return 'scrim';
+  return type;
+};
+
   const calculateWinrate = (matchType?: string | string[], isExclude: boolean = false): string => {
     if (!allMatches.length) return '0%'
 
-    let filtered = allMatches;
+    let filtered = allMatches.map((m: any) => ({
+      ...m,
+      normalized_type: normalizeMatchType(m.match_type)
+    }))
+
     if (matchType) {
       if (Array.isArray(matchType)) {
         filtered = isExclude
-          ? allMatches.filter((m: any) => !matchType.includes(m.match_type))
-          : allMatches.filter((m: any) => matchType.includes(m.match_type))
+          ? filtered.filter((m: any) => !matchType.includes(m.normalized_type))
+          : filtered.filter((m: any) => matchType.includes(m.normalized_type))
       } else {
-        filtered = allMatches.filter((m: any) => m.match_type === matchType)
+        filtered = filtered.filter((m: any) => m.normalized_type === matchType)
       }
     }
 
@@ -131,7 +141,9 @@ export default async function Home() {
     return `${Math.round((wins / filtered.length) * 100)}%`
   }
 
-  const uniqueMatchTypes = Array.from(new Set(allMatches.map((m: any) => m.match_type))).filter(Boolean) as string[]
+  const uniqueMatchTypes = Array.from(
+  new Set(allMatches.map((m: any) => normalizeMatchType(m.match_type)))
+).filter(Boolean) as string[]
   const desiredStandardOrder = ['flex', 'clash', 'scrim_bo1', 'scrim_bo3', 'scrim']
   const standardMatchTypes = desiredStandardOrder.filter(t => uniqueMatchTypes.includes(t))
   const competitiveMatchTypes = uniqueMatchTypes.filter(t => !desiredStandardOrder.includes(t))
@@ -139,6 +151,8 @@ export default async function Home() {
   // Create an array specifically for competitive matches using the same filter logic as the WR box
   const excludeTypes = ['flex', 'scrim_bo1', 'scrim_bo3', 'scrim', 'clash'];
   const competitiveMatches = allMatches.filter((m: any) => !excludeTypes.includes(m.match_type));
+
+
 
   const getPicksByRole = (participants: any[] = []) => {
     return participants.reduce((acc: any, p: any) => {
@@ -209,28 +223,36 @@ export default async function Home() {
               </div>
             </div>
 
-            {competitiveMatchTypes.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-8 text-center pt-4">
-                {/* Competitive WR Box (Estilo Púrpura) */}
-                <div className="relative w-full sm:w-48 bg-gradient-to-b from-card to-purple-50 dark:to-[#160f24] p-8 border-2 border-purple-400 dark:border-purple-800 shadow-[0_0_15px_rgba(168,85,247,0.15)] dark:shadow-[0_0_15px_rgba(168,85,247,0.1)] flex flex-col justify-center transition-all hover:-translate-y-1">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-400 dark:via-purple-600 to-transparent"></div>
-                  <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-purple-400 dark:border-purple-600"></div>
-                  <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-purple-400 dark:border-purple-600"></div>
-                  <div className="text-5xl font-black text-purple-600 dark:text-purple-400 drop-shadow-md">{calculateWinrate(excludeTypes, true)}</div>
-                  <div className="mt-3 text-purple-600 dark:text-purple-400 font-black tracking-widest text-xs uppercase">COMPETITIVE WR</div>
-                </div>
-                {competitiveMatchTypes.map(type => (
-                  <div key={type} className="relative w-full sm:w-48 bg-gradient-to-b from-card to-blue-50/50 dark:to-[#0a101e] p-8 border border-blue-200/50 dark:border-[#1e2328] shadow-lg flex flex-col justify-center transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] dark:hover:shadow-[0_0_20px_rgba(59,130,246,0.1)] hover:border-blue-300 dark:hover:border-blue-800 group overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-blue-400 dark:via-blue-500 to-transparent opacity-30 group-hover:opacity-100 transition-opacity"></div>
-                    <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-blue-300 dark:border-blue-700 opacity-50 group-hover:opacity-100 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-all"></div>
-                    <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-blue-300 dark:border-blue-700 opacity-50 group-hover:opacity-100 group-hover:border-blue-400 dark:group-hover:border-blue-500 transition-all"></div>
-                    <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-400/5 dark:bg-blue-600/5 rounded-full blur-xl group-hover:bg-blue-400/10 dark:group-hover:bg-blue-600/10 transition-colors"></div>
-                    <div className="text-5xl font-black text-blue-600 dark:text-blue-400 drop-shadow-md relative z-10 group-hover:scale-105 transition-transform duration-300">{calculateWinrate(type)}</div>
-                    <div className="mt-3 text-slate-500 dark:text-slate-400 font-bold text-xs tracking-widest uppercase relative z-10 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">{type.replace(/_/g, ' ')}</div>
+{competitiveMatchTypes.length > 0 && (
+                <div className="flex flex-wrap justify-center gap-8 text-center pt-4">
+                  {/* Competitive WR Box (Estilo Púrpura) */}
+                  <div className="relative w-full sm:w-48 bg-gradient-to-b from-card to-purple-50 dark:to-[#160f24] p-8 border-2 border-purple-400 dark:border-purple-800 shadow-[0_0_15px_rgba(168,85,247,0.15)] dark:shadow-[0_0_15px_rgba(168,85,247,0.1)] flex flex-col justify-center transition-all hover:-translate-y-1">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-400 dark:via-purple-600 to-transparent"></div>
+                    <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-purple-400 dark:border-purple-600"></div>
+                    <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-purple-400 dark:border-purple-600"></div>
+                    <div className="text-5xl font-black text-purple-600 dark:text-purple-400 drop-shadow-md">{calculateWinrate(excludeTypes, true)}</div>
+                    <div className="mt-3 text-purple-600 dark:text-purple-400 font-black tracking-widest text-xs uppercase">COMPETITIVE WR</div>
                   </div>
-                ))}
-              </div>
-            )}
+                  {(() => {
+                    // Normalize scrim types to show as just "scrim"
+                    const otherTypes = competitiveMatchTypes.filter(t => !t.includes('scrim'));
+                    
+                    return (
+                      <>
+                        {otherTypes.map(type => (
+                          <div key={type} className="relative w-full sm:w-48 bg-gradient-to-b from-card to-blue-50/50 dark:to-[#0a102e] p-8 border border-blue-200/50 dark:border-[#1e2328] shadow-lg flex flex-col justify-center transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_20px_rgba(59,130,246,0.1)] dark:hover:shadow-[0_0_20px_rgba(59,130,246,0.1)] hover:border-blue-300 dark:hover:border-blue-800 group overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-400 dark:via-blue-600 to-transparent"></div>
+                            <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-blue-400 dark:border-blue-600"></div>
+                            <div className="absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 border-blue-400 dark:border-blue-600"></div>
+                            <div className="text-5xl font-black text-blue-600 dark:text-blue-400 drop-shadow-md group-hover:scale-105 transition-transform duration-300">{calculateWinrate(type)}</div>
+                            <div className="mt-3 text-blue-600 dark:text-blue-400 font-black tracking-widest text-xs uppercase">{normalizeMatchType(type)}</div>
+                          </div>
+                        ))}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
 
             {/* Charts Row */}
             <div className="flex flex-wrap justify-center gap-6 pt-8 mt-2">

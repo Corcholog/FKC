@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-export const LEIF_START_DATE = new Date("2026-05-15T00:00:00")
+export const LEIF_START_DATE = new Date("2026-05-16T00:00:00")
 
 export function useCountdown() {
   const [time, setTime] = useState({

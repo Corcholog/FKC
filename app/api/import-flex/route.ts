@@ -9,9 +9,9 @@ const championIdMap: Record<number, string> = {
 
 const mapRiotRole = (riotRole: string): string => {
   const roleMap: Record<string, string> = {
-    'TOP': 'Top', 'JUNGLE': 'Jungle', 'MIDDLE': 'Mid', 'BOTTOM': 'ADC', 'UTILITY': 'Support',
+    'TOP': 'top', 'JUNGLE': 'jungle', 'MIDDLE': 'mid', 'BOTTOM': 'adc', 'UTILITY': 'support',
   };
-  return roleMap[riotRole] || 'Top';
+  return roleMap[riotRole] || 'top';
 };
 
 // Helper to pause execution briefly

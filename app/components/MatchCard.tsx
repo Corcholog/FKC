@@ -1,11 +1,11 @@
 import Image from 'next/image'
+import { getChampionIcon } from '@/lib/champions'
 
 interface MatchCardProps {
   match: any;
-  allChampions: string[];
 }
 
-export default function MatchCard({ match, allChampions }: MatchCardProps) {
+export default function MatchCard({ match }: MatchCardProps) {
   const getPicksByRole = (participants: any[] = []) => {
     return participants.reduce((acc: any, p: any) => {
       if (p.role) acc[p.role.toLowerCase()] = p
@@ -17,15 +17,7 @@ export default function MatchCard({ match, allChampions }: MatchCardProps) {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
 
-  const getChampionIcon = (name: string): string | null => {
-    if (!name?.trim()) return null
-    const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
-    const matchChamp = allChampions.find(c => normalize(c) === normalize(name))
-    if (!matchChamp) return null
-    const overrides: Record<string, string> = { "Bel'Veth": "Belveth", "Cho'Gath": "Chogath", "Kai'Sa": "Kaisa", "Kha'Zix": "Khazix", "K'Sante": "KSante", "Rek'Sai": "RekSai", "Vel'Koz": "Velkoz", "Wukong": "MonkeyKing", "LeBlanc": "Leblanc", "RenataGlasc": "Renata" }
-    const key = overrides[matchChamp] ?? matchChamp.replace(/[^a-zA-Z0-9]/g, '')
-    return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
-  }
+
 
   let mvpId: number | null = null;
   let intId: number | null = null;

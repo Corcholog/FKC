@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Navbar from '@/app/components/Navbar'
 import MatchCard from '@/app/components/MatchCard'
 import { useRef } from 'react'
+import { allChampions, getChampionIcon } from '@/lib/champions'
 type Match = {
   id: number
   date: string
@@ -248,48 +249,7 @@ export default function MatchesPage() {
     setCurrentPage(1)
   }
 
-  // Full champion list (April 2026)
-  const allChampions = [
-    "Aatrox", "Ahri", "Akali", "Akshan", "Alistar", "Ambessa", "Amumu", "Anivia", "Annie", "Aphelios",
-    "Ashe", "Aurelion Sol", "Aurora", "Azir", "Bard", "Bel'Veth", "Blitzcrank", "Brand", "Braum", "Briar",
-    "Caitlyn", "Camille", "Cassiopeia", "Cho'Gath", "Corki", "Darius", "Diana", "Dr. Mundo", "Draven",
-    "Ekko", "Elise", "Evelynn", "Ezreal", "Fiddlesticks", "Fiora", "Fizz", "Galio", "Gangplank", "Garen",
-    "Gnar", "Gragas", "Graves", "Gwen", "Hecarim", "Heimerdinger", "Hwei", "Illaoi", "Irelia", "Ivern",
-    "Janna", "Jarvan IV", "Jax", "Jayce", "Jhin", "Jinx", "K'Sante", "Kai'Sa", "Kalista", "Karma",
-    "Karthus", "Kassadin", "Katarina", "Kayle", "Kayn", "Kennen", "Kha'Zix", "Kindred", "Kled", "Kog'Maw",
-    "LeBlanc", "Lee Sin", "Leona", "Lillia", "Lissandra", "Lucian", "Lulu", "Lux", "Malphite", "Malzahar",
-    "Maokai", "Master Yi", "Mel", "Milio", "Miss Fortune", "Mordekaiser", "Morgana", "Naafiri", "Nami",
-    "Nasus", "Nautilus", "Neeko", "Nidalee", "Nilah", "Nocturne", "Nunu & Willump", "Olaf", "Orianna",
-    "Ornn", "Pantheon", "Poppy", "Pyke", "Qiyana", "Quinn", "Rakan", "Rammus", "Rek'Sai", "Rell",
-    "Renata Glasc", "Renekton", "Rengar", "Riven", "Rumble", "Ryze", "Samira", "Sejuani", "Senna",
-    "Seraphine", "Sett", "Shaco", "Shen", "Shyvana", "Singed", "Sion", "Sivir", "Skarner", "Smolder",
-    "Sona", "Soraka", "Swain", "Sylas", "Syndra", "Tahm Kench", "Taliyah", "Talon", "Taric", "Teemo",
-    "Thresh", "Tristana", "Trundle", "Tryndamere", "Twisted Fate", "Twitch", "Udyr", "Urgot", "Varus",
-    "Vayne", "Veigar", "Vel'Koz", "Vex", "Vi", "Viego", "Viktor", "Vladimir", "Volibear", "Warwick",
-    "Wukong", "Xayah", "Xerath", "Xin Zhao", "Yasuo", "Yone", "Yorick", "Yunara", "Yuumi", "Zaahen",
-    "Zac", "Zed", "Zeri", "Ziggs", "Zilean", "Zoe", "Zyra"
-  ].sort()
 
-  const getPicksByRole = (participants: any[] = []) => {
-    return participants.reduce((acc: any, p: any) => {
-      if (p.role) acc[p.role.toLowerCase()] = p
-      return acc
-    }, {})
-  }
-
-  const formatDuration = (minutes: number = 0, seconds: number = 0): string => {
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`
-  }
-
-  const getChampionIcon = (name: string): string | null => {
-    if (!name?.trim()) return null
-    const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
-    const match = allChampions.find(c => normalize(c) === normalize(name))
-    if (!match) return null
-    const overrides: Record<string, string> = { "Bel'Veth": "Belveth", "Cho'Gath": "Chogath", "Kai'Sa": "Kaisa", "Kha'Zix": "Khazix", "K'Sante": "KSante", "Rek'Sai": "RekSai", "Vel'Koz": "Velkoz", "Wukong": "MonkeyKing", "LeBlanc": "Leblanc", "RenataGlasc": "Renata" }
-    const key = overrides[match] ?? match.replace(/[^a-zA-Z0-9]/g, '')
-    return `https://ddragon.leagueoflegends.com/cdn/16.7.1/img/champion/${key}.png`
-  }
 
   return (
     <main ref = {matchesRef} className="min-h-screen bg-background text-foreground pb-20 pt-16">
@@ -518,7 +478,7 @@ export default function MatchesPage() {
             <div className="text-center py-12 text-slate-500">Loading matches...</div>
           ) : displayedMatches.length > 0 ? (
             displayedMatches.map((match) => (
-              <MatchCard key={match.id} match={match} allChampions={allChampions} />
+              <MatchCard key={match.id} match={match} />
             ))
           ) : (
             <div className="text-center py-12 text-slate-500 dark:text-slate-400 font-medium bg-card border border-blue-100 dark:border-[#322814] rounded-sm shadow-sm">No matches found</div>

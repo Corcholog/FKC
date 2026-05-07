@@ -1,54 +1,51 @@
-'use client'
-import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/server'
 import Navbar from '@/app/components/Navbar'
-import PlayerStats from './PlayerStats'
-import TeamOverview from './TeamOverview'
+import StatsContainer from './StatsContainer'
 
-export default function StatsPage() {
-  const [players, setPlayers] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selectedPlayerId, setSelectedPlayerId] = useState<number>(0)
+export default async function StatsPage() {
+  const supabase = await createClient()
+
+  // Fetch players
+  const { data: playersData } = await supabase
+    .from('players')
+    .select('*')
   
-  const supabase = createClient()
+  const players = playersData || []
 
-  useEffect(() => {
-    const fetchPlayers = async () => {
-      const { data, error } = await supabase
-        .from('players')
-        .select('*')
-      
-      if (data && data.length > 0) {
-        const ROLE_ORDER = ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUPPORT']
-        const sortedData = [...data].sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role))
-        setPlayers(sortedData)
-        setSelectedPlayerId(sortedData[0].id)
-      }
-      setLoading(false)
-    }
+  // Fetch all player performances for the Team Stats
+  const { data: teamPerformancesData } = await supabase
+    .from('ally_participants')
+    .select(`
+      id,
+      player_id,
+      match_id,
+      champion,
+      kills,
+      deaths,
+      assists,
+      score,
+      cs,
+      matches!inner (id, we_won, match_type, duration_minutes, duration_seconds)
+    `)
+  
+  const teamPerformances = teamPerformancesData || []
 
-    fetchPlayers()
-  }, [])
-
-  if (loading) return <div className="min-h-screen bg-background p-8 text-center text-[#0984e3] font-bold">Loading Team Data...</div>
+  // Fetch all soloq matches
+  const { data: soloqPerformancesData } = await supabase
+    .from('soloq_matches')
+    .select('*')
+  
+  const soloqPerformances = soloqPerformancesData || []
 
   return (
-    <main className="min-h-screen bg-background pb-20 pt-16 text-foreground">
+    <main className="h-screen bg-background text-foreground pt-16 overflow-hidden">
       <Navbar />
 
-      <TeamOverview 
+      <StatsContainer 
         players={players} 
-        selectedPlayerId={selectedPlayerId} 
-        onPlayerSelect={setSelectedPlayerId} 
+        teamPerformances={teamPerformances} 
+        soloqPerformances={soloqPerformances} 
       />
-      
-      <div className="w-full max-w-[1400px] mx-auto px-8 py-8 border-t border-slate-200 dark:border-[#322814] mt-8">
-        {/* Aquí quitamos el onPlayerSelect, ya no lo necesitamos abajo */}
-        <PlayerStats 
-          players={players} 
-          selectedPlayerId={selectedPlayerId} 
-        />
-      </div>
     </main>
   )
 }

@@ -140,10 +140,10 @@ export async function POST(request: NextRequest) {
           enemyParticipants.find((e: any) => e.teamPosition === riotData.teamPosition) || null;
 
         const role =
-          p.role === 'Support' ? 'Support' :
-          p.role === 'Jungle' ? 'Jungle' :
-          p.role === 'Mid' ? 'Mid' :
-          p.role === 'ADC' ? 'ADC' : 'Top';
+          p.role?.toLowerCase() === 'support' ? 'support' :
+          p.role?.toLowerCase() === 'jungle' ? 'jungle' :
+          p.role?.toLowerCase() === 'mid' ? 'mid' :
+          p.role?.toLowerCase() === 'adc' ? 'adc' : 'top';
 
         const playerData = {
           kills: riotData.kills || 0,

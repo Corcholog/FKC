@@ -7,6 +7,7 @@ import DurationChart from '@/app/components/DurationChart'
 import MatchCard from '@/app/components/MatchCard'
 import PlayerLinks from '@/app/components/PlayerLinks'
 import RosterSection from '@/app/components/RosterSection'
+import { allChampions } from '@/lib/champions'
 
 type Player = {
   id: number
@@ -90,27 +91,7 @@ export default async function Home() {
     .select('*')
   const soloqPerformances = allSoloQData || []
 
-  // Complete Champion List
-  const allChampions = [
-    "Aatrox", "Ahri", "Akali", "Akshan", "Alistar", "Ambessa", "Amumu", "Anivia", "Annie", "Aphelios",
-    "Ashe", "Aurelion Sol", "Aurora", "Azir", "Bard", "Bel'Veth", "Blitzcrank", "Brand", "Braum", "Briar",
-    "Caitlyn", "Camille", "Cassiopeia", "Cho'Gath", "Corki", "Darius", "Diana", "Dr. Mundo", "Draven",
-    "Ekko", "Elise", "Evelynn", "Ezreal", "Fiddlesticks", "Fiora", "Fizz", "Galio", "Gangplank", "Garen",
-    "Gnar", "Gragas", "Graves", "Gwen", "Hecarim", "Heimerdinger", "Hwei", "Illaoi", "Irelia", "Ivern",
-    "Janna", "Jarvan IV", "Jax", "Jayce", "Jhin", "Jinx", "K'Sante", "Kai'Sa", "Kalista", "Karma",
-    "Karthus", "Kassadin", "Katarina", "Kayle", "Kayn", "Kennen", "Kha'Zix", "Kindred", "Kled", "Kog'Maw",
-    "LeBlanc", "Lee Sin", "Leona", "Lillia", "Lissandra", "Lucian", "Lulu", "Lux", "Malphite", "Malzahar",
-    "Maokai", "Master Yi", "Mel", "Milio", "Miss Fortune", "Mordekaiser", "Morgana", "Naafiri", "Nami",
-    "Nasus", "Nautilus", "Neeko", "Nidalee", "Nilah", "Nocturne", "Nunu & Willump", "Olaf", "Orianna",
-    "Ornn", "Pantheon", "Poppy", "Pyke", "Qiyana", "Quinn", "Rakan", "Rammus", "Rek'Sai", "Rell",
-    "Renata Glasc", "Renekton", "Rengar", "Riven", "Rumble", "Ryze", "Samira", "Sejuani", "Senna",
-    "Seraphine", "Sett", "Shaco", "Shen", "Shyvana", "Singed", "Sion", "Sivir", "Skarner", "Smolder",
-    "Sona", "Soraka", "Swain", "Sylas", "Syndra", "Tahm Kench", "Taliyah", "Talon", "Taric", "Teemo",
-    "Thresh", "Tristana", "Trundle", "Tryndamere", "Twisted Fate", "Twitch", "Udyr", "Urgot", "Varus",
-    "Vayne", "Veigar", "Vel'Koz", "Vex", "Vi", "Viego", "Viktor", "Vladimir", "Volibear", "Warwick",
-    "Wukong", "Xayah", "Xerath", "Xin Zhao", "Yasuo", "Yone", "Yorick", "Yunara", "Yuumi", "Zaahen",
-    "Zac", "Zed", "Zeri", "Ziggs", "Zilean", "Zoe", "Zyra"
-  ].sort()
+
 
     // Normalize scrim type names for display
   const normalizeMatchType = (type: string) => {
@@ -274,7 +255,7 @@ export default async function Home() {
 
         <div className="grid gap-6">
           {recentMatches.length > 0 ? recentMatches.map((match: any) => (
-            <MatchCard key={match.id} match={match} allChampions={allChampions} />
+            <MatchCard key={match.id} match={match} />
           )) : (
             <div className="bg-card border border-blue-100 dark:border-[#322814] rounded-2xl p-12 text-center shadow-sm">
               <p className="text-slate-500 dark:text-slate-400 text-lg mb-4">No matches recorded yet.</p>

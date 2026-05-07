@@ -119,6 +119,15 @@ export async function POST() {
           const targetParticipant = matchData.info.participants.find((p: any) => p.puuid === puuid);
           if (!targetParticipant) continue;
 
+          const durationSecondsTotal = matchData.info.gameDuration;
+          const isMilliseconds = durationSecondsTotal > 50000;
+          const totalSeconds = isMilliseconds ? Math.floor(durationSecondsTotal / 1000) : durationSecondsTotal;
+          const duration_minutes = Math.floor(totalSeconds / 60);
+          const duration_seconds = totalSeconds % 60;
+
+          const riotRoleMap: Record<string, string> = { 'TOP': 'top', 'JUNGLE': 'jungle', 'MIDDLE': 'mid', 'BOTTOM': 'adc', 'UTILITY': 'support' };
+          const role = riotRoleMap[targetParticipant.teamPosition] || 'top';
+
           await supabase.from('soloq_matches').insert({
             player_id: player.id,
             match_id: matchId,
@@ -129,7 +138,9 @@ export async function POST() {
             assists: targetParticipant.assists || 0,
             cs: (targetParticipant.totalMinionsKilled || 0) + (targetParticipant.neutralMinionsKilled || 0),
             win: targetParticipant.win,
-            role: targetParticipant.teamPosition || 'NONE'
+            role: role,
+            duration_minutes,
+            duration_seconds
           });
 
           existingMatchIds.add(matchId);

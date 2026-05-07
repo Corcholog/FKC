@@ -128,3 +128,29 @@
     @apply font-mono;
   }
 }
+
+/* Custom Scrollbar Styles for Hextech Theme */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--secondary);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 4px;
+  border: 2px solid var(--secondary);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #f1c40f;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) var(--secondary);
+}

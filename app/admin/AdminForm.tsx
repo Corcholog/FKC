@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import Navbar from '@/app/components/Navbar'
 import { allChampions, getChampionIcon } from '@/lib/champions'
+import ScoutingAdmin from './ScoutingAdmin'
 
 type Player = {
   id: number
@@ -49,7 +50,7 @@ const roles = ['top', 'jungle', 'mid', 'adc', 'support']
 
 export default function AdminForm({ players }: { players: Player[] }) {
   const now = new Date().toISOString().slice(0, 16)
-  const [activeTab, setActiveTab] = useState<'auto' | 'import-id' | 'manual'>('auto')
+  const [activeTab, setActiveTab] = useState<'auto' | 'import-id' | 'manual' | 'scouting'>('auto')
   const [importMatchId, setImportMatchId] = useState('')
   const [importMatchIdRiotId, setImportMatchIdRiotId] = useState('Corshus#2108')
   const [importSummonerName, setImportSummonerName] = useState('')
@@ -444,6 +445,12 @@ return (
           >
             Manual Input
           </button>
+          <button 
+            onClick={() => setActiveTab('scouting')}
+            className={`px-6 py-3 rounded-lg font-bold transition-all shadow-sm ${activeTab === 'scouting' ? 'bg-emerald-500 text-white shadow-md' : 'bg-card border border-blue-100 dark:border-[#322814] text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-[#1e2328]'}`}
+          >
+            Tournament Scouting
+          </button>
         </div>
           <div className="flex gap-4">
             <button 
@@ -479,6 +486,9 @@ return (
             </button>
           </div>
       </div>
+
+      {/* TOURNAMENT SCOUTING SECTION */}
+      {activeTab === 'scouting' && <ScoutingAdmin />}
 
       {/* AUTO IMPORT SECTION */}
       {activeTab === 'auto' && (

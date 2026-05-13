@@ -10,7 +10,7 @@ function parseNullableId(value: string | null | undefined) {
   return Number.isInteger(parsed) ? parsed : null
 }
 
-async function ensureAuthenticated(supabase: ReturnType<typeof createClient>) {
+async function ensureAuthenticated(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data, error } = await supabase.auth.getUser()
   if (error || !data.user) {
     return { authenticated: false, error: error?.message || 'Unauthorized' }

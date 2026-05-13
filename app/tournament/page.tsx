@@ -13,6 +13,11 @@ export default async function TournamentPage() {
     .select('*, tournament_players(*)')
     .order('name')
 
+  // Fetch players for Fake Clan
+  const { data: playersData } = await supabase
+    .from('players')
+    .select('*')
+
   const parsedTeams = (teams || []).map(team => {
     const weightedElo = calculateTeamWeightedElo(team.tournament_players)
     return {
@@ -20,7 +25,20 @@ export default async function TournamentPage() {
       weightedElo,
       avgEloStr: eloToString(weightedElo)
     }
-  }).sort((a, b) => b.weightedElo - a.weightedElo)
+  })
+
+  // Ensure Fake Clan is included
+  const fakeClanTeam = { id: 'fake-clan', name: 'Fake Clan', tag: 'FKC', tournament_players: playersData || [] }
+  const fakeClanWeightedElo = calculateTeamWeightedElo(fakeClanTeam.tournament_players)
+  if (!parsedTeams.some(t => t.id === fakeClanTeam.id)) {
+    parsedTeams.push({
+      ...fakeClanTeam,
+      weightedElo: fakeClanWeightedElo,
+      avgEloStr: eloToString(fakeClanWeightedElo)
+    })
+  }
+
+  parsedTeams.sort((a, b) => b.weightedElo - a.weightedElo)
 
   return (
     <main className="min-h-screen bg-background text-foreground pt-16">
@@ -28,11 +46,11 @@ export default async function TournamentPage() {
       
       <div className="max-w-[1400px] mx-auto px-6 py-12">
         <header className="mb-12">
-          <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-blue-500 mb-4">
-            Tournament Scouting
+          <h1 className="text-4xl md:text-5xl font-black text-foreground mb-4">
+            LIGA E-SPORTS INTER FACULTADES 8 - SCOUTING
           </h1>
           <p className="text-lg text-slate-500 max-w-2xl font-medium">
-            Analyze enemy teams, check their SoloQ and FlexQ ranks, and click on any player to open their OP.GG profile for deep dive scouting.
+            Futuras victimas de Fake Clan.
           </p>
         </header>
 

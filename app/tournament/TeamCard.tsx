@@ -45,16 +45,35 @@ export default function TeamCard({ team, avgEloStr }: { team: Team, avgEloStr: s
     return 'text-slate-300'
   }
 
+  const getMultisearchUrl = (players: Player[]) => {
+    const summoners = players.map(p => encodeURIComponent(p.ign)).join('%2C')
+    return `https://op.gg/es/lol/multisearch/las?summoners=${summoners}`
+  }
+
   return (
     <div className="bg-card border border-blue-200 dark:border-[#322814] rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:border-emerald-500/50 transition-colors group">
       <div className="bg-blue-50/50 dark:bg-[#091428] p-4 border-b border-blue-100 dark:border-[#322814] flex justify-between items-center group-hover:bg-emerald-500/10 transition-colors">
-        <div>
-          <h2 className="text-xl font-black text-slate-800 dark:text-[#f0e6d2]">{team.name}</h2>
-          {team.tournament_players.length > 0 && (
-            <div className={`text-xs font-bold mt-1 ${getRankColor(avgEloStr)}`}>
-              Avg Elo: {avgEloStr}
-            </div>
-          )}
+        <div className="flex items-center gap-2">
+          <div>
+            {team.tournament_players.length > 0 ? (
+              <a
+                href={getMultisearchUrl(team.tournament_players)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xl font-black text-slate-800 dark:text-[#f0e6d2] hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors"
+                title="View team on OP.GG Multisearch"
+              >
+                {team.name}
+              </a>
+            ) : (
+              <h2 className="text-xl font-black text-slate-800 dark:text-[#f0e6d2]">{team.name}</h2>
+            )}
+            {team.tournament_players.length > 0 && (
+              <div className={`text-xs font-bold mt-1 ${getRankColor(avgEloStr)}`}>
+                Avg Elo: {avgEloStr}
+              </div>
+            )}
+          </div>
         </div>
         <span className="text-xs font-bold px-2 py-1 bg-blue-100 dark:bg-[#1e2328] text-blue-600 dark:text-blue-400 rounded-full">
           {team.tournament_players.length} Players

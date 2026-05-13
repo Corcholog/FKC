@@ -12,6 +12,7 @@ const links = [
   { href: '/stats', label: 'Player Stats' },
   { href: '/matches', label: 'Matches' },
   { href: '/tournament', label: 'Scouting' },
+  { href: '/stages', label: 'Stages' },
   { href: '/admin', label: 'Admin Panel' },
 ]
 
@@ -42,35 +43,39 @@ export default function Navbar() {
   return (
     <>
       {isModalOpen && <CountdownModal onClose={handleCloseModal} />}
-      <nav className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-[#74b9ff]/95 to-[#0984e3]/95 dark:from-[#010a13]/95 dark:to-[#091428]/95 backdrop-blur-md border-b border-sky-300 dark:border-[#322814] z-50 flex items-center shadow-md">
+      <nav className="fixed top-0 left-0 right-0 h-16 bg-background backdrop-blur-md border-b border-border z-50 flex items-center shadow-lg shadow-black/60">
         <div className="max-w-7xl w-full mx-auto px-6 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-3 group">
-            <Image src="/icons/fkc_icon.jpg" alt="FKC Logo" width={32} height={32} className="w-8 h-8 border-2 border-white/80 shadow-md group-hover:scale-110 group-hover:border-[#f1c40f] transition-all object-cover" />
-            <span className="text-2xl font-black text-white drop-shadow-sm tracking-wider group-hover:text-[#f1c40f] transition-colors">FAKE CLAN</span>
+            <Image src="/icons/fkc_icon.jpg" alt="FKC Logo" width={32} height={32} className="w-8 h-8 border-2 border-accent shadow-lg group-hover:shadow-[0_0_12px_rgba(246,201,14,0.6)] group-hover:scale-110 transition-all object-cover rounded-sharp" />
+            <span className="text-lg font-black text-accent drop-shadow-sm tracking-[0.1em] group-hover:text-foreground transition-colors uppercase">FAKE CLAN</span>
           </Link>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 sm:gap-6">
             {links.map(({ href, label }) => (
               <Link
                 key={href}
                 href={href}
-                className={`text-sm font-bold transition-all drop-shadow-sm ${pathname === href ? 'text-[#f1c40f]' : 'text-white/90 hover:text-[#f1c40f]'}`}
+                className={`text-xs sm:text-sm font-bold uppercase tracking-widest transition-all ${
+                  pathname === href
+                    ? 'text-accent border-b-2 border-accent'
+                    : 'text-muted-foreground hover:text-accent'
+                }`}
               >
                 {label}
               </Link>
             ))}
 
-            <div className="w-px h-6 bg-white/20 dark:bg-white/10 mx-2 hidden md:block" />
+            <div className="w-px h-6 bg-border mx-2 hidden md:block" />
 
             {/* Mini Timer */}
             {isMounted && hasClosed && !isExpired && (
               <button 
                 onClick={handleOpenModal}
-                className="flex items-center gap-2 px-3 py-1 bg-black/40 hover:bg-black/60 border border-yellow-400/50 hover:border-yellow-400 rounded transition-all text-xs text-white group shadow-[0_0_10px_rgba(250,204,21,0.1)]"
+                className="flex items-center gap-2 px-2.5 py-1 bg-card hover:bg-popover border border-accent/40 hover:border-accent rounded-sharp transition-all text-xs group shadow-lg shadow-accent/20"
                 title="Open Countdown"
               >
-                <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
-                <span className="text-yellow-300 font-black tracking-widest uppercase mr-1 opacity-80 group-hover:opacity-100 transition-opacity hidden sm:inline">LEIF 2026</span>
-                <span className="font-mono font-bold tracking-widest text-yellow-50 group-hover:text-yellow-400 transition-colors">
+                <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                <span className="text-accent font-black tracking-widest uppercase opacity-80 group-hover:opacity-100 transition-opacity hidden sm:inline text-[0.65rem]">LEIF 2026</span>
+                <span className="font-mono font-bold tracking-widest text-foreground group-hover:text-accent transition-colors text-[0.7rem]">
                   {time.days}D {time.hours.toString().padStart(2, '0')}:{time.minutes.toString().padStart(2, '0')}
                 </span>
               </button>
@@ -79,18 +84,18 @@ export default function Navbar() {
             {isMounted && hasClosed && isExpired && (
                <button 
                  onClick={handleOpenModal}
-                 className="flex items-center gap-2 px-3 py-1 bg-yellow-500/20 hover:bg-yellow-500/40 border border-yellow-400 rounded transition-all text-xs text-yellow-400 font-black animate-pulse group"
+                 className="flex items-center gap-2 px-2.5 py-1 bg-accent/20 hover:bg-accent/30 border border-accent rounded-sharp transition-all text-xs text-accent font-black animate-pulse group"
                  title="Open Countdown"
                >
-                 <span className="text-yellow-300 font-black tracking-widest uppercase mr-1 opacity-80 group-hover:opacity-100 transition-opacity hidden sm:inline">LEIF 2026</span>
-                 🧀 IT'S TIME
+                 <span className="text-accent font-black tracking-widest uppercase opacity-80 group-hover:opacity-100 transition-opacity hidden sm:inline text-[0.65rem]">LIVE</span>
+                 ⚔️
                </button>
             )}
 
             <button
               onClick={toggle}
               aria-label="Toggle theme"
-              className="w-8 h-8 flex items-center justify-center border border-white/30 dark:border-[#c89b3c]/50 text-white hover:border-[#f1c40f] hover:text-[#f1c40f] transition-all text-base ml-2"
+              className="w-8 h-8 flex items-center justify-center border border-border hover:border-accent text-muted-foreground hover:text-accent transition-all text-base ml-2 rounded-sharp"
             >
               {theme === 'dark' ? '☀️' : '🌙'}
             </button>

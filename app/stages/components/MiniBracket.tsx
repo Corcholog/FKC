@@ -4,6 +4,7 @@ import {
   DbGroup,
   DbMatch,
   Team,
+  MatchStatus,
   ensureGroupSlots,
   normalizeGroupState,
   getMatchStatusFromScores,
@@ -88,7 +89,7 @@ export default function MiniBracket({
             ...m,
             score_a: winner === 'A' ? score : 0,
             score_b: winner === 'B' ? score : 0,
-            status: 'Finished'
+            status: 'Finished' as MatchStatus
           }
     )
 

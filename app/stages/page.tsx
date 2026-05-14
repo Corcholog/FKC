@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import StagesClient from './StagesClient'
-import { DbDate, Team } from '@/lib/tournamentData'
+import { DbDate, DbGroup, Team } from '@/lib/tournamentData'
 
 export const revalidate = 0;
 
@@ -36,7 +36,7 @@ export default async function StagesPage() {
   const dates: DbDate[] = (datesData || []).map(date => ({
     ...date,
     id: String(date.id),
-    groups: (date.groups || []).map(group => ({
+    groups: (date.groups || []).map((group: DbGroup) => ({
       ...group,
       id: String(group.id),
       date_id: String(group.date_id),

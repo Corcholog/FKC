@@ -10,13 +10,13 @@ import {
   getMatchStatusFromScores,
   getRequiredWins
 } from '@/lib/tournamentData'
-import TeamSelect from './TeamSelect'
 import MatchNode from './MatchNode'
 import BracketConnector from '@/app/components/BracketConnector'
 
 interface Props {
   group: DbGroup
   teams: Team[]
+  assignedTeamIds: string[]
   locked: boolean
   onChange: (group: DbGroup) => void
 }
@@ -24,12 +24,12 @@ interface Props {
 export default function MiniBracket({
   group,
   teams,
+  assignedTeamIds,
   locked,
   onChange
 }: Props) {
   const normalizedGroup = normalizeGroupState(group)
   const slots = ensureGroupSlots(normalizedGroup)
-  const usedTeamIds = slots.map(slot => slot.team_id).filter(Boolean) as string[]
 
   const semi1 = normalizedGroup.matches.find(m => m.stage === 'Semifinal_1')
   const semi2 = normalizedGroup.matches.find(m => m.stage === 'Semifinal_2')
@@ -149,17 +149,17 @@ export default function MiniBracket({
   }
 
   return (
-    <section className="rounded-sharp border border-border bg-popover shadow-2xl shadow-black/40 overflow-hidden">
+    <section className="rounded-sharp border border-[#3BD7A8] bg-[#111111] shadow-2xl shadow-[#3BD7A8]/10 overflow-hidden">
       {/* Header */}
-      <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+      <div className="bg-[#080808] border-b border-[#3BD7A8] px-4 py-3 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-black uppercase tracking-widest text-accent">{group.name}</h2>
-          <p className="mt-1 text-xs text-muted-foreground uppercase tracking-widest">Double elimination · BO1 matches</p>
+          <h2 className="text-lg font-black uppercase tracking-widest text-[#3BD7A8]">{group.name}</h2>
+          <p className="mt-1 text-xs uppercase tracking-widest text-[#FFFFFF]/70">Double elimination · BO1 matches</p>
         </div>
         {!locked && (
           <button
             onClick={resetGroup}
-            className="flex-shrink-0 px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-destructive text-destructive-foreground transition hover:bg-destructive/80 hover:glow-gold"
+            className="flex-shrink-0 px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-[#F90E00] text-[#080808] transition hover:bg-[#e10500]"
           >
             Reset
           </button>
@@ -170,20 +170,24 @@ export default function MiniBracket({
       <div className="p-4 flex flex-col items-center space-y-6">
         {/* Seeds Selection */}
         <div className="w-full max-w-md">
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 px-1">Select Seeds</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-[#FFFFFF]/80 mb-3 px-1">Select Seeds</p>
           <div className="grid grid-cols-2 gap-3">
             {slots.map(slot => (
               <div key={slot.seed} className="text-xs">
-                <label className="block mb-1 text-muted-foreground font-semibold uppercase tracking-widest">Seed {slot.seed}</label>
+                <label className="block mb-1 text-[#FFFFFF]/80 font-semibold uppercase tracking-widest">Seed {slot.seed}</label>
                 <select
                   value={slot.team_id || ''}
                   onChange={e => updateSlot(slot.seed, e.target.value || null)}
                   disabled={locked}
-                  className="w-full px-2 py-1.5 rounded-sharp bg-card border border-border text-foreground text-xs outline-none focus:border-accent disabled:opacity-50 cursor-pointer"
+                  className="leif-select w-full px-2 py-1.5 rounded-sharp bg-[#080808] border border-[#3BD7A8] text-white text-xs outline-none focus:border-[#3BD7A8] disabled:opacity-50 cursor-pointer"
                 >
                   <option value="">TBD</option>
                   {teams
-                    .filter(t => !usedTeamIds.includes(t.id) || slot.team_id === t.id)
+                    .filter(
+                    t =>
+                      !assignedTeamIds.includes(t.id) ||
+                      slot.team_id === t.id
+                  )
                     .map(team => (
                       <option key={team.id} value={team.id}>
                         {team.name}
@@ -251,8 +255,8 @@ export default function MiniBracket({
           {/* Right Column: Finals */}
           <div className="flex flex-col space-y-4">
             {/* Winners Final */}
-            <div className="glow-gold rounded-sharp border-2 border-accent/50 bg-gradient-to-r from-accent/10 to-transparent p-2">
-              <p className="text-xs font-bold uppercase tracking-widest text-accent mb-2 text-center">Winners Final</p>
+            <div className="rounded-sharp border-2 border-[#3BD7A8]/50 bg-[#3BD7A8]/10 p-2">
+              <p className="text-xs font-bold uppercase tracking-widest text-[#3BD7A8] mb-2 text-center">Winners Final</p>
               <MatchNode
                 compact
                 title="WF"
@@ -266,8 +270,8 @@ export default function MiniBracket({
             </div>
 
             {/* 3rd Place */}
-            <div className="glow-silver rounded-sharp border-2 border-muted/50 bg-gradient-to-r from-muted/10 to-transparent p-2">
-              <p className="text-xs font-bold uppercase tracking-widest text-muted mb-2 text-center">3rd Place</p>
+            <div className="rounded-sharp border-2 border-[#F90E00]/50 bg-[#F90E00]/10 p-2">
+              <p className="text-xs font-bold uppercase tracking-widest text-[#F90E00] mb-2 text-center">3rd Place</p>
               <MatchNode
                 compact
                 title="LM"

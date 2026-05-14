@@ -40,13 +40,13 @@ export default function MatchNode({
   const isBo1 = match.format === 'Bo1'
 
   return (
-    <div className="rounded-sharp border border-border bg-popover shadow-lg shadow-black/40">
+    <div className="rounded-sharp border border-[#3BD7A8] bg-[#111111] shadow-lg shadow-[#3BD7A8]/10">
       {/* Header */}
-      <div className="border-b border-border px-3 py-2 flex items-center justify-between bg-card">
+      <div className="border-b border-[#3BD7A8] px-3 py-2 flex items-center justify-between bg-[#080808]">
         <div className="min-w-0">
-          <p className="text-[0.65rem] uppercase tracking-widest text-muted-foreground truncate">{title}</p>
+          <p className="text-[0.65rem] uppercase tracking-widest text-[#FFFFFF]/70 truncate">{title}</p>
         </div>
-        <div className="ml-2 flex-shrink-0 rounded-sm bg-background px-2 py-1 text-[0.6rem] uppercase tracking-widest text-accent font-semibold">
+        <div className="ml-2 flex-shrink-0 rounded-sm bg-[#3BD7A8] px-2 py-1 text-[0.6rem] uppercase tracking-widest text-[#080808] font-semibold">
           {status}
         </div>
       </div>
@@ -63,17 +63,17 @@ export default function MatchNode({
               key={side}
               className={`px-3 py-2 transition ${
                 isWinner
-                  ? 'bg-gradient-to-r from-accent/15 to-transparent border-l-2 border-accent'
-                  : 'hover:bg-card/50'
+                  ? 'bg-gradient-to-r from-[#3BD7A8]/15 to-transparent border-l-2 border-[#3BD7A8]'
+                  : 'hover:bg-[#080808]/80'
               }`}
             >
               <div className="flex items-center gap-2 justify-between">
                 {/* Team info */}
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold text-foreground truncate">
+                  <p className="text-xs font-semibold text-white truncate">
                     {team ? `${team.name}` : 'TBD'}
                   </p>
-                  {team && <p className="text-[0.65rem] text-muted-foreground">{team.tag}</p>}
+                  {team && <p className="text-[0.65rem] text-[#FFFFFF]/70">{team.tag}</p>}
                 </div>
 
                 {/* Score input or WIN button */}
@@ -82,7 +82,7 @@ export default function MatchNode({
                     type="button"
                     disabled={locked || !team}
                     onClick={() => onWinner(match.id, side)}
-                    className="ml-2 flex-shrink-0 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-widest rounded-sharp bg-accent text-accent-foreground transition hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="ml-2 flex-shrink-0 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-widest rounded-sharp bg-[#3BD7A8] text-[#080808] transition hover:bg-[#2fc499] disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     WIN
                   </button>
@@ -95,7 +95,7 @@ export default function MatchNode({
                       value={score ?? ''}
                       onChange={e => handleScore(side, e.target.value)}
                       disabled={locked || !team}
-                      className="w-10 h-8 rounded-sharp border border-border bg-background text-center font-bold text-accent text-sm outline-none transition focus:border-accent focus:ring-1 focus:ring-accent/30 disabled:opacity-40"
+                      className="w-10 h-8 rounded-sharp border border-[#3BD7A8] bg-[#080808] text-center font-bold text-[#3BD7A8] text-sm outline-none transition focus:border-[#3BD7A8] focus:ring-1 focus:ring-[#3BD7A8]/30 disabled:opacity-40"
                     />
 
                     {/* Winner button */}
@@ -103,7 +103,7 @@ export default function MatchNode({
                       type="button"
                       disabled={locked || !team}
                       onClick={() => onWinner(match.id, side)}
-                      className="ml-2 flex-shrink-0 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-widest rounded-sharp bg-accent text-accent-foreground transition hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="ml-2 flex-shrink-0 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-widest rounded-sharp bg-[#3BD7A8] text-[#080808] transition hover:bg-[#2fc499] disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       WIN
                     </button>
@@ -116,7 +116,7 @@ export default function MatchNode({
       </div>
 
       {/* Footer - Format info */}
-      <div className="px-3 py-2 text-[0.65rem] uppercase tracking-widest text-muted-foreground border-t border-border bg-card flex items-center justify-between">
+      <div className="px-3 py-2 text-[0.65rem] uppercase tracking-widest text-[#FFFFFF]/70 border-t border-[#3BD7A8] bg-[#080808] flex items-center justify-between">
         <span>BO{requiredWins * 2 - 1}</span>
         <span>{match.format}</span>
       </div>

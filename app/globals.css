@@ -4,6 +4,32 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* LEIF Select Dropdown Styling */
+.leif-select {
+  background-color: #080808 !important;
+  color: white !important;
+  border: 1px solid #3BD7A8 !important;
+  border-radius: 4px !important;
+}
+
+.leif-select option {
+  background-color: #080808 !important;
+  color: white !important;
+  padding: 8px !important;
+}
+
+.leif-select option:hover,
+.leif-select option:focus {
+  background-color: #3BD7A8 !important;
+  color: #080808 !important;
+}
+
+.leif-select:focus {
+  outline: none !important;
+  border-color: #3BD7A8 !important;
+  box-shadow: 0 0 0 2px rgba(59, 215, 168, 0.2) !important;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -49,89 +75,203 @@
 }
 
 :root {
-  --background: #f4f4f4;
+  color-scheme: light;
+  --background: #eff6ff;
   --foreground: #0f172a;
   --card: #ffffff;
   --card-foreground: #0f172a;
-  --popover: #ffffff;
+  --popover: #f8fafc;
   --popover-foreground: #0f172a;
-  --primary: #3486cf;
-  --primary-foreground: #f4f4f4;
-  --secondary: #74acdf;
-  --secondary-foreground: #0f172a;
-  --muted: #d1d5db;
-  --muted-foreground: #64748b;
-  --accent: #f7cb66;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #475569;
+  --secondary-foreground: #f8fafc;
+  --muted: #64748b;
+  --muted-foreground: #475569;
+  --accent: #38bdf8;
   --accent-foreground: #0f172a;
-  --accent-rgb: 247,203,102;
-  --primary-rgb: 52,140,207;
-  --destructive: #EF4444;
-  --border: #d1d5db;
-  --input: #F1F5F9;
-  --ring: #efad0d;
-  --chart-1: #3486cf;
-  --chart-2: #f7cb66;
+  --accent-rgb: 56, 189, 248;
+  --primary-rgb: 37, 99, 235;
+  --destructive: #ef4444;
+  --border: #cbd5e1;
+  --input: #ffffff;
+  --ring: #2563eb;
+  --chart-1: #2563eb;
+  --chart-2: #38bdf8;
   --chart-3: #0f172a;
-  --chart-4: #94A3B8;
-  --chart-5: #efad0d;
-  --radius: 0.25rem;
-  --sidebar: #f4f4f4;
+  --chart-4: #94a3b8;
+  --chart-5: #60a5fa;
+  --radius: 0.75rem;
+  --sidebar: #e2e8f0;
   --sidebar-foreground: #0f172a;
-  --sidebar-primary: #3486cf;
-  --sidebar-primary-foreground: #f4f4f4;
-  --sidebar-accent: #74acdf;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #38bdf8;
   --sidebar-accent-foreground: #0f172a;
-  --sidebar-border: #d1d5db;
-  --sidebar-ring: #efad0d;
+  --sidebar-border: #cbd5e1;
+  --sidebar-ring: #60a5fa;
+  --shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
 }
 
 .dark {
-  --background: #050914;
-  --foreground: #f4f4f4;
-  --card: #0a1128;
-  --card-foreground: #f4f4f4;
-  --popover: #0a1128;
-  --popover-foreground: #f4f4f4;
-  --primary: #3486cf;
-  --primary-foreground: #f4f4f4;
-  --secondary: #1e2a4f;
-  --secondary-foreground: #f4f4f4;
-  --muted: #1e2a4f;
-  --muted-foreground: #a1a1aa;
-  --accent: #efad0d;
-  --accent-foreground: #050914;
-  --accent-rgb: 239,173,13;
-  --primary-rgb: 52,140,207;
-  --destructive: #EF4444;
-  --border: #1e2a4f;
-  --input: #0a1128;
-  --ring: #74acdf;
-  --chart-1: #3486cf;
-  --chart-2: #efad0d;
-  --chart-3: #f4f4f4;
-  --chart-4: #1e2a4f;
-  --chart-5: #74acdf;
-  --radius: 0.25rem;
-  --sidebar: #050914;
-  --sidebar-foreground: #f4f4f4;
-  --sidebar-primary: #3486cf;
-  --sidebar-primary-foreground: #f4f4f4;
-  --sidebar-accent: #1e2a4f;
-  --sidebar-accent-foreground: #f4f4f4;
-  --sidebar-border: #1e2a4f;
-  --sidebar-ring: #74acdf;
+  color-scheme: dark;
+  --background: #020617;
+  --foreground: #e2e8f0;
+  --card: #0f172a;
+  --card-foreground: #e2e8f0;
+  --popover: #111827;
+  --popover-foreground: #e2e8f0;
+  --primary: #5b9cff;
+  --primary-foreground: #f8fafc;
+  --secondary: #94a3b8;
+  --secondary-foreground: #e2e8f0;
+  --muted: #94a3b8;
+  --muted-foreground: #cbd5e1;
+  --accent: #38bdf8;
+  --accent-foreground: #020617;
+  --accent-rgb: 56, 189, 248;
+  --primary-rgb: 91, 156, 255;
+  --destructive: #f87171;
+  --border: #334155;
+  --input: #111827;
+  --ring: #60a5fa;
+  --chart-1: #5b9cff;
+  --chart-2: #38bdf8;
+  --chart-3: #e2e8f0;
+  --chart-4: #334155;
+  --chart-5: #60a5fa;
+  --radius: 0.75rem;
+  --sidebar: #020617;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-primary: #5b9cff;
+  --sidebar-primary-foreground: #f8fafc;
+  --sidebar-accent: #38bdf8;
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: #334155;
+  --sidebar-ring: #60a5fa;
+  --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
+  *, *::before, *::after {
+    box-sizing: border-box;
+    border-radius: 0 !important;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
+
   html {
-    @apply font-mono;
+    scroll-behavior: smooth;
   }
+
+  body {
+    @apply min-h-full bg-background text-foreground antialiased;
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.5;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    @apply font-sans;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  ::selection {
+    background: rgba(56, 189, 248, 0.25);
+    color: var(--foreground);
+  }
+}
+
+@layer utilities {
+  .soft-card {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+
+  .soft-panel {
+    background-color: var(--popover);
+    border: 1px solid var(--border);
+  }
+
+  .bg-surface {
+    background-color: var(--card);
+  }
+
+  .text-primary {
+    color: var(--primary);
+  }
+
+  .text-muted {
+    color: var(--muted);
+  }
+
+  .bg-primary {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  .border-theme {
+    border-color: var(--border);
+  }
+
+  .ring-theme {
+    color: var(--ring);
+  }
+
+  .btn-theme {
+    @apply inline-flex items-center justify-center rounded-md font-semibold transition-all shadow-sm border border-transparent;
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  .btn-theme:hover {
+    filter: brightness(1.05);
+  }
+}
+
+select,
+input,
+textarea {
+  background-color: var(--input);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 2px solid var(--background);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
 }
 
 /* Custom Scrollbar Styles for Hextech Theme */
@@ -215,11 +355,6 @@
 }
 
 /* Sharp edges throughout */
-* {
-  --tw-rounded: 0.25rem;
-}
-
-/* Border radius utilities */
 @layer utilities {
   .rounded-sharp { @apply rounded-sm; }
   .rounded-compact { @apply rounded-md; }
@@ -238,13 +373,13 @@
   .ring-theme { color: var(--ring); }
 
   .bg-white { background-color: var(--card) !important; }
-  .bg-slate-50 { background-color: rgba(240, 199, 94, 0.08) !important; }
-  .bg-slate-100 { background-color: rgba(240, 199, 94, 0.12) !important; }
-  .bg-slate-200 { background-color: rgba(240, 199, 94, 0.16) !important; }
+  .bg-slate-50 { background-color: rgba(56, 189, 248, 0.08) !important; }
+  .bg-slate-100 { background-color: rgba(56, 189, 248, 0.12) !important; }
+  .bg-slate-200 { background-color: rgba(56, 189, 248, 0.16) !important; }
   .bg-slate-700 { background-color: var(--sidebar) !important; }
   .bg-slate-800 { background-color: var(--popover) !important; }
   .bg-slate-900 { background-color: var(--popover) !important; }
-  .bg-blue-50 { background-color: rgba(200, 155, 60, 0.08) !important; }
+  .bg-blue-50 { background-color: rgba(56, 189, 248, 0.08) !important; }
 
   .text-slate-300 { color: var(--card-foreground) !important; }
   .text-slate-400 { color: var(--muted-foreground) !important; }
@@ -257,8 +392,8 @@
   .border-slate-200 { border-color: rgba(255, 255, 255, 0.08) !important; }
   .border-slate-600 { border-color: rgba(255, 255, 255, 0.12) !important; }
   .border-slate-700 { border-color: rgba(255, 255, 255, 0.14) !important; }
-  .border-blue-100 { border-color: rgba(200, 155, 60, 0.18) !important; }
-  .border-blue-200 { border-color: rgba(200, 155, 60, 0.24) !important; }
+  .border-blue-100 { border-color: rgba(56, 189, 248, 0.18) !important; }
+  .border-blue-200 { border-color: rgba(56, 189, 248, 0.24) !important; }
 }
 
 /* Form elements styling */

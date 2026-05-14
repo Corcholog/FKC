@@ -39,6 +39,7 @@ export default function StagesClient({
   const [showStandings, setShowStandings] = useState(false)
   const [saving, setSaving] = useState(false)
   const [locking, setLocking] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const allTeams = useMemo(() => {
     const missing = 16 - teams.length
@@ -54,7 +55,26 @@ export default function StagesClient({
     return [...teams, ...placeholders]
   }, [teams])
 
+  const stageDates: Record<number, string> = {
+    1: '16/05',
+    2: '30/05',
+    3: '13/06',
+    4: '27/06'
+  }
+
   const activeDate = dates.find(d => d.id === activeDateId)
+  const assignedTeamIds = useMemo(
+    () =>
+      activeDate
+        ? activeDate.groups.flatMap(group =>
+            group.group_teams
+              .map(team => team.team_id)
+              .filter(Boolean) as string[]
+          )
+        : [],
+    [activeDate]
+  )
+
   const standings = useMemo(
     () => calculateGlobalStandings(dates, allTeams),
     [dates, allTeams]
@@ -73,12 +93,16 @@ export default function StagesClient({
 
   async function handleSave(date: DbDate) {
     if (!isAuthenticated) return
+    setSaveError(null)
     setSaving(true)
     const matches = date.groups.flatMap(group => group.matches)
     const groupTeams = date.groups.flatMap(group => group.group_teams)
 
     const result = await saveDateState(date.id, matches, groupTeams)
-    if (!result.success) console.error('Save failed:', result.error)
+    if (!result.success) {
+      console.error('Save failed:', result.error)
+      setSaveError(result.error || 'Unable to save stage data.')
+    }
     setSaving(false)
   }
 
@@ -160,41 +184,45 @@ export default function StagesClient({
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="min-h-screen bg-[#120000] text-white">
       <Navbar />
 
       {/* Hero Section - Cinematic */}
-      <section className="relative isolate overflow-hidden border-b border-border bg-gradient-to-b from-background via-popover to-background px-4 py-20 sm:px-8">
+      <section className="relative isolate overflow-hidden border-b border-[#3BD7A8] bg-[#080808] px-4 py-20 sm:px-8 text-white">
         {/* Ambient glow elements */}
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_right,rgba(var(--accent-rgb),0.15),transparent_50%)]" />
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_bottom_left,rgba(var(--primary-rgb),0.1),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,rgba(10,14,19,0.8)_100%)]" />
+        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_right,rgba(59,215,168,0.2),transparent_50%)]" />
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_bottom_left,rgba(249,14,0,0.12),transparent_50%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,rgba(8,8,8,0.92)_100%)]" />
 
         <div className="relative mx-auto max-w-[1800px] space-y-8">
           {/* Main Title */}
-          <div className="text-center space-y-4">
-            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground font-bold">Tournament Operations System</p>
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black uppercase tracking-[0.08em] text-accent">
-              LEIF 8
-            </h1>
-            <p className="text-lg sm:text-xl font-black uppercase tracking-[0.1em] text-foreground">Tournament Circuit</p>
-            <p className="text-sm text-muted-foreground max-w-2xl mx-auto">Manage seeds, brackets, results, and live standings across all stages with esports-grade operations tools.</p>
+          <div className="text-center space-y-6">
+            <div className="mx-auto flex h-64 w-64 items-center justify-center overflow-hidden rounded-xl border border-[#3BD7A8] bg-white p-2">
+              <img src="/icons/leif.jpg" alt="LEIF" className="h-full w-full object-cover" />
+            </div>
+            <p className="text-3xl sm:text-4xl font-black uppercase tracking-[0.08em] text-[#3BD7A8]">
+              LIGA E-SPORTS INTER-FACULTADES
+            </p>
+            <p className="text-xl uppercase tracking-[0.3em] text-[#F90E00] font-bold">Tournament Operations System</p>
+            <p className="text-sm text-[#FFFFFF]/70 max-w-2xl mx-auto">Manage seeds, brackets, results, and live standings across all stages with esports-grade operations tools.</p>
           </div>
 
           {/* Date Cards Grid - More compact */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-2xl mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-4xl mx-auto">
             {dates.map(date => (
               <button
                 key={date.id}
                 onClick={() => setActiveDateId(date.id)}
                 className={`rounded-sharp p-2.5 border transition text-xs font-bold uppercase tracking-widest ${
                   activeDateId === date.id
-                    ? 'border-accent bg-accent/20 text-accent glow-gold'
-                    : 'border-border bg-card text-muted-foreground hover:border-accent hover:bg-popover'
+                    ? 'border-[#3BD7A8] bg-[#3BD7A8]/10 text-[#3BD7A8] shadow-[0_0_16px_rgba(59,215,168,0.24)]'
+                    : 'border-[#3E3E3E] bg-[#111111] text-white hover:border-[#3BD7A8] hover:bg-[#111111]/90'
                 }`}
               >
                 <div>{date.name}</div>
-                <div className="text-[0.65rem] text-muted-foreground">{date.is_locked ? '🔒 Locked' : '✎ Open'}</div>
+                <div className="text-[0.65rem] text-[#FFFFFF]/70">
+                  {stageDates[date.sequence_order] ?? 'TBD'} · {date.is_locked ? '🔒 Locked' : '✎ Open'}
+                </div>
               </button>
             ))}
           </div>
@@ -209,20 +237,20 @@ export default function StagesClient({
             {activeDate && (
               <div className="space-y-6">
                 {/* Date Header and Controls */}
-                <div className="rounded-sharp border border-border bg-card p-4 shadow-lg shadow-black/40">
+                <div className="rounded-sharp border border-[#3BD7A8] bg-[#080808] p-4 shadow-lg shadow-[#3BD7A8]/10">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-black uppercase tracking-widest text-accent">{activeDate.name}</h2>
-                      <p className="mt-1 text-xs text-muted-foreground uppercase tracking-widest">
+                      <h2 className="text-2xl font-black uppercase tracking-widest text-[#3BD7A8]">{activeDate.name}</h2>
+                      <p className="mt-1 text-xs uppercase tracking-widest text-[#FFFFFF]/80">
                         {activeDate.is_locked ? 'FINALIZED · EDITING DISABLED' : 'ACTIVE · EDIT TEAMS & RESULTS'}
                       </p>
                     </div>
 
                     {/* Control Buttons */}
                     <div className="flex flex-wrap gap-2">
-                      <button
+                            <button
                         onClick={() => setShowStandings(prev => !prev)}
-                        className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-primary/20 border border-primary/40 text-primary transition hover:bg-primary/30 xl:hidden"
+                        className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-[#3BD7A8]/12 border border-[#3BD7A8]/40 text-[#3BD7A8] transition hover:bg-[#3BD7A8]/20 xl:hidden"
                       >
                         {showStandings ? 'Hide' : 'Show'}
                       </button>
@@ -230,24 +258,21 @@ export default function StagesClient({
                       <button
                         onClick={() => handleSave(activeDate)}
                         disabled={!isAuthenticated || activeDate.is_locked || saving}
-                        className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-primary text-primary-foreground transition hover:bg-primary/80 disabled:opacity-40"
+                        className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-[#3BD7A8] text-[#080808] transition hover:bg-[#2fc499] disabled:opacity-40"
                       >
                         {saving ? 'Saving...' : 'Save'}
                       </button>
-
-                      <button
-                        onClick={() => resetDate(activeDate.id)}
-                        disabled={activeDate.is_locked}
-                        className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-destructive text-destructive-foreground transition hover:bg-destructive/80 disabled:opacity-40"
-                      >
-                        Reset
-                      </button>
+                      {saveError && (
+                        <div className="w-full text-xs text-[#F90E00] mt-2">
+                          {saveError}
+                        </div>
+                      )}
 
                       {activeDate.is_locked ? (
                         <button
                           onClick={() => handleUnlockAndReset(activeDate.id)}
                           disabled={!isAuthenticated || locking}
-                          className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-destructive text-destructive-foreground transition hover:bg-destructive/80 disabled:opacity-40"
+                          className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-[#F90E00] text-[#080808] transition hover:bg-[#e10500] disabled:opacity-40"
                         >
                           Unlock & Reset
                         </button>
@@ -255,13 +280,13 @@ export default function StagesClient({
                         <button
                           onClick={() => handleLock(activeDate.id)}
                           disabled={!isAuthenticated || locking}
-                          className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-accent text-accent-foreground transition hover:bg-accent/80 disabled:opacity-40"
+                          className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-[#3BD7A8] text-[#080808] transition hover:bg-[#2fc499] disabled:opacity-40"
                         >
                           {locking ? 'Locking...' : 'Lock'}
                         </button>
                       )}
                       {!isAuthenticated && (
-                        <div className="w-full text-[0.65rem] text-muted-foreground mt-1">
+                        <div className="w-full text-[0.65rem] text-[#FFFFFF]/70 mt-1">
                           Log in to save or lock results.
                         </div>
                       )}
@@ -280,6 +305,7 @@ export default function StagesClient({
                             key={group.id}
                             group={group}
                             teams={allTeams}
+                            assignedTeamIds={assignedTeamIds}
                             locked={activeDate.is_locked}
                             onChange={updateGroup}
                           />
@@ -288,6 +314,7 @@ export default function StagesClient({
                             key={group.id}
                             group={group}
                             teams={allTeams}
+                            assignedTeamIds={assignedTeamIds}
                             locked={activeDate.is_locked}
                             onChange={updateGroup}
                           />
@@ -303,7 +330,7 @@ export default function StagesClient({
           {/* Sidebar - Standings */}
           <aside className="xl:w-80 xl:flex-shrink-0">
             <div className={`${showStandings ? 'block' : 'hidden'} xl:block`}>
-              <div className="sticky top-6 rounded-sharp border border-[#2a3544] bg-[#11161d] p-4 shadow-2xl shadow-black/40">
+              <div className="sticky top-6 rounded-sharp border border-[#3BD7A8] bg-[#080808] p-4 shadow-2xl shadow-[#3BD7A8]/10">
                 <GlobalStandings standings={standings} />
               </div>
             </div>

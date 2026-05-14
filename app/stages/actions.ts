@@ -26,9 +26,17 @@ export async function saveDateState(dateId: string, matches: DbMatch[], groupTea
   }
 
   if (groupTeams.length > 0) {
+    const invalidGroupTeam = groupTeams.find(gt => gt.team_id !== null && parseNullableId(gt.team_id) === null)
+    if (invalidGroupTeam) {
+      return {
+        success: false,
+        error: `Invalid team_id ${invalidGroupTeam.team_id} for group ${invalidGroupTeam.group_id}`
+      }
+    }
+
     const payload = groupTeams.map(gt => ({
       group_id: parseNullableId(gt.group_id),
-      team_id: parseNullableId(gt.team_id),
+      team_id: gt.team_id === null ? null : parseNullableId(gt.team_id),
       seed: gt.seed
     }))
 
@@ -36,7 +44,10 @@ export async function saveDateState(dateId: string, matches: DbMatch[], groupTea
       .from('tournament_group_teams')
       .upsert(payload, { onConflict: 'group_id,seed' })
 
-    if (gtError) console.error('Error saving group teams:', gtError)
+    if (gtError) {
+      console.error('Error saving group teams:', gtError)
+      return { success: false, error: gtError.message }
+    }
   }
 
   if (matches.length > 0) {

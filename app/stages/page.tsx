@@ -21,12 +21,6 @@ export default async function StagesPage() {
     tag: t.tag || 'TAG'
   }))
 
-  // Ensure Fake Clan is included
-  const fakeClanTeam: Team = { id: 'fake-clan', name: 'Fake Clan', tag: 'FKC' }
-  if (!teams.some(t => t.id === fakeClanTeam.id)) {
-    teams.push(fakeClanTeam)
-  }
-
   const { data: datesData } = await supabase
     .from('tournament_dates')
     .select(`
@@ -39,7 +33,29 @@ export default async function StagesPage() {
     `)
     .order('sequence_order')
 
-  const dates: DbDate[] = datesData || []
+  const dates: DbDate[] = (datesData || []).map(date => ({
+    ...date,
+    id: String(date.id),
+    groups: (date.groups || []).map(group => ({
+      ...group,
+      id: String(group.id),
+      date_id: String(group.date_id),
+      group_teams: (group.group_teams || []).map(slot => ({
+        ...slot,
+        id: String(slot.id),
+        group_id: String(slot.group_id),
+        team_id: slot.team_id != null ? String(slot.team_id) : null
+      })),
+      matches: (group.matches || []).map(match => ({
+        ...match,
+        id: String(match.id),
+        date_id: String(match.date_id),
+        group_id: match.group_id != null ? String(match.group_id) : null,
+        team_a_id: match.team_a_id != null ? String(match.team_a_id) : null,
+        team_b_id: match.team_b_id != null ? String(match.team_b_id) : null
+      }))
+    }))
+  }))
 
   return (
     <StagesClient

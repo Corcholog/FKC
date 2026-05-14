@@ -13,11 +13,6 @@ export default async function TournamentPage() {
     .select('*, tournament_players(*)')
     .order('name')
 
-  // Fetch players for Fake Clan
-  const { data: playersData } = await supabase
-    .from('players')
-    .select('*')
-
   const parsedTeams = (teams || []).map(team => {
     const weightedElo = calculateTeamWeightedElo(team.tournament_players)
     return {
@@ -26,17 +21,6 @@ export default async function TournamentPage() {
       avgEloStr: eloToString(weightedElo)
     }
   })
-
-  // Ensure Fake Clan is included
-  const fakeClanTeam = { id: 'fake-clan', name: 'Fake Clan', tag: 'FKC', tournament_players: playersData || [] }
-  const fakeClanWeightedElo = calculateTeamWeightedElo(fakeClanTeam.tournament_players)
-  if (!parsedTeams.some(t => t.id === fakeClanTeam.id)) {
-    parsedTeams.push({
-      ...fakeClanTeam,
-      weightedElo: fakeClanWeightedElo,
-      avgEloStr: eloToString(fakeClanWeightedElo)
-    })
-  }
 
   parsedTeams.sort((a, b) => b.weightedElo - a.weightedElo)
 

@@ -43,7 +43,7 @@ export default function Navbar() {
   return (
     <>
       {isModalOpen && <CountdownModal onClose={handleCloseModal} />}
-      <nav className="fixed top-0 left-0 right-0 h-16 bg-background backdrop-blur-md border-b border-border z-50 flex items-center shadow-lg shadow-black/60">
+      <nav className="fixed top-0 left-0 right-0 h-16 bg-background/95 backdrop-blur-xl border-b border-border/70 z-50 flex items-center shadow-sm shadow-slate-900/10">
         <div className="max-w-7xl w-full mx-auto px-6 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-3 group">
             <Image src="/icons/fkc_icon.jpg" alt="FKC Logo" width={32} height={32} className="w-8 h-8 border-2 border-accent shadow-lg group-hover:shadow-[0_0_12px_rgba(246,201,14,0.6)] group-hover:scale-110 transition-all object-cover rounded-sharp" />

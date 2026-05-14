@@ -9,13 +9,13 @@ import {
   getMatchStatusFromScores,
   getRequiredWins
 } from '@/lib/tournamentData'
-import TeamSelect from './TeamSelect'
 import MatchNode from './MatchNode'
 import BracketConnector from '@/app/components/BracketConnector'
 
 interface Props {
   group: DbGroup
   teams: Team[]
+  assignedTeamIds: string[]
   locked: boolean
   onChange: (group: DbGroup) => void
 }
@@ -23,12 +23,12 @@ interface Props {
 export default function PlayoffBracket({
   group,
   teams,
+  assignedTeamIds,
   locked,
   onChange
 }: Props) {
   const normalizedGroup = normalizeGroupState(group)
   const slots = ensureGroupSlots(normalizedGroup)
-  const usedTeamIds = slots.map(slot => slot.team_id).filter(Boolean) as string[]
 
   const semi1 = normalizedGroup.matches.find(m => m.stage === 'Playoff_Semi_1')
   const semi2 = normalizedGroup.matches.find(m => m.stage === 'Playoff_Semi_2')
@@ -118,17 +118,17 @@ export default function PlayoffBracket({
   }
 
   return (
-    <section className="rounded-sharp border border-border bg-popover shadow-2xl shadow-black/40 overflow-hidden">
+    <section className="rounded-sharp border border-[#3BD7A8] bg-[#111111] shadow-2xl shadow-[#3BD7A8]/10 overflow-hidden">
       {/* Header */}
-      <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+      <div className="bg-[#080808] border-b border-[#3BD7A8] px-4 py-3 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-black uppercase tracking-widest text-accent">PLAYOFFS</h2>
-          <p className="mt-1 text-xs text-muted-foreground uppercase tracking-widest">Single elimination · BO3 semis · BO5 final</p>
+          <h2 className="text-lg font-black uppercase tracking-widest text-[#3BD7A8]">PLAYOFFS</h2>
+          <p className="mt-1 text-xs uppercase tracking-widest text-[#FFFFFF]/70">Single elimination · BO3 semis · BO5 final</p>
         </div>
         {!locked && (
           <button
             onClick={resetPlayoffs}
-            className="flex-shrink-0 px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-destructive text-destructive-foreground transition hover:bg-destructive/80 hover:glow-gold"
+            className="flex-shrink-0 px-3 py-1.5 text-xs font-bold uppercase tracking-widest rounded-sharp bg-[#F90E00] text-[#080808] transition hover:bg-[#e10500]"
           >
             Reset
           </button>
@@ -136,21 +136,25 @@ export default function PlayoffBracket({
       </div>
 
       {/* Seed Selection Panel */}
-      <div className="border-b border-border bg-background p-4">
-        <p className="text-xs font-bold uppercase tracking-widest text-accent mb-3">Select Seeds</p>
+      <div className="border-b border-[#3BD7A8] bg-[#080808] p-4">
+        <p className="text-xs font-bold uppercase tracking-widest text-[#FFFFFF]/80 mb-3">Select Seeds</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {slots.map(slot => (
             <div key={slot.seed} className="text-xs">
-              <label className="block mb-1 text-muted-foreground font-semibold uppercase tracking-widest">Seed {slot.seed}</label>
+              <label className="block mb-1 text-[#FFFFFF]/80 font-semibold uppercase tracking-widest">Seed {slot.seed}</label>
               <select
                 value={slot.team_id || ''}
                 onChange={e => updateSeed(slot.seed, e.target.value || null)}
                 disabled={locked}
-                className="w-full px-2 py-1.5 rounded-sharp bg-card border border-border text-foreground text-xs outline-none focus:border-accent disabled:opacity-50 cursor-pointer"
+                className="leif-select w-full px-2 py-1.5 rounded-sharp bg-[#080808] border border-[#3BD7A8] text-white text-xs outline-none focus:border-[#3BD7A8] disabled:opacity-50 cursor-pointer"
               >
                 <option value="">TBD</option>
                 {teams
-                  .filter(t => !usedTeamIds.includes(t.id) || slot.team_id === t.id)
+                  .filter(
+                    t =>
+                      !assignedTeamIds.includes(t.id) ||
+                      slot.team_id === t.id
+                  )
                   .map(team => (
                     <option key={team.id} value={team.id}>
                       {team.name}
@@ -168,7 +172,7 @@ export default function PlayoffBracket({
           {/* Semifinals Column */}
           <div className="w-48 flex-shrink-0 space-y-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Semifinals</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-[#FFFFFF]/70 mb-2">Semifinals</p>
               <MatchNode
                 title="SF 1"
                 match={semi1 ?? normalizedGroup.matches[0]}
@@ -250,8 +254,8 @@ export default function PlayoffBracket({
 
           {/* Grand Final Column */}
           <div className="w-48 flex-shrink-0">
-            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Grand Final</p>
-            <div className="glow-gold-intense">
+            <p className="text-xs font-bold uppercase tracking-widest text-[#FFFFFF]/70 mb-2">Grand Final</p>
+            <div className="rounded-sharp border-2 border-[#3BD7A8]/50 bg-[#3BD7A8]/10 p-1">
               <MatchNode
                 title="FINAL"
                 match={final ?? normalizedGroup.matches[2]}

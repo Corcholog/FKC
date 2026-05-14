@@ -24,6 +24,17 @@ export const metadata: Metadata = {
   },
 };
 
+const initialThemeScript = `(${String(() => {
+  /* eslint-disable no-undef */
+  try {
+    const stored = localStorage.getItem('theme');
+    const theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    if (theme === 'dark') document.documentElement.classList.add('dark');
+  } catch (e) {
+    // ignore
+  }
+})})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -36,6 +47,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <script dangerouslySetInnerHTML={{ __html: initialThemeScript }} />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

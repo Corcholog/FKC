@@ -65,6 +65,15 @@ export async function POST() {
 
         const updateData: any = { puuid };
 
+        // Save current stats to prev_ columns
+        updateData.prev_soloq_tier = player.soloq_tier;
+        updateData.prev_soloq_rank = player.soloq_rank;
+        updateData.prev_soloq_lp = player.soloq_lp;
+        
+        updateData.prev_flexq_tier = player.flexq_tier;
+        updateData.prev_flexq_rank = player.flexq_rank;
+        updateData.prev_flexq_lp = player.flexq_lp;
+
         if (soloq) {
           updateData.soloq_tier = soloq.tier;
           updateData.soloq_rank = soloq.rank;

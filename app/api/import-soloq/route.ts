@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { RiotLeagueEntryDTO, RiotMatchDTO, RiotParticipantDTO } from '@/lib/riot-types';
+import { refreshAnalyticsCache } from '@/lib/analytics';
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
@@ -151,6 +152,9 @@ export async function POST() {
         }
       }
     }
+
+    // Auto-refresh the cache so the UI updates instantly
+    await refreshAnalyticsCache();
 
     return NextResponse.json({ success: true, addedCount: totalAddedCount });
 

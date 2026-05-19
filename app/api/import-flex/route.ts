@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { calculateScoreV3 } from '@/lib/score';
 import { RiotMatchDTO, RiotParticipantDTO, RiotTeamDTO } from '@/lib/riot-types';
 import { championIdMap } from '@/lib/champions';
+import { refreshAnalyticsCache } from '@/lib/analytics';
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
@@ -186,6 +187,9 @@ export async function POST(request: NextRequest) {
         enemy_participants
       });
     }
+
+    // Auto-refresh the cache so the UI updates instantly
+    await refreshAnalyticsCache();
 
     return NextResponse.json({
       success: true,

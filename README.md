@@ -1,34 +1,35 @@
 # FKC Esports Management Dashboard
 
-A comprehensive League of Legends team operations, scouting, and match tracking dashboard built with Next.js, TypeScript, and Supabase. Designed with a premium, esports-inspired "Hextech" aesthetic, this application serves as the central hub for team practice tracking and tournament scouting.
+A comprehensive, production-grade League of Legends team operations platform built with Next.js 16, React 19, and Supabase. Designed with a premium, esports-inspired "Hextech" aesthetic, this application serves as the central hub for team practice tracking, tournament administration, and automated opponent scouting.
 
 ## 🌟 Core Features
 
-### 🏆 Tournament Scouting & Clash Tracking
+### 🏆 Real-Time Tournament Scouting & Tracking
 - **Clash-Style Mini-Brackets:** Full tracking system for 16 teams across a 3-week points-based tournament format.
-- **Roster Management:** View enemy team rosters, rank distributions, and direct OP.GG integration for quick scouting.
-- **Global Standings Dashboard:** Automated qualification tracking based on the tournament's 1000/700/400/200 scoring logic.
+- **Supabase Realtime Sync:** Tournament brackets and global standings instantly update across all connected spectator screens the moment an admin records a match result.
+- **Roster Management:** View enemy team rosters, rank distributions, and direct OP.GG integrations for quick scouting.
 
-### 🤖 Smart Riot API Integration
-- **Flex Queue Auto-Importer:** Automatically fetches recent matches from the Riot API. It uses smart roster detection to only import matches where at least 4 core team members (or recognized alternate accounts) played together, seamlessly mapping alt accounts to the correct main roster profile based on role.
-- **SoloQ Tracking & LP Deltas:** Synchronizes player SoloQ and FlexQ ranks. Tracks rank changes over time, visualizing LP gains/losses since the last sync with dynamic status indicators.
+### 🤖 Automated Riot API Integration
+- **Vercel Cron Scouting:** Automatically fetches and updates SoloQ and FlexQ ranks for every player in the tournament every night. Tracks rank deltas over time, visualizing LP gains/losses with dynamic status indicators.
+- **Flex Queue Auto-Importer:** Safely handles Riot rate limits with client-side chunking and browser rate-limit handling to avoid Vercel 504 Timeouts. 
 - **Automated Match Parsing:** Pulls champion picks, bans, KDA, CS, and objective stats without manual data entry.
 
-### 📊 Advanced Player Statistics
+### 📊 Advanced Player Statistics & Caching
+- **Materialized Cache Pipeline:** Eliminates thousands of dynamic row calculations by using a Vercel Cron job to pre-calculate MVP counts, Top Champions, and KDAs into a blazing-fast JSON cache table (`roster_stats_cache`).
 - **Custom Performance Scoring:** Utilizes an algorithmic scoring model (`calculateScoreV3`) to evaluate player performance based on lane opponents, vision score, damage share, and match duration.
-- **Match History:** Detailed views of Scrims (BO1/BO3), Flex Queue, and official Tournament matches.
-- **Filtered Insights:** Clean data by automatically excluding remake games (under 5 minutes) from overall statistics.
+- **Multi-Tenant Ready:** The underlying PostgreSQL schema utilizes `org_id` keys, preparing the platform to serve multiple esports organizations simultaneously without data bleeding.
 
 ### 🎨 Hextech-Themed UI
-- **Premium Aesthetics:** High-fidelity, custom-styled interface featuring glowing accents, glassmorphism, and custom scrollbars.
+- **Premium Aesthetics:** High-fidelity, custom-styled interface featuring glowing accents, glassmorphism, and custom scrollbars built entirely with Tailwind CSS v4.
 - **Dynamic Ranked Emblems:** Visually renders Riot's official ranked tiers directly on player cards.
 
 ## 🛠️ Tech Stack
 
-- **Framework:** [Next.js 16](https://nextjs.org/) (React 19)
+- **Framework:** [Next.js 16](https://nextjs.org/) (React 19, App Router, Server Actions)
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS v4, `clsx`, `tailwind-merge`
-- **Database & Auth:** [Supabase](https://supabase.com/) (PostgreSQL & Row Level Security)
+- **Database:** [Supabase](https://supabase.com/) (PostgreSQL, Realtime Subscriptions, RLS)
+- **Automation:** Vercel Cron Jobs (`vercel.json`)
 - **Icons:** Phosphor Icons
 
 ## 🚀 Getting Started
@@ -52,25 +53,28 @@ cd fkc-team-tracker
 npm install
 ```
 
-3. Set up environment variables:
-Create a `.env.local` file with your credentials:
+3. Set up environment variables in a `.env.local` file:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 RIOT_API_KEY=your_riot_api_key
+CRON_SECRET=your_custom_cron_password
 ```
 
-4. Run the development server:
+4. Apply the database migrations located in the `supabase/migrations/` folder using the Supabase SQL Editor to set up multi-team features and analytics caches.
+
+5. Run the development server:
 ```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to view the application.
 
-## 🔒 Security & Admin
+## 🔒 Security & Architecture
 
-- **Admin Dashboard:** Secure interface for triggering API syncs, initializing ranks, and managing tournament data.
-- **Authentication:** Protected via Supabase Auth and Row Level Security (RLS) policies.
+- **Next.js Server Actions:** All database write operations (like inserting matches) are securely routed through server actions, entirely hiding database schemas from the client bundle.
+- **Cron Authentication:** Automated endpoints require a valid `Authorization: Bearer <CRON_SECRET>` header to prevent unauthorized triggers.
+- **Row Level Security (RLS):** Data access is protected at the database layer via Supabase Auth.
 
 ## 📝 License & Contributing
 

@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
+import type { Player } from './types'
 
-export default function ScoutingAdmin() {
+export default function ScoutingAdmin({ players }: { players: Player[] }) {
   const [teams, setTeams] = useState<any[]>([])
   const [newTeamName, setNewTeamName] = useState('')
   const [selectedTeam, setSelectedTeam] = useState<number | null>(null)

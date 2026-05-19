@@ -2,15 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-
-// Use the existing Player type from AdminForm (could be moved to a types file later)
-type Player = {
-  id: number
-  name: string
-  ign: string
-  role: string
-  puuid: string
-}
+import type { Player } from './types'
 
 export default function AutoImportTab({ 
   players, 

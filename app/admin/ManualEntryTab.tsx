@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { allChampions, getChampionIcon } from '@/lib/champions'
+import type { Player, FormData } from './types'
 
 export default function ManualEntryTab({
   formData,
@@ -13,11 +14,11 @@ export default function ManualEntryTab({
   updateOurParticipant,
   updateEnemyParticipant
 }: {
-  formData: any;
+  formData: FormData;
   loading: boolean;
-  players: any[];
+  players: Player[];
   handleManualSubmit: (e: React.FormEvent) => Promise<void>;
-  updateFormData: (key: string, value: any) => void;
+  updateFormData: (key: keyof FormData, value: any) => void;
   updateBans: (team: 'our' | 'enemy', index: number, value: string) => void;
   updateOurParticipant: (index: number, field: string, value: any) => void;
   updateEnemyParticipant: (index: number, field: string, value: any) => void;

@@ -85,6 +85,25 @@ export default function RosterSection({ playerList, rosterStatsCache }: RosterSe
     return [];
   }, [rosterStatsCache, mode]);
 
+  // If cache is empty, fall back to showing basic player list
+  const displayStats = rosterStats.length > 0
+    ? rosterStats
+    : (playerList || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        ign: p.ign,
+        role: p.role,
+        totalGames: 0,
+        wins: 0,
+        losses: 0,
+        winrate: 0,
+        overallKda: 0,
+        avgScore: 0,
+        mvpCount: 0,
+        intMvpCount: 0,
+        topChampions: []
+      }))
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-16">
       <h2 className="text-4xl font-bold mb-6 text-center">Our Roster</h2>
@@ -108,7 +127,7 @@ export default function RosterSection({ playerList, rosterStatsCache }: RosterSe
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-        {rosterStats.length > 0 ? rosterStats.map((stat: any) => (
+        {displayStats.length > 0 ? displayStats.map((stat: any) => (
           <div
             key={stat.id}
             className={`bg-card overflow-hidden flex flex-col transition-all duration-300 ${mode === 'soloq'

@@ -187,6 +187,7 @@ export default function ManualEntryTab({
                         <td className="p-3 font-bold text-[#f1c40f] text-sm">{p.role}</td>
                         <td className="p-3">
                           <select value={p.player_id} onChange={(e) => updateOurParticipant(index, 'player_id', parseInt(e.target.value))} className="w-full bg-card border border-blue-200 dark:border-[#322814] rounded px-2 py-1.5 text-sm font-medium text-slate-700 dark:text-[#f0e6d2] outline-none focus:border-[#0984e3]">
+                            <option value={0} disabled={players.length > 0 ? false : true}>Select player</option>
                             {players.map(player => (
                               <option key={player.id} value={player.id}>
                                 {player.name} ({player.ign})

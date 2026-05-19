@@ -1,5 +1,5 @@
 import Image from 'next/image'
-import { getElo } from '@/lib/elo'
+import { getOpggLink, getRankColor, getMultisearchUrl, renderRankChange } from '@/lib/presentation'
 
 type Player = {
   id: number
@@ -25,50 +25,6 @@ type Team = {
 }
 
 export default function TeamCard({ team, avgEloStr }: { team: Team, avgEloStr: string }) {
-  const getOpggLink = (ign: string) => {
-    let gameName = ign
-    let tagLine = 'LAN'
-    if (ign.includes('#')) {
-      const parts = ign.split('#')
-      gameName = parts[0]
-      tagLine = parts[1]
-    }
-    return `https://www.op.gg/summoners/las/${encodeURIComponent(gameName)}-${encodeURIComponent(tagLine)}`
-  }
-
-  const getRankColor = (tier?: string) => {
-    if (!tier) return 'text-slate-500'
-    const t = tier.toLowerCase()
-    if (t.includes('iron')) return 'text-slate-500'
-    if (t.includes('bronze')) return 'text-[#8C513A]'
-    if (t.includes('silver')) return 'text-[#80989D]'
-    if (t.includes('gold')) return 'text-[#CD8837]'
-    if (t.includes('platinum')) return 'text-[#4E9996]'
-    if (t.includes('emerald')) return 'text-[#25B47B]'
-    if (t.includes('diamond')) return 'text-[#576BCE]'
-    if (t.includes('master')) return 'text-[#9D48E0]'
-    if (t.includes('grandmaster')) return 'text-[#E84057]'
-    if (t.includes('challenger')) return 'text-[#F4C874]'
-    return 'text-slate-300'
-  }
-
-  const getMultisearchUrl = (players: Player[]) => {
-    const summoners = players.map(p => encodeURIComponent(p.ign)).join('%2C')
-    return `https://op.gg/es/lol/multisearch/las?summoners=${summoners}`
-  }
-
-  const renderRankChange = (currentTier?: string, currentRank?: string, currentLp?: number, prevTier?: string, prevRank?: string, prevLp?: number) => {
-    if (!currentTier && !prevTier) return null; // Unranked to Unranked
-    if (!prevTier && currentTier) return <span title="New Rank" className="ml-1 cursor-help">😇</span>;
-    if (prevTier && !currentTier) return <span title="Lost Rank" className="ml-1 cursor-help">😈</span>;
-    
-    const currentElo = getElo(currentTier, currentRank, currentLp);
-    const prevElo = getElo(prevTier, prevRank, prevLp);
-    
-    if (currentElo > prevElo) return <span title={`Gained ${Math.round(currentElo - prevElo)} LP`} className="ml-1 text-emerald-400 drop-shadow-sm text-sm cursor-help">😇</span>;
-    if (currentElo < prevElo) return <span title={`Lost ${Math.round(prevElo - currentElo)} LP`} className="ml-1 text-rose-400 drop-shadow-sm text-sm cursor-help">😈</span>;
-    return <span title="No change" className="ml-1 text-slate-500 text-sm cursor-help opacity-50">➖</span>;
-  }
 
   return (
     <div className="bg-card border border-blue-200 dark:border-[#322814] rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:border-emerald-500/50 transition-colors group">

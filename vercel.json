@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/update-scouting",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-analytics",
+      "schedule": "30 3 * * *"
+    }
+  ]
+}

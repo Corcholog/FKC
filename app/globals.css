@@ -49,6 +49,16 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-iron: #a1a1aa;
+  --color-bronze: #8C513A;
+  --color-silver: #80989D;
+  --color-gold: #CD8837;
+  --color-platinum: #4E9996;
+  --color-emerald: #25B47B;
+  --color-diamond: #576BCE;
+  --color-master: #9D48E0;
+  --color-grandmaster: #E84057;
+  --color-challenger: #F4C874;
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);

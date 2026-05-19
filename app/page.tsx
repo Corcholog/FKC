@@ -69,27 +69,11 @@ export default async function Home() {
     .select('id, we_won, match_type, duration_minutes')
   const allMatches = allMatchesData || []
 
-  // Fetch all player performances for the Roster Stats
-  const { data: allPerformancesData } = await supabase
-    .from('ally_participants')
-    .select(`
-      id,
-      player_id,
-      match_id,
-      champion,
-      kills,
-      deaths,
-      assists,
-      score,
-      matches!inner (id, we_won)
-    `)
-  const allPerformances = allPerformancesData || []
-
-  // Fetch all soloq matches
-  const { data: allSoloQData } = await supabase
-    .from('soloq_matches')
+  // Fetch pre-calculated roster stats
+  const { data: rosterCacheData } = await supabase
+    .from('roster_stats_cache')
     .select('*')
-  const soloqPerformances = allSoloQData || []
+  const rosterStatsCache = rosterCacheData || []
 
 
 
@@ -171,11 +155,10 @@ export default async function Home() {
         </div>
       </div>
 
-      {/* Roster with Integrated Stats */}
+      {/* Roster with Cached Stats */}
       <RosterSection
         playerList={playerList}
-        teamPerformances={allPerformances}
-        soloqPerformances={soloqPerformances}
+        rosterStatsCache={rosterStatsCache}
       />
 
       {/* Team Performance */}

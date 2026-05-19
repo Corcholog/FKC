@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateScoreV3 } from '@/lib/score';
+import { RiotMatchDTO, RiotParticipantDTO, RiotTeamDTO } from '@/lib/riot-types';
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
@@ -67,32 +68,32 @@ export async function POST(request: NextRequest) {
 
       if (!matchDataRes.ok) continue;
 
-      const matchData = await matchDataRes.json();
+      const matchData = await matchDataRes.json() as RiotMatchDTO;
       if (!matchData.info || !matchData.info.participants) continue;
 
-      const targetPlayer = matchData.info.participants.find((p: any) => p.puuid === puuid);
+      const targetPlayer = matchData.info.participants.find((p: RiotParticipantDTO) => p.puuid === puuid);
       if (!targetPlayer) continue;
 
       const ourTeamId = targetPlayer.teamId;
 
       const durationMinutes = Math.max(1, Math.floor((matchData.info.gameDuration || 1800) / 60));
 
-      const ourRiotParticipants = matchData.info.participants.filter((p: any) => p.teamId === ourTeamId);
-      const enemyRiotParticipants = matchData.info.participants.filter((p: any) => p.teamId !== ourTeamId);
+      const ourRiotParticipants = matchData.info.participants.filter((p: RiotParticipantDTO) => p.teamId === ourTeamId);
+      const enemyRiotParticipants = matchData.info.participants.filter((p: RiotParticipantDTO) => p.teamId !== ourTeamId);
 
       const teamTotals = {
-        teamKills: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.kills || 0), 0),
-        teamDamageDealt: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.totalDamageDealtToChampions || 0), 0),
-        teamDamageTaken: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.totalDamageTaken || 0), 0),
+        teamKills: ourRiotParticipants.reduce((sum: number, p: RiotParticipantDTO) => sum + (p.kills || 0), 0),
+        teamDamageDealt: ourRiotParticipants.reduce((sum: number, p: RiotParticipantDTO) => sum + (p.totalDamageDealtToChampions || 0), 0),
+        teamDamageTaken: ourRiotParticipants.reduce((sum: number, p: RiotParticipantDTO) => sum + (p.totalDamageTaken || 0), 0),
       };
 
       const objectives = {
-        dragons: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.dragons || 0), 0),
-        barons: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.barons || 0), 0),
-        hersalds: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.riftHeraldTakedowns || 0), 0),
+        dragons: ourRiotParticipants.reduce((sum: number, p: RiotParticipantDTO) => sum + (p.dragons || 0), 0),
+        barons: ourRiotParticipants.reduce((sum: number, p: RiotParticipantDTO) => sum + (p.barons || 0), 0),
+        hersalds: ourRiotParticipants.reduce((sum: number, p: RiotParticipantDTO) => sum + (p.riftHeraldTakedowns || 0), 0),
       };
 
-      const teamParticipantsForV3 = ourRiotParticipants.map((p: any) => ({
+      const teamParticipantsForV3 = ourRiotParticipants.map((p: RiotParticipantDTO) => ({
         kills: p.kills || 0,
         deaths: p.deaths || 0,
         assists: p.assists || 0,
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
         teamPosition: p.teamPosition || 'TOP',
       }));
 
-      const mapParticipant = (p: any, isAlly: boolean) => {
+      const mapParticipant = (p: RiotParticipantDTO, isAlly: boolean) => {
         const role = mapRiotRole(p.teamPosition);
         const data = {
           riotId: `${p.riotIdGameName}#${p.riotIdTagline}`,
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
         };
 
         if (isAlly) {
-          const opponent = enemyRiotParticipants.find((e: any) => e.teamPosition === p.teamPosition) || null;
+          const opponent = enemyRiotParticipants.find((e: RiotParticipantDTO) => e.teamPosition === p.teamPosition) || null;
 
           const playerData = {
             kills: p.kills || 0,
@@ -165,14 +166,14 @@ export async function POST(request: NextRequest) {
         return data;
       };
 
-      const our_participants = ourRiotParticipants.map((p: any) => mapParticipant(p, true));
-      const enemy_participants = enemyRiotParticipants.map((p: any) => mapParticipant(p, false));
+      const our_participants = ourRiotParticipants.map((p: RiotParticipantDTO) => mapParticipant(p, true));
+      const enemy_participants = enemyRiotParticipants.map((p: RiotParticipantDTO) => mapParticipant(p, false));
 
-      const ourTeamData = matchData.info.teams.find((t: any) => t.teamId === ourTeamId);
-      const enemyTeamData = matchData.info.teams.find((t: any) => t.teamId !== ourTeamId);
+      const ourTeamData = matchData.info.teams.find((t: RiotTeamDTO) => t.teamId === ourTeamId);
+      const enemyTeamData = matchData.info.teams.find((t: RiotTeamDTO) => t.teamId !== ourTeamId);
 
-      const our_bans = ourTeamData?.bans ? ourTeamData.bans.map((b: any) => championIdMap[b.championId] || 'Unknown') : [];
-      const enemy_bans = enemyTeamData?.bans ? enemyTeamData.bans.map((b: any) => championIdMap[b.championId] || 'Unknown') : [];
+      const our_bans = ourTeamData?.bans ? ourTeamData.bans.map((b: {championId: number}) => championIdMap[b.championId] || 'Unknown') : [];
+      const enemy_bans = enemyTeamData?.bans ? enemyTeamData.bans.map((b: {championId: number}) => championIdMap[b.championId] || 'Unknown') : [];
 
       parsedMatches.push({
         matchId,

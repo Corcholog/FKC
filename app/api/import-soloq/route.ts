@@ -1,21 +1,17 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { RiotLeagueEntryDTO, RiotMatchDTO, RiotParticipantDTO } from '@/lib/riot-types';
 
 const RIOT_API_KEY = process.env.RIOT_API_KEY;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const fetchWithRetry = async (url: string, retries = 2): Promise<Response> => {
-  for (let i = 0; i < retries; i++) {
-    const res = await fetch(url, { headers: { 'X-Riot-Token': RIOT_API_KEY! } });
-    if (res.status === 429) {
-      console.warn(`Rate limited on ${url}, retrying in 5 seconds...`);
-      await delay(5000);
-      continue;
-    }
-    return res;
+const fetchWithRetry = async (url: string, retries = 1): Promise<Response> => {
+  const res = await fetch(url, { headers: { 'X-Riot-Token': RIOT_API_KEY! } });
+  if (res.status === 429) {
+    throw new Error("Rate limit exceeded permanently");
   }
-  return fetch(url, { headers: { 'X-Riot-Token': RIOT_API_KEY! } });
+  return res;
 };
 
 export async function POST() {
@@ -53,7 +49,7 @@ export async function POST() {
       const leagueRes = await fetchWithRetry(`https://la2.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`);
       if (leagueRes.ok) {
         const leagues = await leagueRes.json();
-        const soloq = leagues.find((l: any) => l.queueType === 'RANKED_SOLO_5x5');
+        const soloq = leagues.find((l: RiotLeagueEntryDTO) => l.queueType === 'RANKED_SOLO_5x5');
         if (soloq) {
           await supabase.from('players').update({
             soloq_tier: soloq.tier,
@@ -106,17 +102,17 @@ export async function POST() {
           const matchDataRes = await fetchWithRetry(`https://americas.api.riotgames.com/lol/match/v5/matches/${matchId}`);
           if (!matchDataRes.ok) continue;
 
-          const matchData = await matchDataRes.json();
+          const matchData = await matchDataRes.json() as RiotMatchDTO;
           if (!matchData.info || !matchData.info.participants) continue;
 
-          const isRemake = matchData.info.gameDuration < 300 || matchData.info.participants.some((p: any) => p.gameEndedInEarlySurrender);
+          const isRemake = matchData.info.gameDuration < 300 || matchData.info.participants.some((p: RiotParticipantDTO) => p.gameEndedInEarlySurrender);
 
           if (isRemake) {
             existingMatchIds.add(matchId);
             continue;
           }
 
-          const targetParticipant = matchData.info.participants.find((p: any) => p.puuid === puuid);
+          const targetParticipant = matchData.info.participants.find((p: RiotParticipantDTO) => p.puuid === puuid);
           if (!targetParticipant) continue;
 
           const durationSecondsTotal = matchData.info.gameDuration;

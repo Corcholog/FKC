@@ -1,7 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Navbar from '@/app/components/Navbar'
+import { createClient } from '@/lib/supabase/client'
 import {
   DbDate,
   DbGroup,
@@ -32,6 +34,41 @@ export default function StagesClient({
   const [dates, setDates] = useState<DbDate[]>(() =>
     initialDates.map(normalizeDateState)
   )
+
+  const router = useRouter()
+
+  useEffect(() => {
+    // Sync external database updates with the client local state
+    // When a refresh happens, initialDates updates, so we update the local dates state.
+    setDates(initialDates.map(normalizeDateState));
+  }, [initialDates]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    
+    // Subscribe to all relevant tournament tables for real-time updates
+    const channel = supabase.channel('tournament-updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tournament_matches' },
+        () => router.refresh()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tournament_dates' },
+        () => router.refresh()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tournament_group_teams' },
+        () => router.refresh()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [router]);
 
   const [activeDateId, setActiveDateId] =
     useState(initialDates?.[0]?.id || '')

@@ -9,6 +9,9 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const fetchWithRetry = async (url: string, retries = 1): Promise<Response> => {
   const res = await fetch(url, { headers: { 'X-Riot-Token': RIOT_API_KEY! } });
+  if (res.status === 403) {
+    throw new Error("Riot API Key is invalid or expired. Please renew it at developer.riotgames.com");
+  }
   if (res.status === 429) {
     throw new Error("Rate limit exceeded permanently");
   }
@@ -37,10 +40,11 @@ export async function POST() {
         const accRes = await fetchWithRetry(`https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent('Corcho')}/FKC`);
         if (accRes.ok) {
           const accData = await accRes.json();
-          puuid = accData.puuid;
+          puuid = accData.puuid || 'cDEcUdvKUsgvkZszC2w1yvzk4ZMX7d9LCKFdBI-XtVOK_ZMTAGsdLdNgLhvl9IpQvXJTStAqudf_ew';
           console.log(`[Import SoloQ] Hardcoded Corcho PUUID fetched: ${puuid}`);
         } else {
-          console.error(`[Import SoloQ] Failed to fetch Corcho override PUUID. Status: ${accRes.status}`);
+          puuid = 'cDEcUdvKUsgvkZszC2w1yvzk4ZMX7d9LCKFdBI-XtVOK_ZMTAGsdLdNgLhvl9IpQvXJTStAqudf_ew';
+          console.error(`[Import SoloQ] Failed to fetch Corcho override PUUID, using hardcoded fallback.`);
         }
       }
 
@@ -125,6 +129,13 @@ export async function POST() {
           const riotRoleMap: Record<string, string> = { 'TOP': 'top', 'JUNGLE': 'jungle', 'MIDDLE': 'mid', 'BOTTOM': 'adc', 'UTILITY': 'support' };
           const role = riotRoleMap[targetParticipant.teamPosition] || 'top';
 
+          const targetTeamId = targetParticipant.teamId;
+          const teammates = matchData.info.participants.filter((p: any) => p.teamId === targetTeamId);
+          const team_total_kills = teammates.reduce((sum: number, p: any) => sum + (p.kills || 0), 0);
+          const team_total_deaths = teammates.reduce((sum: number, p: any) => sum + (p.deaths || 0), 0);
+          const team_total_damage = teammates.reduce((sum: number, p: any) => sum + (p.totalDamageDealtToChampions || 0), 0);
+          const team_total_gold = teammates.reduce((sum: number, p: any) => sum + (p.goldEarned || 0), 0);
+
           await supabase.from('soloq_matches').insert({
             player_id: player.id,
             match_id: matchId,
@@ -137,7 +148,15 @@ export async function POST() {
             win: targetParticipant.win,
             role: role,
             duration_minutes,
-            duration_seconds
+            duration_seconds,
+            damage_dealt: targetParticipant.totalDamageDealtToChampions || 0,
+            gold_earned: targetParticipant.goldEarned || 0,
+            vision_score: targetParticipant.visionScore || 0,
+            damage_taken: targetParticipant.totalDamageTaken || 0,
+            team_total_damage,
+            team_total_gold,
+            team_total_kills,
+            team_total_deaths
           });
 
           existingMatchIds.add(matchId);

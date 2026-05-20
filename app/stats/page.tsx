@@ -25,6 +25,14 @@ export default async function StatsPage() {
       assists,
       score,
       cs,
+      damage_dealt,
+      gold_earned,
+      vision_score,
+      damage_taken,
+      team_total_damage,
+      team_total_gold,
+      team_total_kills,
+      team_total_deaths,
       matches!inner (id, we_won, match_type, duration_minutes, duration_seconds)
     `)
   

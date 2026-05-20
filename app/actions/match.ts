@@ -28,7 +28,18 @@ export async function insertMatchToDb(matchData: any, isManual: boolean = false,
   const allyParticipantsData = matchData.our_participants.map((p: any) => {
     let dbPlayerId = p.player_id;
     if (!isManual) {
-      const dbPlayer = players.find(player => player.puuid === p.puuid);
+      const dbPlayer = players.find(player => {
+        if (player.puuid === p.puuid) return true;
+        if (player.name === 'Corcho') {
+          const corchoPuuids = [
+            'CWiI5tqz4IeXj2iLmqRH96WPKHiuGIp8xrFAt2DklNvZtHiDNAYeTOaJmDrw0bIh8jxUPvIzCv-6JA', // volvé camila#MISSU
+            'WW7cKwyL1JE36CuyLo3ErQ5k3gijfvxch6Q79RCauyiGSI9Be-n_qj2IX7JcQ5QTKqfEZzfYznRRlA', // Corshus#2108
+            'cDEcUdvKUsgvkZszC2w1yvzk4ZMX7d9LCKFdBI-XtVOK_ZMTAGsdLdNgLhvl9IpQvXJTStAqudf_ew'  // Corcho#fkc
+          ];
+          return corchoPuuids.includes(p.puuid);
+        }
+        return false;
+      });
       dbPlayerId = dbPlayer?.id || 0;
     }
 
@@ -41,7 +52,15 @@ export async function insertMatchToDb(matchData: any, isManual: boolean = false,
       deaths: p.deaths,
       assists: p.assists,
       cs: p.cs,
-      score: p.score || 0
+      score: p.score || 0,
+      damage_dealt: p.damage_dealt || 0,
+      gold_earned: p.gold_earned || 0,
+      vision_score: p.vision_score || 0,
+      damage_taken: p.damage_taken || 0,
+      team_total_damage: p.team_total_damage || 0,
+      team_total_gold: p.team_total_gold || 0,
+      team_total_kills: p.team_total_kills || 0,
+      team_total_deaths: p.team_total_deaths || 0
     }
   })
   

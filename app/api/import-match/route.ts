@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (!accountRes.ok) {
+      if (accountRes.status === 403) return NextResponse.json({ error: "Riot API Key is invalid or expired. Please renew it at developer.riotgames.com" }, { status: 403 });
       if (accountRes.status === 429) return NextResponse.json({ error: "Rate limit getting PUUID" }, { status: 429 });
       return NextResponse.json({ error: `Riot Account not found. Status: ${accountRes.status}` }, { status: accountRes.status });
     }
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (!matchDataRes.ok) {
+      if (matchDataRes.status === 403) return NextResponse.json({ error: "Riot API Key is invalid or expired. Please renew it at developer.riotgames.com" }, { status: 403 });
       if (matchDataRes.status === 429) return NextResponse.json({ error: "Rate limit getting Match" }, { status: 429 });
       return NextResponse.json({ error: `Match not found. Ensure ID is correct. Status: ${matchDataRes.status}` }, { status: matchDataRes.status });
     }
@@ -65,7 +67,11 @@ export async function POST(request: NextRequest) {
       ourTeamId = targetPlayer.teamId;
     }
 
-    const durationMinutes = Math.max(1, Math.floor((matchData.info.gameDuration || 1800) / 60));
+    const rawDuration = matchData.info.gameDuration || 1800;
+    const isMilliseconds = rawDuration > 50000;
+    const gameDurationSeconds = isMilliseconds ? Math.floor(rawDuration / 1000) : rawDuration;
+    const durationMinutes = Math.max(1, Math.floor(gameDurationSeconds / 60));
+    const durationSeconds = gameDurationSeconds % 60;
 
     const ourRiotParticipants = matchData.info.participants.filter((p: any) => p.teamId === ourTeamId);
     const enemyRiotParticipants = matchData.info.participants.filter((p: any) => p.teamId !== ourTeamId);
@@ -74,6 +80,19 @@ export async function POST(request: NextRequest) {
       teamKills: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.kills || 0), 0),
       teamDamageDealt: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.totalDamageDealtToChampions || 0), 0),
       teamDamageTaken: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.totalDamageTaken || 0), 0),
+      teamGoldEarned: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.goldEarned || 0), 0),
+      teamDeaths: ourRiotParticipants.reduce((sum: number, p: any) => sum + (p.deaths || 0), 0),
+    };
+
+    const getTeamTotalsForParticipant = (p: any) => {
+      const teammates = matchData.info.participants.filter((x: any) => x.teamId === p.teamId);
+      return {
+        teamKills: teammates.reduce((sum: number, x: any) => sum + (x.kills || 0), 0),
+        teamDamageDealt: teammates.reduce((sum: number, x: any) => sum + (x.totalDamageDealtToChampions || 0), 0),
+        teamDamageTaken: teammates.reduce((sum: number, x: any) => sum + (x.totalDamageTaken || 0), 0),
+        teamGoldEarned: teammates.reduce((sum: number, x: any) => sum + (x.goldEarned || 0), 0),
+        teamDeaths: teammates.reduce((sum: number, x: any) => sum + (x.deaths || 0), 0),
+      };
     };
 
     const objectives = {
@@ -102,6 +121,7 @@ export async function POST(request: NextRequest) {
     }));
 
     const mapParticipant = (p: any, isAlly: boolean) => {
+      const pTeamTotals = getTeamTotalsForParticipant(p);
       const data = {
         riotId: `${p.riotIdGameName}#${p.riotIdTagline}`,
         puuid: p.puuid,
@@ -111,7 +131,15 @@ export async function POST(request: NextRequest) {
         deaths: p.deaths,
         assists: p.assists,
         cs: p.totalMinionsKilled + (p.neutralMinionsKilled || 0),
-        score: 0
+        score: 0,
+        damage_dealt: p.totalDamageDealtToChampions || 0,
+        gold_earned: p.goldEarned || 0,
+        vision_score: p.visionScore || 0,
+        damage_taken: p.totalDamageTaken || 0,
+        team_total_damage: pTeamTotals.teamDamageDealt,
+        team_total_gold: pTeamTotals.teamGoldEarned,
+        team_total_kills: pTeamTotals.teamKills,
+        team_total_deaths: pTeamTotals.teamDeaths,
       };
 
       if (isAlly) {
@@ -173,8 +201,8 @@ export async function POST(request: NextRequest) {
       match_type: 'tournament',
       our_side: ourTeamId === 100 ? 'Blue' : 'Red',
       we_won: ourTeamData?.win || false,
-      duration_minutes: Math.floor(matchData.info.gameDuration / 60),
-      duration_seconds: matchData.info.gameDuration % 60,
+      duration_minutes: durationMinutes,
+      duration_seconds: durationSeconds,
       our_bans,
       enemy_bans,
       our_participants,

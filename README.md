@@ -17,6 +17,9 @@ A comprehensive, production-grade League of Legends team operations platform bui
 ### 📊 Advanced Player Statistics & Caching
 - **Materialized Cache Pipeline:** Eliminates thousands of dynamic row calculations by using a Vercel Cron job to pre-calculate MVP counts, Top Champions, and KDAs into a blazing-fast JSON cache table (`roster_stats_cache`).
 - **Custom Performance Scoring:** Utilizes an algorithmic scoring model (`calculateScoreV3`) to evaluate player performance based on lane opponents, vision score, damage share, and match duration.
+- **Role-Aware Performance Profiles:** Algorithmically grades player match history over 5 core dimensions (Consistency, Carry, Fight Presence, Survivability, and Resource Control). Underlying targets are dynamically calibrated based on the player's primary role (e.g., ignoring CS for supports in favor of vision score metrics).
+- **Hextech SVG Radar Charts:** Pure, dependency-free, responsive SVG radar charts rendering player metrics with native vector gradients, concentric guideline rings, and clean bounding spacing to prevent text cropping.
+- **Dynamic Playstyle Archetypes:** Uses live match telemetry to classify players into distinct archetypes (such as *Apex Carry*, *Unkillable Demon*, *Teamfight Catalyst*, or support-specific roles like *Vision Mastermind* and *Guardian Angel*), paired with dynamic playstyle traits (e.g., *KDA Royalty*, *Immortal*, *CS Vacuum*, *Warding Machine*).
 - **Multi-Tenant Ready:** The underlying PostgreSQL schema utilizes `org_id` keys, preparing the platform to serve multiple esports organizations simultaneously without data bleeding.
 
 ### 🎨 Hextech-Themed UI
@@ -61,7 +64,7 @@ RIOT_API_KEY=your_riot_api_key
 CRON_SECRET=your_custom_cron_password
 ```
 
-4. Apply the database migrations located in the `supabase/migrations/` folder using the Supabase SQL Editor to set up multi-team features and analytics caches.
+4. Apply the database migrations located in the `supabase/migrations/` folder using the Supabase SQL Editor to set up multi-team features and analytics caches. Use the Admin panel's **Recalculate Database Scores** button to backfill telemetry columns for any existing matches.
 
 5. Run the development server:
 ```bash

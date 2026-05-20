@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (!accountRes.ok) {
+      if (accountRes.status === 403) return NextResponse.json({ error: "Riot API Key is invalid or expired. Please renew it at developer.riotgames.com" }, { status: 403 });
       if (accountRes.status === 429) return NextResponse.json({ error: "Rate limit" }, { status: 429 });
       return NextResponse.json({ error: `Summoner not found. Status: ${accountRes.status}` }, { status: accountRes.status });
     }
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       { headers: { 'X-Riot-Token': RIOT_API_KEY! } }
     );
 
+    if (matchesRes.status === 403) return NextResponse.json({ error: "Riot API Key is invalid or expired. Please renew it at developer.riotgames.com" }, { status: 403 });
     if (matchesRes.status === 429) return NextResponse.json({ error: "Rate limit" }, { status: 429 });
     const matchIds = await matchesRes.json();
     if (!matchIds || !matchIds.length) return NextResponse.json({ success: true, matches: [], rateLimited: false });
@@ -74,7 +76,11 @@ export async function POST(request: NextRequest) {
 
       const ourTeamId = targetPlayer.teamId;
 
-      const durationMinutes = Math.max(1, Math.floor((matchData.info.gameDuration || 1800) / 60));
+      const rawDuration = matchData.info.gameDuration || 1800;
+      const isMilliseconds = rawDuration > 50000;
+      const gameDurationSeconds = isMilliseconds ? Math.floor(rawDuration / 1000) : rawDuration;
+      const durationMinutes = Math.max(1, Math.floor(gameDurationSeconds / 60));
+      const durationSeconds = gameDurationSeconds % 60;
 
       const ourRiotParticipants = matchData.info.participants.filter((p: RiotParticipantDTO) => p.teamId === ourTeamId);
       const enemyRiotParticipants = matchData.info.participants.filter((p: RiotParticipantDTO) => p.teamId !== ourTeamId);
@@ -83,6 +89,19 @@ export async function POST(request: NextRequest) {
         teamKills: ourRiotParticipants.reduce((sum: number, p: RiotParticipantDTO) => sum + (p.kills || 0), 0),
         teamDamageDealt: ourRiotParticipants.reduce((sum: number, p: RiotParticipantDTO) => sum + (p.totalDamageDealtToChampions || 0), 0),
         teamDamageTaken: ourRiotParticipants.reduce((sum: number, p: RiotParticipantDTO) => sum + (p.totalDamageTaken || 0), 0),
+        teamGoldEarned: ourRiotParticipants.reduce((sum: number, p: RiotParticipantDTO) => sum + (p.goldEarned || 0), 0),
+        teamDeaths: ourRiotParticipants.reduce((sum: number, p: RiotParticipantDTO) => sum + (p.deaths || 0), 0),
+      };
+
+      const getTeamTotalsForParticipant = (p: RiotParticipantDTO) => {
+        const teammates = matchData.info.participants.filter((x: RiotParticipantDTO) => x.teamId === p.teamId);
+        return {
+          teamKills: teammates.reduce((sum: number, x: RiotParticipantDTO) => sum + (x.kills || 0), 0),
+          teamDamageDealt: teammates.reduce((sum: number, x: RiotParticipantDTO) => sum + (x.totalDamageDealtToChampions || 0), 0),
+          teamDamageTaken: teammates.reduce((sum: number, x: RiotParticipantDTO) => sum + (x.totalDamageTaken || 0), 0),
+          teamGoldEarned: teammates.reduce((sum: number, x: RiotParticipantDTO) => sum + (x.goldEarned || 0), 0),
+          teamDeaths: teammates.reduce((sum: number, x: RiotParticipantDTO) => sum + (x.deaths || 0), 0),
+        };
       };
 
       const objectives = {
@@ -112,6 +131,7 @@ export async function POST(request: NextRequest) {
 
       const mapParticipant = (p: RiotParticipantDTO, isAlly: boolean) => {
         const role = mapRiotRole(p.teamPosition);
+        const pTeamTotals = getTeamTotalsForParticipant(p);
         const data = {
           riotId: `${p.riotIdGameName}#${p.riotIdTagline}`,
           puuid: p.puuid,
@@ -121,7 +141,15 @@ export async function POST(request: NextRequest) {
           deaths: p.deaths,
           assists: p.assists,
           cs: (p.totalMinionsKilled || 0) + (p.neutralMinionsKilled || 0),
-          score: 0
+          score: 0,
+          damage_dealt: p.totalDamageDealtToChampions || 0,
+          gold_earned: p.goldEarned || 0,
+          vision_score: p.visionScore || 0,
+          damage_taken: p.totalDamageTaken || 0,
+          team_total_damage: pTeamTotals.teamDamageDealt,
+          team_total_gold: pTeamTotals.teamGoldEarned,
+          team_total_kills: pTeamTotals.teamKills,
+          team_total_deaths: pTeamTotals.teamDeaths,
         };
 
         if (isAlly) {
@@ -179,8 +207,8 @@ export async function POST(request: NextRequest) {
         match_type: 'flex',
         our_side: ourTeamId === 100 ? 'Blue' : 'Red',
         we_won: targetPlayer.win,
-        duration_minutes: Math.floor(matchData.info.gameDuration / 60),
-        duration_seconds: matchData.info.gameDuration % 60,
+        duration_minutes: durationMinutes,
+        duration_seconds: durationSeconds,
         our_bans,
         enemy_bans,
         our_participants,

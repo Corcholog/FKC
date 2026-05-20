@@ -3,6 +3,8 @@ import { useState, useMemo } from 'react'
 import Image from 'next/image'
 import PlayerLinks from '@/app/components/PlayerLinks'
 import { getChampionIcon } from '@/lib/champions'
+import PlayerRadarChart from '@/app/components/PlayerRadarChart'
+import { calculateRadarStats, determineArchetype, getDynamicTraits, calculateBadges, normalizeRole } from '@/lib/archetypes'
 
 // Color Helpers
 const getColorWR = (wr: number) => {
@@ -81,6 +83,7 @@ export default function StatsContainer({ players, teamPerformances, soloqPerform
   const [matchType, setMatchType] = useState<MatchTypeFilter>('all');
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(players.length > 0 ? players[0].id : null);
   const [championSearch, setChampionSearch] = useState('');
+  const [profileTab, setProfileTab] = useState<'champions' | 'profile'>('champions');
 
   // Helper for image paths
   const getPlayerImageName = (name: string) => name.toLowerCase().replace(/\s+/g, '');
@@ -314,6 +317,101 @@ export default function StatsContainer({ players, teamPerformances, soloqPerform
     return finalStats;
   }, [selectedPlayerId, filteredTeamPerformances, filteredSoloqPerformances, championSearch]);
 
+  const radarStatsAndProfile = useMemo(() => {
+    if (!selectedPlayerId) return null;
+
+    const tMatches = filteredTeamPerformances.filter(p => p.player_id === selectedPlayerId);
+    const sMatches = filteredSoloqPerformances.filter(p => p.player_id === selectedPlayerId);
+
+    const statsList: any[] = [];
+
+    tMatches.forEach((row: any) => {
+      const durMin = row.matches?.duration_minutes || 20;
+      const durSec = row.matches?.duration_seconds || 0;
+      const durationMinutes = durMin + (durSec / 60);
+
+      statsList.push({
+        durationMinutes,
+        kills: row.kills || 0,
+        deaths: row.deaths || 0,
+        assists: row.assists || 0,
+        cs: row.cs || 0,
+        score: row.score || 50,
+        damageDealt: row.damage_dealt || 0,
+        goldEarned: row.gold_earned || 0,
+        visionScore: row.vision_score || 0,
+        damageTaken: row.damage_taken || 0,
+        role: row.role || 'top',
+        win: row.matches?.we_won || false,
+        team_total_damage: row.team_total_damage || 0,
+        team_total_gold: row.team_total_gold || 0,
+        team_total_kills: row.team_total_kills || 0,
+        team_total_deaths: row.team_total_deaths || 0,
+      });
+    });
+
+    sMatches.forEach((row: any) => {
+      const durMin = row.duration_minutes || 20;
+      const durSec = row.duration_seconds || 0;
+      const durationMinutes = durMin + (durSec / 60);
+
+      statsList.push({
+        durationMinutes,
+        kills: row.kills || 0,
+        deaths: row.deaths || 0,
+        assists: row.assists || 0,
+        cs: row.cs || 0,
+        score: 50,
+        damageDealt: row.damage_dealt || 0,
+        goldEarned: row.gold_earned || 0,
+        visionScore: row.vision_score || 0,
+        damageTaken: row.damage_taken || 0,
+        role: row.role || 'top',
+        win: row.win || false,
+        team_total_damage: row.team_total_damage || 0,
+        team_total_gold: row.team_total_gold || 0,
+        team_total_kills: row.team_total_kills || 0,
+        team_total_deaths: row.team_total_deaths || 0,
+      });
+    });
+
+    if (statsList.length === 0) return null;
+
+    const role = players.find(p => p.id === selectedPlayerId)?.role || 'top';
+    const stats = calculateRadarStats(statsList);
+    const profile = determineArchetype(stats, role);
+    const dynamicTraits = getDynamicTraits(statsList, stats, role);
+
+    // Compute averages for summary view
+    const totalGames = statsList.length;
+    const avgKills = statsList.reduce((sum, p) => sum + p.kills, 0) / totalGames;
+    const avgDeaths = statsList.reduce((sum, p) => sum + p.deaths, 0) / totalGames;
+    const avgAssists = statsList.reduce((sum, p) => sum + p.assists, 0) / totalGames;
+    const avgCs = statsList.reduce((sum, p) => sum + p.cs, 0) / totalGames;
+    const avgCspm = statsList.reduce((sum, p) => sum + (p.cs / (p.durationMinutes || 20)), 0) / totalGames;
+    const avgDpm = statsList.reduce((sum, p) => sum + ((p.damageDealt || 0) / (p.durationMinutes || 20)), 0) / totalGames;
+    const avgGpm = statsList.reduce((sum, p) => sum + ((p.goldEarned || 0) / (p.durationMinutes || 20)), 0) / totalGames;
+    const avgVspm = statsList.reduce((sum, p) => sum + ((p.visionScore || 0) / (p.durationMinutes || 20)), 0) / totalGames;
+
+    return {
+      stats,
+      profile,
+      dynamicTraits,
+      badges: calculateBadges(statsList, stats, role),
+      averages: {
+        kills: avgKills.toFixed(1),
+        deaths: avgDeaths.toFixed(1),
+        assists: avgAssists.toFixed(1),
+        kda: avgDeaths === 0 ? (avgKills + avgAssists).toFixed(2) : ((avgKills + avgAssists) / avgDeaths).toFixed(2),
+        cs: Math.round(avgCs),
+        cspm: avgCspm.toFixed(1),
+        dpm: Math.round(avgDpm),
+        gpm: Math.round(avgGpm),
+        vspm: avgVspm.toFixed(2),
+      }
+    };
+  }, [selectedPlayerId, filteredTeamPerformances, filteredSoloqPerformances, players]);
+
   const activePlayer = players.find(p => p.id === selectedPlayerId);
 
   return (
@@ -484,99 +582,269 @@ export default function StatsContainer({ players, teamPerformances, soloqPerform
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/3"></div>
 
                 <div className="flex flex-col md:flex-row justify-between items-center mb-6 relative z-10 border-b border-slate-200 dark:border-slate-800 pb-4">
-                  <div>
+                  <div className="flex flex-col gap-2">
                     <h2 className="text-lg font-black text-foreground uppercase tracking-widest">
                       {mode === 'team' ? 'Team Performance' : mode === 'soloq' ? 'Solo Queue Performance' : 'Combined Performance'}
                       {matchType !== 'all' && mode !== 'soloq' ? ` • ${matchType.toUpperCase()}` : ''}
                     </h2>
+                    {/* Inner Tabs for Champion Pool vs Performance Profile */}
+                    <div className="flex gap-4 mt-2">
+                      <button
+                        onClick={() => setProfileTab('champions')}
+                        className={`text-xs font-bold uppercase tracking-wider transition-all pb-1 border-b-2 ${profileTab === 'champions'
+                          ? 'border-yellow-500 text-yellow-600 dark:text-yellow-400'
+                          : 'border-transparent text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Champion Pool
+                      </button>
+                      <button
+                        onClick={() => setProfileTab('profile')}
+                        className={`text-xs font-bold uppercase tracking-wider transition-all pb-1 border-b-2 ${profileTab === 'profile'
+                          ? 'border-yellow-500 text-yellow-600 dark:text-yellow-400'
+                          : 'border-transparent text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Performance Profile
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="mt-4 md:mt-0 relative w-full md:w-64">
-                    <input
-                      type="text"
-                      placeholder="Search champion..."
-                      value={championSearch}
-                      onChange={(e) => setChampionSearch(e.target.value)}
-                      className="w-full bg-slate-50 dark:bg-[#0a0f18] border border-slate-200 dark:border-slate-700 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-foreground"
-                    />
-                    {championSearch && (
-                      <button
-                        onClick={() => setChampionSearch('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
+                  {profileTab === 'champions' && (
+                    <div className="mt-4 md:mt-0 relative w-full md:w-64">
+                      <input
+                        type="text"
+                        placeholder="Search champion..."
+                        value={championSearch}
+                        onChange={(e) => setChampionSearch(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0f18] border border-slate-200 dark:border-slate-700 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-foreground"
+                      />
+                      {championSearch && (
+                        <button
+                          onClick={() => setChampionSearch('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {!selectedPlayerStats || selectedPlayerStats.length === 0 ? (
-                  <div className="text-center py-20 text-slate-500 font-medium text-lg bg-slate-50/50 dark:bg-black/20 rounded-xl">
-                    No games match the current filters for {activePlayer.name}.
-                  </div>
+                {profileTab === 'profile' ? (
+                  radarStatsAndProfile ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start relative z-10 py-4">
+                      {/* Left side: Radar chart */}
+                      <div className="flex flex-col items-center justify-center bg-slate-900/40 dark:bg-black/20 p-6 rounded-2xl border border-slate-200/5 dark:border-white/5">
+                        <h3 className="text-sm font-black text-[#c8aa6e] uppercase tracking-widest mb-6">Radar Analysis</h3>
+                        <PlayerRadarChart stats={radarStatsAndProfile.stats} role={activePlayer.role} />
+                      </div>
+
+                      {/* Right side: Archetype details & stats */}
+                      <div className={`p-6 rounded-2xl border ${radarStatsAndProfile.profile.badgeColor} ${radarStatsAndProfile.profile.glowColor} backdrop-blur-md flex flex-col justify-between h-full`}>
+                        <div>
+                          <div className="flex justify-between items-center mb-4">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Class Type</span>
+                            <span className={`px-3 py-1 text-xs font-black uppercase tracking-wider rounded border ${radarStatsAndProfile.profile.badgeColor}`}>
+                              {radarStatsAndProfile.profile.name}
+                            </span>
+                          </div>
+
+                          <h3 className="text-3xl font-black text-foreground uppercase tracking-wide mb-3">
+                            {activePlayer.name}
+                          </h3>
+                          
+                          <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-6 font-medium">
+                            {radarStatsAndProfile.profile.description}
+                          </p>
+
+                          <div className="mb-6 font-sans">
+                            <h4 className="text-xs font-black uppercase tracking-widest text-[#c8aa6e] mb-3">Key Playstyle Traits</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {radarStatsAndProfile.dynamicTraits.map((trait: any, i: number) => (
+                                <div 
+                                  key={i} 
+                                  className="px-3 py-1 bg-slate-900/30 dark:bg-black/30 border border-slate-200/10 dark:border-white/10 text-xs font-bold text-slate-300 dark:text-slate-200 rounded-full relative group cursor-pointer transition-all duration-300 hover:border-[#c8aa6e]/30 hover:scale-105 select-none"
+                                >
+                                  <span>✦ {trait.name}</span>
+
+                                  {/* Tooltip popup */}
+                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-[#091428] border border-[#c8aa6e]/30 rounded-lg shadow-2xl opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 pointer-events-none z-50 text-left">
+                                    <div className="font-black text-xs uppercase mb-1 text-[#c8aa6e]">
+                                      {trait.name}
+                                    </div>
+                                    <p className="text-[11px] text-slate-300 font-medium leading-relaxed mb-2">
+                                      {trait.description}
+                                    </p>
+                                    <div className="text-[9px] font-mono text-[#c8aa6e]/80 border-t border-slate-200/10 pt-1">
+                                      Formula: {trait.formula}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Playstyle Badges */}
+                          <div className="mb-6 font-sans">
+                            <h4 className="text-xs font-black uppercase tracking-widest text-[#c8aa6e] mb-3">Playstyle Badges</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {radarStatsAndProfile.badges.length > 0 ? (
+                                radarStatsAndProfile.badges.map((badge, i) => (
+                                  <div
+                                    key={i}
+                                    className={`px-3 py-1.5 rounded-lg border text-xs font-black flex items-center gap-1.5 select-none transition-all duration-300 hover:scale-105 cursor-pointer relative group ${
+                                      badge.type === 'positive'
+                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+                                        : 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:shadow-[0_0_12px_rgba(239,68,68,0.3)]'
+                                    }`}
+                                  >
+                                    <span>{badge.icon}</span>
+                                    <span>{badge.name}</span>
+
+                                    {/* Tooltip popup */}
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-[#091428] border border-[#c8aa6e]/30 rounded-lg shadow-2xl opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 pointer-events-none z-50 text-left">
+                                      <div className={`font-black text-xs uppercase mb-1 ${badge.type === 'positive' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {badge.name} ({badge.type})
+                                      </div>
+                                      <p className="text-[11px] text-slate-300 font-medium leading-relaxed mb-2">
+                                        {badge.description}
+                                      </p>
+                                      <div className="text-[9px] font-mono text-[#c8aa6e]/80 border-t border-slate-200/10 pt-1">
+                                        Formula: {badge.formula}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-xs text-slate-500 italic">No special playstyle badges detected. Keep playing!</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Summary Metrics */}
+                        <div className="border-t border-slate-200/10 dark:border-white/10 pt-6 mt-6">
+                          <h4 className="text-xs font-black uppercase tracking-widest text-[#c8aa6e] mb-4">Normalized Performance Metrics</h4>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                            <div className="bg-slate-900/20 dark:bg-black/20 p-3 rounded-lg border border-slate-200/5 dark:border-white/5">
+                              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Avg KDA</div>
+                              <div className="text-lg font-black text-foreground mt-0.5">
+                                {radarStatsAndProfile.averages.kda} <span className="text-xs font-medium text-slate-500 dark:text-slate-400">({radarStatsAndProfile.averages.kills} / {radarStatsAndProfile.averages.deaths} / {radarStatsAndProfile.averages.assists})</span>
+                              </div>
+                            </div>
+                            <div className="bg-slate-900/20 dark:bg-black/20 p-3 rounded-lg border border-slate-200/5 dark:border-white/5">
+                              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">DPM</div>
+                              <div className="text-lg font-black text-foreground mt-0.5">
+                                {radarStatsAndProfile.averages.dpm || '-'}
+                              </div>
+                            </div>
+                            <div className="bg-slate-900/20 dark:bg-black/20 p-3 rounded-lg border border-slate-200/5 dark:border-white/5">
+                              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">GPM</div>
+                              <div className="text-lg font-black text-foreground mt-0.5">
+                                {radarStatsAndProfile.averages.gpm || '-'}
+                              </div>
+                            </div>
+                            {normalizeRole(activePlayer?.role || '').toLowerCase() !== 'support' && (
+                              <>
+                                <div className="bg-slate-900/20 dark:bg-black/20 p-3 rounded-lg border border-slate-200/5 dark:border-white/5">
+                                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">CS / Min</div>
+                                  <div className="text-lg font-black text-foreground mt-0.5">
+                                    {radarStatsAndProfile.averages.cspm || '-'}
+                                  </div>
+                                </div>
+                                <div className="bg-slate-900/20 dark:bg-black/20 p-3 rounded-lg border border-slate-200/5 dark:border-white/5">
+                                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Avg CS/Game</div>
+                                  <div className="text-lg font-black text-foreground mt-0.5">
+                                    {radarStatsAndProfile.averages.cs || '-'}
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                            <div className="bg-slate-900/20 dark:bg-black/20 p-3 rounded-lg border border-slate-200/5 dark:border-white/5">
+                              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Vision / Min</div>
+                              <div className="text-lg font-black text-foreground mt-0.5">
+                                {radarStatsAndProfile.averages.vspm || '-'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 text-slate-500 font-medium text-lg bg-slate-50/50 dark:bg-black/20 rounded-xl">
+                      Not enough performance data to compute profile.
+                    </div>
+                  )
                 ) : (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-[#322814] shadow-sm">
-                    <table className="w-full text-left border-collapse table-fixed">
-                      <thead>
-                        <tr className="bg-slate-100 dark:bg-[#0a0f18] border-b border-slate-200 dark:border-[#322814] text-slate-600 dark:text-slate-400 text-xs uppercase tracking-wider">
-                          <th className="p-4 font-black w-[20%]">Champion</th>
-                          <th className="p-4 font-black text-center w-[12%]">Games</th>
-                          <th className="p-4 font-black text-center w-[15%]">W - L</th>
-                          <th className="p-4 font-black text-center w-[12%]">Winrate</th>
-                          <th className="p-4 font-black text-center w-[21%]">K / D / A</th>
-                          <th className="p-4 font-black text-center w-[10%]">KDA Ratio</th>
-                          <th className="p-4 font-black text-center w-[10%]">CS/Min</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-[#322814]">
-                        {selectedPlayerStats.map((stat: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-[#1e2328]/50 transition-colors group">
-                            <td className="p-4 flex items-center gap-4">
-                              <Image
-                                src={getChampionIcon(stat.championName) || '/placeholder-icon.png'}
-                                alt={stat.championName}
-                                width={40} height={40}
-                                className="w-10 h-10 border border-slate-200 dark:border-slate-700 shadow-sm rounded-sm group-hover:scale-110 transition-transform"
-                              />
-                              <span className="font-bold text-foreground text-sm tracking-wide">{stat.championName}</span>
-                            </td>
-
-                            <td className="p-4 text-center font-black text-lg text-yellow-600 dark:text-yellow-500">
-                              {stat.games}
-                            </td>
-
-                            <td className="p-4 text-center text-slate-500 dark:text-slate-400 font-semibold text-xs tracking-wider">
-                              <span className="text-emerald-500 dark:text-emerald-400">{stat.wins}W</span>
-                              <span className="mx-2 text-slate-300 dark:text-slate-700">-</span>
-                              <span className="text-rose-500 dark:text-rose-400">{stat.losses}L</span>
-                            </td>
-
-                            <td className="p-4 text-center">
-                              <span className={`font-black text-lg ${getColorWR(stat.winrate)}`}>
-                                {stat.winrate}%
-                              </span>
-                            </td>
-
-                            <td className="p-4 text-center text-slate-600 dark:text-slate-300 font-bold text-sm">
-                              {stat.kills} <span className="text-slate-300 dark:text-slate-600 mx-1">/</span> <span className="text-rose-400">{stat.deaths}</span> <span className="text-slate-300 dark:text-slate-600 mx-1">/</span> {stat.assists}
-                            </td>
-
-                            <td className="p-4 text-center">
-                              <span className={`font-black text-base ${getColorKDA(stat.kda)}`}>
-                                {stat.kda}
-                              </span>
-                            </td>
-
-                            <td className="p-4 text-center">
-                              <span className={`font-black text-base ${getColorCS(stat.csPerMin, activePlayer.role)}`}>
-                                {stat.csPerMin > 0 ? stat.csPerMin : '-'}
-                              </span>
-                            </td>
+                  !selectedPlayerStats || selectedPlayerStats.length === 0 ? (
+                    <div className="text-center py-20 text-slate-500 font-medium text-lg bg-slate-50/50 dark:bg-black/20 rounded-xl">
+                      No games match the current filters for {activePlayer.name}.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-[#322814] shadow-sm">
+                      <table className="w-full text-left border-collapse table-fixed">
+                        <thead>
+                          <tr className="bg-slate-100 dark:bg-[#0a0f18] border-b border-slate-200 dark:border-[#322814] text-slate-600 dark:text-slate-400 text-xs uppercase tracking-wider">
+                            <th className="p-4 font-black w-[20%]">Champion</th>
+                            <th className="p-4 font-black text-center w-[12%]">Games</th>
+                            <th className="p-4 font-black text-center w-[15%]">W - L</th>
+                            <th className="p-4 font-black text-center w-[12%]">Winrate</th>
+                            <th className="p-4 font-black text-center w-[21%]">K / D / A</th>
+                            <th className="p-4 font-black text-center w-[10%]">KDA Ratio</th>
+                            <th className="p-4 font-black text-center w-[10%]">CS/Min</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-[#322814]">
+                          {selectedPlayerStats.map((stat: any, idx: number) => (
+                            <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-[#1e2328]/50 transition-colors group">
+                              <td className="p-4 flex items-center gap-4">
+                                <Image
+                                  src={getChampionIcon(stat.championName) || '/placeholder-icon.png'}
+                                  alt={stat.championName}
+                                  width={40} height={40}
+                                  className="w-10 h-10 border border-slate-200 dark:border-slate-700 shadow-sm rounded-sm group-hover:scale-110 transition-transform"
+                                />
+                                <span className="font-bold text-foreground text-sm tracking-wide">{stat.championName}</span>
+                              </td>
+
+                              <td className="p-4 text-center font-black text-lg text-yellow-600 dark:text-yellow-500">
+                                {stat.games}
+                              </td>
+
+                              <td className="p-4 text-center text-slate-500 dark:text-slate-400 font-semibold text-xs tracking-wider">
+                                <span className="text-emerald-500 dark:text-emerald-400">{stat.wins}W</span>
+                                <span className="mx-2 text-slate-300 dark:text-slate-700">-</span>
+                                <span className="text-rose-500 dark:text-rose-400">{stat.losses}L</span>
+                              </td>
+
+                              <td className="p-4 text-center">
+                                <span className={`font-black text-lg ${getColorWR(stat.winrate)}`}>
+                                  {stat.winrate}%
+                                </span>
+                              </td>
+
+                              <td className="p-4 text-center text-slate-600 dark:text-slate-300 font-bold text-sm">
+                                {stat.kills} <span className="text-slate-300 dark:text-slate-600 mx-1">/</span> <span className="text-rose-400">{stat.deaths}</span> <span className="text-slate-300 dark:text-slate-600 mx-1">/</span> {stat.assists}
+                              </td>
+
+                              <td className="p-4 text-center">
+                                <span className={`font-black text-base ${getColorKDA(stat.kda)}`}>
+                                  {stat.kda}
+                                </span>
+                              </td>
+
+                              <td className="p-4 text-center">
+                                <span className={`font-black text-base ${getColorCS(stat.csPerMin, activePlayer.role)}`}>
+                                  {stat.csPerMin > 0 ? stat.csPerMin : '-'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
                 )}
               </div>
             ) : (

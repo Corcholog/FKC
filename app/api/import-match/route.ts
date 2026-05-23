@@ -52,6 +52,11 @@ export async function POST(request: NextRequest) {
     if (!matchDataRes.ok) {
       if (matchDataRes.status === 403) return NextResponse.json({ error: "Riot API Key is invalid or expired. Please renew it at developer.riotgames.com" }, { status: 403 });
       if (matchDataRes.status === 429) return NextResponse.json({ error: "Rate limit getting Match" }, { status: 429 });
+      if (matchDataRes.status === 404) {
+        return NextResponse.json({ 
+          error: "Match not found (Status: 404). Note: Riot's public API does not support fetching standard custom games or scrims. Please record this match using the Manual Entry tab instead." 
+        }, { status: 404 });
+      }
       return NextResponse.json({ error: `Match not found. Ensure ID is correct. Status: ${matchDataRes.status}` }, { status: matchDataRes.status });
     }
 

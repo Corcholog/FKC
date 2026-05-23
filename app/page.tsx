@@ -4,6 +4,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import Navbar from '@/app/components/Navbar'
 import DurationChart from '@/app/components/DurationChart'
+import SidePerformanceChart from '@/app/components/SidePerformanceChart'
+import RoleDistributionChart from '@/app/components/RoleDistributionChart'
 import MatchCard from '@/app/components/MatchCard'
 import PlayerLinks from '@/app/components/PlayerLinks'
 import RosterSection from '@/app/components/RosterSection'
@@ -66,7 +68,23 @@ export default async function Home() {
   // Fetch all matches for overall statistics
   const { data: allMatchesData } = await supabase
     .from('matches')
-    .select('id, we_won, match_type, duration_minutes')
+    .select(`
+      id,
+      we_won,
+      match_type,
+      duration_minutes,
+      duration_seconds,
+      our_side,
+      ally_participants (
+        role,
+        kills,
+        deaths,
+        assists,
+        damage_dealt,
+        gold_earned,
+        cs
+      )
+    `)
   const allMatches = allMatchesData || []
 
   // Fetch pre-calculated roster stats
@@ -350,9 +368,11 @@ export default async function Home() {
               )}
 
             {/* Charts Row */}
-            <div className="flex flex-wrap justify-center gap-6 pt-8 mt-2">
-              <DurationChart title="Overall Winrate by Duration" matches={allMatches} />
-              <DurationChart title="Competitive Winrate by Duration" matches={competitiveMatches} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 mt-2 max-w-5xl mx-auto w-full justify-items-center animate-fade-in">
+              <SidePerformanceChart matches={allMatches} />
+              <RoleDistributionChart matches={allMatches} />
+              <DurationChart title="Overall WR by Duration" matches={allMatches} />
+              <DurationChart title="Competitive WR by Duration" matches={competitiveMatches} />
             </div>
           </div>
         </div>

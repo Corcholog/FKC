@@ -63,27 +63,161 @@ const ROLE_ORDER = ['top', 'jungle', 'mid', 'adc', 'support']
 interface RosterSectionProps {
   playerList: any[];
   rosterStatsCache: any[];
+  teamPerformances: any[];
+  soloqPerformances: any[];
 }
 
 type Mode = 'team' | 'soloq' | 'mixed';
 
-export default function RosterSection({ playerList, rosterStatsCache }: RosterSectionProps) {
+export default function RosterSection({ playerList, rosterStatsCache, teamPerformances, soloqPerformances }: RosterSectionProps) {
   const [mode, setMode] = useState<Mode>('team');
+  const [gameLimit, setGameLimit] = useState<'all' | 'last20'>('all');
 
   const rosterStats = useMemo(() => {
-    if (!rosterStatsCache || rosterStatsCache.length === 0) return [];
-    
-    // Find the cached stats for the selected mode
-    const cacheRow = rosterStatsCache.find((c: any) => c.mode === mode);
-    
-    // If we have cached data, use it directly (it's already sorted and parsed)
-    if (cacheRow && cacheRow.data) {
-      return cacheRow.data;
+    if (gameLimit === 'all') {
+      if (!rosterStatsCache || rosterStatsCache.length === 0) return [];
+      const cacheRow = rosterStatsCache.find((c: any) => c.mode === mode);
+      if (cacheRow && cacheRow.data) {
+        return cacheRow.data;
+      }
+      return [];
     }
-    
-    // Fallback: If cache is empty, return empty array
-    return [];
-  }, [rosterStatsCache, mode]);
+
+    // Dynamic 'last20' calculations
+    const matchPerformances: Record<number, any[]> = {}
+    const activeTeamPerformances = teamPerformances || [];
+    activeTeamPerformances.forEach((row: any) => {
+      const matchId = row.matches?.id
+      if (matchId) {
+        if (!matchPerformances[matchId]) matchPerformances[matchId] = []
+        matchPerformances[matchId].push(row)
+      }
+    })
+
+    const playerMvpIntCounts: Record<number, { mvpCount: number; intMvpCount: number }> = {}
+    Object.values(matchPerformances).forEach(playersInMatch => {
+      const scoredPlayers = playersInMatch.filter((p: any) => typeof p.score === 'number' && p.score > 0)
+      if (scoredPlayers.length < 2) return
+
+      const sorted = [...scoredPlayers].sort((a, b) => b.score - a.score)
+      const mvpPlayerId = sorted[0].player_id
+      const intPlayerId = sorted[sorted.length - 1].player_id
+
+      if (mvpPlayerId) {
+        playerMvpIntCounts[mvpPlayerId] = playerMvpIntCounts[mvpPlayerId] || { mvpCount: 0, intMvpCount: 0 }
+        playerMvpIntCounts[mvpPlayerId].mvpCount++
+      }
+      if (intPlayerId && intPlayerId !== mvpPlayerId) {
+        playerMvpIntCounts[intPlayerId] = playerMvpIntCounts[intPlayerId] || { mvpCount: 0, intMvpCount: 0 }
+        playerMvpIntCounts[intPlayerId].intMvpCount++
+      }
+    })
+
+    const stats = (playerList || []).map((player: any) => {
+      let tMatches = (teamPerformances || []).filter((p: any) => p.player_id === player.id);
+      let sMatches = (soloqPerformances || []).filter((p: any) => p.player_id === player.id);
+
+      // Sort matches by date descending (newest first)
+      tMatches.sort((a, b) => new Date(b.matches?.date || 0).getTime() - new Date(a.matches?.date || 0).getTime());
+      sMatches.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+      if (mode === 'team') {
+        tMatches = tMatches.slice(0, 20);
+        sMatches = [];
+      } else if (mode === 'soloq') {
+        sMatches = sMatches.slice(0, 20);
+        tMatches = [];
+      } else if (mode === 'mixed') {
+        const combined = [
+          ...tMatches.map(m => ({ ...m, unifiedDate: m.matches?.date })),
+          ...sMatches.map(m => ({ ...m, unifiedDate: m.date }))
+        ];
+        combined.sort((a, b) => new Date(b.unifiedDate || 0).getTime() - new Date(a.unifiedDate || 0).getTime());
+        const sliced = combined.slice(0, 20);
+        tMatches = sliced.filter(m => m.matches !== undefined);
+        sMatches = sliced.filter(m => m.matches === undefined);
+      }
+
+      let wins = 0;
+      let kills = 0;
+      let deaths = 0;
+      let assists = 0;
+      let totalScore = 0;
+      const mvpCount = playerMvpIntCounts[player.id]?.mvpCount || 0;
+      const intMvpCount = playerMvpIntCounts[player.id]?.intMvpCount || 0;
+      const champStats: Record<string, { games: number, wins: number, kills: number, deaths: number, assists: number }> = {};
+
+      let gamesWithScore = 0;
+      let totalGames = 0;
+
+      const processMatch = (champion: string, win: boolean, k: number, d: number, a: number, score?: number) => {
+        totalGames++;
+        if (win) wins++;
+        kills += k || 0;
+        deaths += d || 0;
+        assists += a || 0;
+
+        if (typeof score === 'number' && score > 0) {
+          totalScore += score;
+          gamesWithScore++;
+        }
+
+        if (!champStats[champion]) {
+          champStats[champion] = { games: 0, wins: 0, kills: 0, deaths: 0, assists: 0 };
+        }
+        champStats[champion].games++;
+        if (win) champStats[champion].wins++;
+        champStats[champion].kills += k || 0;
+        champStats[champion].deaths += d || 0;
+        champStats[champion].assists += a || 0;
+      };
+
+      tMatches.forEach((row: any) => {
+        processMatch(row.champion, row.matches?.we_won, row.kills, row.deaths, row.assists, row.score);
+      });
+
+      sMatches.forEach((row: any) => {
+        processMatch(row.champion, row.win, row.kills, row.deaths, row.assists);
+      });
+
+      const winrate = totalGames > 0 ? (wins / totalGames) * 100 : 0;
+      const overallKda = deaths === 0 ? (kills + assists) : (kills + assists) / deaths;
+      const avgScore = gamesWithScore > 0 ? totalScore / gamesWithScore : 0;
+
+      const topChampions = Object.entries(champStats)
+        .map(([name, champData]) => {
+          const champWinrate = (champData.wins / champData.games) * 100;
+          const champKda = champData.deaths === 0
+            ? (champData.kills + champData.assists)
+            : (champData.kills + champData.assists) / champData.deaths;
+
+          return {
+            name,
+            games: champData.games,
+            winrate: champWinrate,
+            kda: isNaN(champKda) ? 0 : Number(champKda.toFixed(2))
+          };
+        })
+        .sort((a, b) => b.games - a.games)
+        .slice(0, 5);
+
+      return {
+        ...player,
+        totalGames,
+        wins,
+        losses: totalGames - wins,
+        winrate: Number(winrate.toFixed(1)),
+        overallKda: Number(overallKda.toFixed(2)),
+        avgScore: Number(avgScore.toFixed(1)),
+        mvpCount,
+        intMvpCount,
+        topChampions
+      };
+    });
+
+    stats.sort((a, b) => ROLE_ORDER.indexOf(a.role.toLowerCase()) - ROLE_ORDER.indexOf(b.role.toLowerCase()));
+    return stats;
+  }, [rosterStatsCache, teamPerformances, soloqPerformances, mode, gameLimit, playerList]);
 
   // If cache is empty, fall back to showing basic player list
   const displayStats = rosterStats.length > 0
@@ -108,14 +242,15 @@ export default function RosterSection({ playerList, rosterStatsCache }: RosterSe
     <div className="max-w-7xl mx-auto px-6 py-16">
       <h2 className="text-4xl font-bold mb-6 text-center">Our Roster</h2>
 
-      {/* Mode Toggle */}
-      <div className="flex justify-center mb-10">
-        <div className="inline-flex bg-card border border-blue-200 dark:border-[#322814] p-1 shadow-sm">
+      {/* Mode & Game Scope Toggle */}
+      <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-10">
+        {/* Mode Toggle */}
+        <div className="inline-flex bg-card border border-blue-200 dark:border-[#322814] p-1 shadow-sm rounded-lg">
           {(['team', 'soloq', 'mixed'] as Mode[]).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`px-6 py-2 text-sm font-bold transition-all capitalize ${mode === m
+              className={`px-6 py-2 text-sm font-bold transition-all capitalize rounded-md ${mode === m
                   ? 'bg-[#f1c40f] text-slate-900 shadow-md border border-[#f39c12]'
                   : 'text-slate-600 dark:text-slate-300 hover:text-[#f39c12]'
                 }`}
@@ -123,6 +258,28 @@ export default function RosterSection({ playerList, rosterStatsCache }: RosterSe
               {m === 'team' ? 'Team Stats' : m === 'soloq' ? 'SoloQ Stats' : 'Mixed Stats'}
             </button>
           ))}
+        </div>
+
+        {/* Game Scope Toggle */}
+        <div className="inline-flex bg-card border border-blue-200 dark:border-[#322814] p-1 shadow-sm rounded-lg">
+          <button
+            onClick={() => setGameLimit('all')}
+            className={`px-4 py-2 text-sm font-bold transition-all rounded-md ${gameLimit === 'all'
+                ? 'bg-[#f1c40f] text-slate-900 shadow-md border border-[#f39c12]'
+                : 'text-slate-600 dark:text-slate-300 hover:text-[#f39c12]'
+              }`}
+          >
+            All Games
+          </button>
+          <button
+            onClick={() => setGameLimit('last20')}
+            className={`px-4 py-2 text-sm font-bold transition-all rounded-md ${gameLimit === 'last20'
+                ? 'bg-[#f1c40f] text-[#0f1923] shadow-md border border-[#f39c12]'
+                : 'text-slate-600 dark:text-slate-300 hover:text-[#f39c12]'
+              }`}
+          >
+            Last 20 Games
+          </button>
         </div>
       </div>
 

@@ -93,6 +93,25 @@ export default async function Home() {
     .select('*')
   const rosterStatsCache = rosterCacheData || []
 
+  // Fetch raw performance data for dynamic client-side filtering (e.g. Last 20 Games)
+  const { data: teamPerformancesData } = await supabase
+    .from('ally_participants')
+    .select(`
+      id,
+      player_id,
+      match_id,
+      champion,
+      kills,
+      deaths,
+      assists,
+      score,
+      matches!inner (id, date, we_won)
+    `)
+  const teamPerformances = teamPerformancesData || []
+
+  const { data: soloqPerformancesData } = await supabase.from('soloq_matches').select('*')
+  const soloqPerformances = soloqPerformancesData || []
+
   // If cache is empty or contains incomplete rows (missing picks or MVP counts), compute roster stats on the server
   let rosterStatsComputed = rosterStatsCache
   const cacheMissingData = !rosterStatsCache || rosterStatsCache.length === 0 || rosterStatsCache.some((r: any) => {
@@ -101,22 +120,6 @@ export default async function Home() {
 
   if (cacheMissingData && (playerList && playerList.length > 0)) {
     const ROLE_ORDER = ['top', 'jungle', 'mid', 'adc', 'support']
-
-    const { data: teamPerformances } = await supabase
-      .from('ally_participants')
-      .select(`
-        id,
-        player_id,
-        match_id,
-        champion,
-        kills,
-        deaths,
-        assists,
-        score,
-        matches!inner (id, we_won)
-      `)
-
-    const { data: soloqPerformances } = await supabase.from('soloq_matches').select('*')
 
     const playerMvpIntCounts: Record<number, { mvpCount: number; intMvpCount: number }> = {}
     const matchGroups: Record<number, any[]> = {}
@@ -308,6 +311,8 @@ export default async function Home() {
       <RosterSection
         playerList={playerList}
         rosterStatsCache={rosterStatsCache}
+        teamPerformances={teamPerformances}
+        soloqPerformances={soloqPerformances}
       />
 
       {/* Team Performance */}

@@ -33,7 +33,7 @@ export default async function StatsPage() {
       team_total_gold,
       team_total_kills,
       team_total_deaths,
-      matches!inner (id, we_won, match_type, duration_minutes, duration_seconds)
+      matches!inner (id, date, we_won, match_type, duration_minutes, duration_seconds)
     `)
   
   const teamPerformances = teamPerformancesData || []

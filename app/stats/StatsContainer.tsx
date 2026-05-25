@@ -84,6 +84,7 @@ export default function StatsContainer({ players, teamPerformances, soloqPerform
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(players.length > 0 ? players[0].id : null);
   const [championSearch, setChampionSearch] = useState('');
   const [profileTab, setProfileTab] = useState<'champions' | 'profile'>('champions');
+  const [gameLimit, setGameLimit] = useState<'all' | 'last20'>('all');
 
   // Helper for image paths
   const getPlayerImageName = (name: string) => name.toLowerCase().replace(/\s+/g, '');
@@ -145,8 +146,29 @@ export default function StatsContainer({ players, teamPerformances, soloqPerform
     })
 
     const stats = players.map(player => {
-      const tMatches = filteredTeamPerformances.filter(p => p.player_id === player.id);
-      const sMatches = filteredSoloqPerformances.filter(p => p.player_id === player.id);
+      let tMatches = filteredTeamPerformances.filter(p => p.player_id === player.id);
+      let sMatches = filteredSoloqPerformances.filter(p => p.player_id === player.id);
+
+      // Sort matches by date descending (newest first)
+      tMatches.sort((a, b) => new Date(b.matches?.date || 0).getTime() - new Date(a.matches?.date || 0).getTime());
+      sMatches.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+      if (gameLimit === 'last20') {
+        if (mode === 'team') {
+          tMatches = tMatches.slice(0, 20);
+        } else if (mode === 'soloq') {
+          sMatches = sMatches.slice(0, 20);
+        } else if (mode === 'mixed') {
+          const combined = [
+            ...tMatches.map(m => ({ ...m, unifiedDate: m.matches?.date })),
+            ...sMatches.map(m => ({ ...m, unifiedDate: m.date }))
+          ];
+          combined.sort((a, b) => new Date(b.unifiedDate || 0).getTime() - new Date(a.unifiedDate || 0).getTime());
+          const sliced = combined.slice(0, 20);
+          tMatches = sliced.filter(m => m.matches !== undefined);
+          sMatches = sliced.filter(m => m.matches === undefined);
+        }
+      }
 
       let wins = 0;
       let kills = 0;
@@ -230,14 +252,34 @@ export default function StatsContainer({ players, teamPerformances, soloqPerform
 
     stats.sort((a, b) => ROLE_ORDER.indexOf(a.role.toLowerCase()) - ROLE_ORDER.indexOf(b.role.toLowerCase()));
     return stats;
-  }, [players, filteredTeamPerformances, filteredSoloqPerformances]);
+  }, [players, filteredTeamPerformances, filteredSoloqPerformances, gameLimit, mode]);
 
-  // Calculate Detailed Champion Stats for Selected Player
   const selectedPlayerStats = useMemo(() => {
     if (!selectedPlayerId) return null;
 
-    const tMatches = filteredTeamPerformances.filter(p => p.player_id === selectedPlayerId);
-    const sMatches = filteredSoloqPerformances.filter(p => p.player_id === selectedPlayerId);
+    let tMatches = filteredTeamPerformances.filter(p => p.player_id === selectedPlayerId);
+    let sMatches = filteredSoloqPerformances.filter(p => p.player_id === selectedPlayerId);
+
+    // Sort matches by date descending (newest first)
+    tMatches.sort((a, b) => new Date(b.matches?.date || 0).getTime() - new Date(a.matches?.date || 0).getTime());
+    sMatches.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+    if (gameLimit === 'last20') {
+      if (mode === 'team') {
+        tMatches = tMatches.slice(0, 20);
+      } else if (mode === 'soloq') {
+        sMatches = sMatches.slice(0, 20);
+      } else if (mode === 'mixed') {
+        const combined = [
+          ...tMatches.map(m => ({ ...m, unifiedDate: m.matches?.date })),
+          ...sMatches.map(m => ({ ...m, unifiedDate: m.date }))
+        ];
+        combined.sort((a, b) => new Date(b.unifiedDate || 0).getTime() - new Date(a.unifiedDate || 0).getTime());
+        const sliced = combined.slice(0, 20);
+        tMatches = sliced.filter(m => m.matches !== undefined);
+        sMatches = sliced.filter(m => m.matches === undefined);
+      }
+    }
 
     const champAggregator: Record<string, any> = {};
 
@@ -315,13 +357,34 @@ export default function StatsContainer({ players, teamPerformances, soloqPerform
     });
 
     return finalStats;
-  }, [selectedPlayerId, filteredTeamPerformances, filteredSoloqPerformances, championSearch]);
+  }, [selectedPlayerId, filteredTeamPerformances, filteredSoloqPerformances, championSearch, gameLimit, mode]);
 
   const radarStatsAndProfile = useMemo(() => {
     if (!selectedPlayerId) return null;
 
-    const tMatches = filteredTeamPerformances.filter(p => p.player_id === selectedPlayerId);
-    const sMatches = filteredSoloqPerformances.filter(p => p.player_id === selectedPlayerId);
+    let tMatches = filteredTeamPerformances.filter(p => p.player_id === selectedPlayerId);
+    let sMatches = filteredSoloqPerformances.filter(p => p.player_id === selectedPlayerId);
+
+    // Sort matches by date descending (newest first)
+    tMatches.sort((a, b) => new Date(b.matches?.date || 0).getTime() - new Date(a.matches?.date || 0).getTime());
+    sMatches.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+    if (gameLimit === 'last20') {
+      if (mode === 'team') {
+        tMatches = tMatches.slice(0, 20);
+      } else if (mode === 'soloq') {
+        sMatches = sMatches.slice(0, 20);
+      } else if (mode === 'mixed') {
+        const combined = [
+          ...tMatches.map(m => ({ ...m, unifiedDate: m.matches?.date })),
+          ...sMatches.map(m => ({ ...m, unifiedDate: m.date }))
+        ];
+        combined.sort((a, b) => new Date(b.unifiedDate || 0).getTime() - new Date(a.unifiedDate || 0).getTime());
+        const sliced = combined.slice(0, 20);
+        tMatches = sliced.filter(m => m.matches !== undefined);
+        sMatches = sliced.filter(m => m.matches === undefined);
+      }
+    }
 
     const statsList: any[] = [];
 
@@ -410,7 +473,7 @@ export default function StatsContainer({ players, teamPerformances, soloqPerform
         vspm: avgVspm.toFixed(2),
       }
     };
-  }, [selectedPlayerId, filteredTeamPerformances, filteredSoloqPerformances, players]);
+  }, [selectedPlayerId, filteredTeamPerformances, filteredSoloqPerformances, players, gameLimit, mode]);
 
   const activePlayer = players.find(p => p.id === selectedPlayerId);
 
@@ -536,23 +599,47 @@ export default function StatsContainer({ players, teamPerformances, soloqPerform
 
           {/* Filters Section */}
           <div className="flex flex-col md:flex-row justify-between items-center gap-6 bg-card p-4 border border-blue-200/50 dark:border-[#322814] shadow-md rounded-xl shrink-0">
-            {/* Mode Toggle */}
-            <div className="inline-flex bg-slate-100 dark:bg-[#0a0f18] p-1 rounded-lg shadow-inner">
-              {(['team', 'soloq', 'mixed'] as Mode[]).map((m) => (
+            <div className="flex flex-col sm:flex-row gap-4 items-center w-full md:w-auto">
+              {/* Mode Toggle */}
+              <div className="inline-flex bg-slate-100 dark:bg-[#0a0f18] p-1 rounded-lg shadow-inner">
+                {(['team', 'soloq', 'mixed'] as Mode[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => {
+                      setMode(m);
+                      if (m === 'soloq') setMatchType('all');
+                    }}
+                    className={`px-6 py-2 text-sm font-bold transition-all capitalize rounded-md ${mode === m
+                      ? 'bg-gradient-to-b from-[#f1c40f] to-[#d4ac0d] text-slate-900 shadow-md border border-[#f39c12]'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-[#f39c12] hover:bg-white/50 dark:hover:bg-white/5'
+                      }`}
+                  >
+                    {m === 'team' ? 'Team Stats' : m === 'soloq' ? 'SoloQ Stats' : 'Mixed Stats'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Game Scope Toggle */}
+              <div className="inline-flex bg-slate-100 dark:bg-[#0a0f18] p-1 rounded-lg shadow-inner">
                 <button
-                  key={m}
-                  onClick={() => {
-                    setMode(m);
-                    if (m === 'soloq') setMatchType('all');
-                  }}
-                  className={`px-6 py-2 text-sm font-bold transition-all capitalize rounded-md ${mode === m
+                  onClick={() => setGameLimit('all')}
+                  className={`px-4 py-2 text-sm font-bold transition-all rounded-md ${gameLimit === 'all'
                     ? 'bg-gradient-to-b from-[#f1c40f] to-[#d4ac0d] text-slate-900 shadow-md border border-[#f39c12]'
                     : 'text-slate-600 dark:text-slate-300 hover:text-[#f39c12] hover:bg-white/50 dark:hover:bg-white/5'
                     }`}
                 >
-                  {m === 'team' ? 'Team Stats' : m === 'soloq' ? 'SoloQ Stats' : 'Mixed Stats'}
+                  All Games
                 </button>
-              ))}
+                <button
+                  onClick={() => setGameLimit('last20')}
+                  className={`px-4 py-2 text-sm font-bold transition-all rounded-md ${gameLimit === 'last20'
+                    ? 'bg-gradient-to-b from-[#f1c40f] to-[#d4ac0d] text-slate-900 shadow-md border border-[#f39c12]'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-[#f39c12] hover:bg-white/50 dark:hover:bg-white/5'
+                    }`}
+                >
+                  Last 20 Games
+                </button>
+              </div>
             </div>
 
             {/* Match Type Filters (Only for Team/Mixed) */}

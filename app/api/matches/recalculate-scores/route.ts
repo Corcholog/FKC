@@ -22,6 +22,25 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
 
+    const corchoPuuids = [
+      'cDEcUdvKUsgvkZszC2w1yvzk4ZMX7d9LCKFdBI-XtVOK_ZMTAGsdLdNgLhvl9IpQvXJTStAqudf_ew', // Corcho#fkc
+      'jVrn-jVYqpiVRaBZWK1Q6hQ6r8fH8shXfXtT9MTUVj36hRoDewaay71ZJGzr1I0eQYemnEQTyk8ZeA'  // Nikaro#PAINT
+    ];
+    try {
+      const accRes = await fetch(
+        `https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/Nikaro/PAINT`,
+        { headers: { 'X-Riot-Token': RIOT_API_KEY! } }
+      );
+      if (accRes.ok) {
+        const accData = await accRes.json();
+        if (accData.puuid && !corchoPuuids.includes(accData.puuid)) {
+          corchoPuuids.push(accData.puuid);
+        }
+      }
+    } catch (e) {
+      console.error(`[Recalculate Scores] Failed to fetch Nikaro PUUID dynamically:`, e);
+    }
+
     let body = {};
     try { body = await request.json(); } catch (e) {}
 
@@ -328,11 +347,10 @@ export async function POST(request: NextRequest) {
         const duration_seconds = gameDurationSeconds % 60;
 
         const isCorcho = (match.players as any)?.name === 'Corcho';
-        const playerPuuid = isCorcho
-          ? 'cDEcUdvKUsgvkZszC2w1yvzk4ZMX7d9LCKFdBI-XtVOK_ZMTAGsdLdNgLhvl9IpQvXJTStAqudf_ew'
-          : (match.players as any)?.puuid;
         
-        let targetParticipant = riotParticipants.find((rp: any) => rp.puuid === playerPuuid);
+        let targetParticipant = isCorcho
+          ? riotParticipants.find((rp: any) => corchoPuuids.includes(rp.puuid))
+          : riotParticipants.find((rp: any) => rp.puuid === (match.players as any)?.puuid);
         if (!targetParticipant && match.champion) {
           targetParticipant = riotParticipants.find((rp: any) => 
             rp.championName.toLowerCase() === match.champion.toLowerCase()

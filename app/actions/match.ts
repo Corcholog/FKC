@@ -34,7 +34,8 @@ export async function insertMatchToDb(matchData: any, isManual: boolean = false,
           const corchoPuuids = [
             'CWiI5tqz4IeXj2iLmqRH96WPKHiuGIp8xrFAt2DklNvZtHiDNAYeTOaJmDrw0bIh8jxUPvIzCv-6JA', // volvé camila#MISSU
             'WW7cKwyL1JE36CuyLo3ErQ5k3gijfvxch6Q79RCauyiGSI9Be-n_qj2IX7JcQ5QTKqfEZzfYznRRlA', // Corshus#2108
-            'cDEcUdvKUsgvkZszC2w1yvzk4ZMX7d9LCKFdBI-XtVOK_ZMTAGsdLdNgLhvl9IpQvXJTStAqudf_ew'  // Corcho#fkc
+            'cDEcUdvKUsgvkZszC2w1yvzk4ZMX7d9LCKFdBI-XtVOK_ZMTAGsdLdNgLhvl9IpQvXJTStAqudf_ew', // Corcho#fkc
+            'jVrn-jVYqpiVRaBZWK1Q6hQ6r8fH8shXfXtT9MTUVj36hRoDewaay71ZJGzr1I0eQYemnEQTyk8ZeA'  // Nikaro#PAINT
           ];
           return corchoPuuids.includes(p.puuid);
         }

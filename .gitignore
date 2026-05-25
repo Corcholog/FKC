@@ -42,3 +42,6 @@ next-env.d.ts
 
 # supabase scripts
 **/.supabase
+
+# scratch / test scripts
+/scratch/

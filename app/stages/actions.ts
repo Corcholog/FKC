@@ -40,6 +40,20 @@ export async function saveDateState(dateId: string, matches: DbMatch[], groupTea
       seed: gt.seed
     }))
 
+    // First clear existing team assignments for the affected groups to avoid UNIQUE constraint conflicts on team_id swap
+    const groupIds = Array.from(new Set(payload.map(p => p.group_id).filter((id): id is number => id !== null)))
+    if (groupIds.length > 0) {
+      const { error: clearError } = await supabase
+        .from('tournament_group_teams')
+        .update({ team_id: null })
+        .in('group_id', groupIds)
+      
+      if (clearError) {
+        console.error('Error clearing group teams before upsert:', clearError)
+        return { success: false, error: clearError.message }
+      }
+    }
+
     const { error: gtError } = await supabase
       .from('tournament_group_teams')
       .upsert(payload, { onConflict: 'group_id,seed' })

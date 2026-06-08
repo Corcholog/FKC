@@ -155,6 +155,7 @@ export default function PlayoffBracket({
                       !assignedTeamIds.includes(t.id) ||
                       slot.team_id === t.id
                   )
+                  .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
                   .map(team => (
                     <option key={team.id} value={team.id}>
                       {team.name}

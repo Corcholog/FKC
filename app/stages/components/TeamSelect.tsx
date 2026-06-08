@@ -32,14 +32,16 @@ export default function TeamSelect({
       >
         <option value="">TBD / Open Slot</option>
 
-        {teams.map(team => {
-          const alreadySelected = excludeTeamIds.includes(team.id)
-          return (
-            <option key={team.id} value={team.id} disabled={alreadySelected}>
-              {team.name} {alreadySelected ? '(used)' : ''}
-            </option>
-          )
-        })}
+        {[...teams]
+          .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+          .map(team => {
+            const alreadySelected = excludeTeamIds.includes(team.id)
+            return (
+              <option key={team.id} value={team.id} disabled={alreadySelected}>
+                {team.name} {alreadySelected ? '(used)' : ''}
+              </option>
+            )
+          })}
       </select>
     </label>
   )

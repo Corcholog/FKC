@@ -62,7 +62,14 @@ export default function MatchesPage() {
   const [enemyChampionSearch, setEnemyChampionSearch] = useState<string>('')
   const [sortBy, setSortBy] = useState<string>('date')
 
-
+  const predefinedTypes = ['flex', 'scrim_bo1', 'scrim_bo3', 'scrim', 'clash']
+  const customMatchTypes = Array.from(
+    new Set(
+      allMatches
+        .map(m => m.match_type?.toLowerCase().trim())
+        .filter((t): t is string => Boolean(t))
+    )
+  ).filter(t => !predefinedTypes.includes(t))
 
   const matchesRef = useRef<HTMLDivElement | null>(null)
   const clearFilters = () => {
@@ -108,13 +115,14 @@ export default function MatchesPage() {
   // In-memory filtering
   const filteredMatches = allMatches.filter(match => {
     let typeMatches = true
+    const normalizedType = match.match_type?.toLowerCase().trim() || ''
     if (typeFilter === 'competitive') {
       const exclude = ['flex', 'scrim_bo1', 'scrim_bo3', 'scrim', 'clash']
-      typeMatches = !exclude.includes(match.match_type)
+      typeMatches = !exclude.includes(normalizedType)
     } else if (typeFilter === 'scrims') {
-      typeMatches = ['scrim_bo1', 'scrim_bo3', 'scrim'].includes(match.match_type)
+      typeMatches = ['scrim_bo1', 'scrim_bo3', 'scrim'].includes(normalizedType)
     } else if (typeFilter !== 'all') {
-      typeMatches = match.match_type === typeFilter
+      typeMatches = normalizedType === typeFilter.toLowerCase().trim()
     }
 
     let resultMatches = true
@@ -315,6 +323,30 @@ export default function MatchesPage() {
                   {f.label}
                 </button>
               ))}
+
+              {customMatchTypes.length > 0 && (
+                <select
+                  value={['all', 'competitive', 'scrims', 'flex', 'clash'].includes(typeFilter) ? '' : typeFilter}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    handleTypeFilter(val || 'all');
+                  }}
+                  className={`px-3 py-1.5 rounded-none text-xs font-bold transition-all border shadow-sm cursor-pointer outline-none focus:border-[#f1c40f] ${
+                    !['all', 'competitive', 'scrims', 'flex', 'clash'].includes(typeFilter)
+                      ? 'bg-[#f1c40f] text-slate-900 border-yellow-500 shadow-md font-bold'
+                      : 'bg-card text-slate-600 dark:text-slate-300 border-blue-200 dark:border-[#322814] hover:border-[#f1c40f]'
+                  }`}
+                >
+                  <option value="" className="bg-card text-slate-600 dark:text-slate-300">
+                    Other...
+                  </option>
+                  {customMatchTypes.map(t => (
+                    <option key={t} value={t} className="bg-card text-slate-600 dark:text-slate-300">
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* Result */}

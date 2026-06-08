@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "./components/ThemeProvider";
+import Script from 'next/script';
 
 const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'});
 
@@ -46,10 +47,15 @@ export default function RootLayout({
       className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-mono", jetbrainsMono.variable)}
       suppressHydrationWarning
     >
+      <head>
+        <Script id="theme-script" strategy="beforeInteractive">
+          {initialThemeScript}
+        </Script>
+      </head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        <script dangerouslySetInnerHTML={{ __html: initialThemeScript }} />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );
 }
+

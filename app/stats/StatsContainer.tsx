@@ -80,7 +80,7 @@ interface StatsContainerProps {
 
 export default function StatsContainer({ players, teamPerformances, soloqPerformances }: StatsContainerProps) {
   const [mode, setMode] = useState<Mode>('team');
-  const [matchType, setMatchType] = useState<MatchTypeFilter>('all');
+  const [matchType, setMatchType] = useState<string>('all');
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(players.length > 0 ? players[0].id : null);
   const [championSearch, setChampionSearch] = useState('');
   const [profileTab, setProfileTab] = useState<'champions' | 'profile'>('champions');
@@ -94,6 +94,17 @@ export default function StatsContainer({ players, teamPerformances, soloqPerform
     if (type === 'scrim_bo1' || type === 'scrim_bo3') return 'scrim';
     return type;
   };
+
+  const predefinedTypes = ['scrim', 'flex', 'clash']
+  const customMatchTypes = useMemo(() => {
+    const types = teamPerformances
+      .map((perf: any) => {
+        const rawType = perf.matches?.match_type
+        return rawType ? normalizeMatchType(rawType).toLowerCase().trim() : null
+      })
+      .filter((t): t is string => Boolean(t))
+    return Array.from(new Set(types)).filter(t => !predefinedTypes.includes(t))
+  }, [teamPerformances])
 
   // Filter performances based on mode and matchType
   const filteredTeamPerformances = useMemo(() => {
@@ -644,8 +655,8 @@ export default function StatsContainer({ players, teamPerformances, soloqPerform
 
             {/* Match Type Filters (Only for Team/Mixed) */}
             {(mode === 'team' || mode === 'mixed') && (
-              <div className="flex gap-2 flex-wrap justify-center">
-                {(['all', 'competitive', 'scrim', 'flex', 'clash'] as MatchTypeFilter[]).map((type) => (
+              <div className="flex gap-2 flex-wrap justify-center items-center">
+                {(['all', 'competitive', 'scrim', 'flex', 'clash'] as string[]).map((type) => (
                   <button
                     key={type}
                     onClick={() => setMatchType(type)}
@@ -657,6 +668,30 @@ export default function StatsContainer({ players, teamPerformances, soloqPerform
                     {type}
                   </button>
                 ))}
+
+                {customMatchTypes.length > 0 && (
+                  <select
+                    value={['all', 'competitive', 'scrim', 'flex', 'clash'].includes(matchType) ? '' : matchType}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setMatchType(val || 'all');
+                    }}
+                    className={`px-4 py-1.5 text-xs font-bold rounded-full uppercase tracking-wider transition-all border cursor-pointer outline-none ${
+                      !['all', 'competitive', 'scrim', 'flex', 'clash'].includes(matchType)
+                        ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500 dark:border-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.2)]'
+                        : 'bg-transparent text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-800 hover:text-blue-500 dark:hover:text-blue-400'
+                    }`}
+                  >
+                    <option value="" className="bg-card text-slate-600 dark:text-slate-300">
+                      Other...
+                    </option>
+                    {customMatchTypes.map(t => (
+                      <option key={t} value={t} className="bg-card text-slate-600 dark:text-slate-300">
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             )}
           </div>

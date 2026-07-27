@@ -21,6 +21,9 @@ export function Navbar() {
       </Link>
 
       <div className="flex items-center gap-3">
+        <Link href="/admin" className="text-sm text-grey-light transition-colors hover:text-white">
+          Admin
+        </Link>
         {/* Sync engine lands in Phase 3; key-expiry indicator lands in Phase 7 */}
         <button
           type="button"

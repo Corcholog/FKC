@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  /* backgrounds, darkest to lightest */
+  --color-bg-primary: #0a0e17; /* page background, near-black */
+  --color-bg-secondary: #121a2b; /* cards, panels — dark navy */
+  --color-bg-tertiary: #1b263f; /* nested cards, hover surfaces */
+
+  /* structure */
+  --color-navy: #1e2e52; /* navbar, section headers */
+  --color-border: #2a3654; /* dividers, card borders */
+
+  /* accent (interactive) */
+  --color-blue-primary: #3b82f6; /* buttons, links, active states */
+  --color-blue-bright: #5fa1ff; /* hover state for the above */
+  --color-blue-muted: #2c4677; /* secondary buttons, badges */
+
+  /* text */
+  --color-white: #f1f4f9; /* primary text */
+  --color-grey-light: #9aa6bd; /* secondary text, labels */
+  --color-grey-mid: #5c6786; /* disabled/muted text, placeholders */
+  --color-black: #05070c; /* deepest shadows/accents only */
+
+  /* win/loss — see docs/05_DESIGN_SYSTEM.md for the green/red alternative */
+  --color-win: #5fa1ff; /* lighter blue = win */
+  --color-loss: #5c6786; /* muted grey = loss */
+}
+
+@theme inline {
+  --color-bg-primary: var(--color-bg-primary);
+  --color-bg-secondary: var(--color-bg-secondary);
+  --color-bg-tertiary: var(--color-bg-tertiary);
+  --color-navy: var(--color-navy);
+  --color-border: var(--color-border);
+  --color-blue-primary: var(--color-blue-primary);
+  --color-blue-bright: var(--color-blue-bright);
+  --color-blue-muted: var(--color-blue-muted);
+  --color-white: var(--color-white);
+  --color-grey-light: var(--color-grey-light);
+  --color-grey-mid: var(--color-grey-mid);
+  --color-black: var(--color-black);
+  --color-win: var(--color-win);
+  --color-loss: var(--color-loss);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--color-bg-primary);
+  color: var(--color-white);
+}
+
+/* stat tables (KDA, damage, gold, CS) per docs/05_DESIGN_SYSTEM.md */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

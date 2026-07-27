@@ -1,36 +1,25 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fake Clan SoloQ Tracker
 
-## Getting Started
+Private web app for tracking a small group's League of Legends Solo/Duo ranked games on LAS. Next.js (App Router) + TypeScript + Tailwind, Supabase (Postgres + Auth), Vercel, Riot Games API, Gemini.
 
-First, run the development server:
+Not a public product — everything here sits behind a single shared login for one private friend group.
+
+## Setup
 
 ```bash
+npm install
+cp .env.local.example .env.local   # fill in the values, see below
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+See [.env.local.example](.env.local.example) for the full list and where each value comes from (Supabase project settings, ai.google.dev). The Riot API key is **not** an env var — it's stored in Supabase's `sync_state` table instead, since a personal dev key expires every 24h and this avoids a redeploy each time it's refreshed.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Database
 
-## Learn More
+Run the schema SQL against a fresh Supabase project's SQL Editor before first use. (Kept locally, not in this repo — ask if you need it re-shared.)
 
-To learn more about Next.js, take a look at the following resources:
+## Status
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Built phase by phase; currently past Phase 0 (project scaffold + Supabase wiring). See commit history for progress.

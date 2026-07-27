@@ -40,6 +40,9 @@ yarn-error.log*
 # claude code — local-only permission settings
 .claude/settings.local.json
 
+# planning docs — kept locally for reference, not published
+/docs
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

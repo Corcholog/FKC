@@ -13,6 +13,27 @@ const TIER_ORDER = [
 
 const APEX_TIERS = new Set(["MASTER", "GRANDMASTER", "CHALLENGER"]);
 
+// Standard League rank-tier colors, used for the home page's per-tier card
+// border — a deliberate exception to the blue/navy/grey palette, same
+// reasoning as win/loss and the key-expiry warning: rank identity is exactly
+// what these colors exist to communicate at a glance.
+const TIER_COLORS: Record<string, string> = {
+  IRON: "#5d5a56",
+  BRONZE: "#a9702d",
+  SILVER: "#9fa8b2",
+  GOLD: "#e0b64d",
+  PLATINUM: "#4fd1c5",
+  EMERALD: "#2ecc71",
+  DIAMOND: "#5aa9e6",
+  MASTER: "#a855c9",
+  GRANDMASTER: "#e74c3c",
+  CHALLENGER: "#ffe66d",
+};
+
+export function rankTierColor(tier: string | null): string {
+  return (tier && TIER_COLORS[tier]) || "var(--color-border)";
+}
+
 const DIVISION_WORSENESS: Record<string, number> = { I: 0, II: 1, III: 2, IV: 3 };
 
 export type RankSnapshot = {

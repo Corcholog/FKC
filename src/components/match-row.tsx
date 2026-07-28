@@ -47,7 +47,7 @@ function TeamComposRow({
             src={url}
             alt={name}
             title={name}
-            className={`h-7 w-7 rounded-sm ${c.isOpponent ? "ring-2 ring-blue-bright" : ""}`}
+            className={`h-7 w-7 rounded-sm ${c.isOpponent ? "ring-2 ring-red-500" : ""}`}
           />
         ) : (
           <div key={i} className="h-7 w-7 rounded-sm bg-blue-muted" />

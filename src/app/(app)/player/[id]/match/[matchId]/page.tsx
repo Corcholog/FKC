@@ -45,7 +45,7 @@ function ParticipantRow({
       ) : (
         <div className="h-7 w-7 rounded bg-blue-muted" />
       )}
-      <p className="flex-1 truncate text-xs text-white">{name}</p>
+      <p className="min-w-0 flex-1 truncate text-xs text-white">{name}</p>
       <p className="tabular-nums text-xs text-grey-light">
         {formatKDA(participant.kills, participant.deaths, participant.assists)}
       </p>

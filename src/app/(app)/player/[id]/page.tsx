@@ -60,9 +60,9 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
           <div className="h-16 w-16 rounded-full bg-blue-muted" />
         )}
 
-        <div className="flex-1">
-          <h1 className="text-lg font-semibold text-white">{player.display_name}</h1>
-          <p className="text-xs text-grey-light">
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-lg font-semibold text-white">{player.display_name}</h1>
+          <p className="truncate text-xs text-grey-light">
             {player.riot_game_name}#{player.riot_tag_line}
           </p>
           <div className="mt-1.5 flex items-center gap-2">
@@ -75,7 +75,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
           </div>
         </div>
 
-        <div className="text-right">
+        <div className="shrink-0 text-right">
           <p className="tabular-nums font-semibold text-white">
             {formatWinLoss(player.wins, player.losses)}
           </p>

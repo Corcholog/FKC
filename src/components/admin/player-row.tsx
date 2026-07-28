@@ -116,27 +116,27 @@ export function PlayerRow({ player }: { player: Player }) {
 
   return (
     <li className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-secondary p-3">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         {player.avatar_url ? (
           <Image
             src={player.avatar_url}
             alt=""
             width={36}
             height={36}
-            className="h-9 w-9 rounded-full object-cover"
+            className="h-9 w-9 shrink-0 rounded-full object-cover"
           />
         ) : (
-          <div className="h-9 w-9 rounded-full bg-blue-muted" />
+          <div className="h-9 w-9 shrink-0 rounded-full bg-blue-muted" />
         )}
-        <div>
-          <p className="text-sm font-medium text-white">{player.display_name}</p>
-          <p className="text-xs text-grey-light">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-white">{player.display_name}</p>
+          <p className="truncate text-xs text-grey-light">
             {player.riot_game_name}#{player.riot_tag_line}
           </p>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-3">
         {deleteError && <p className="text-xs text-loss">{deleteError}</p>}
         <button
           type="button"

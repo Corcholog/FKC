@@ -131,12 +131,14 @@ export function NotesSection({
     <section className="flex flex-col gap-3">
       <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Notes</h2>
 
-      {notes.length > 0 && (
+      {notes.length > 0 ? (
         <ul className="flex flex-col gap-2">
           {notes.map((n) => (
             <NoteItem key={n.id} note={n} playerId={playerId} matchId={matchId} />
           ))}
         </ul>
+      ) : (
+        <p className="text-sm text-grey-mid">No notes yet.</p>
       )}
 
       <form ref={formRef} action={formAction} className="flex flex-col gap-2">

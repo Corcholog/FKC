@@ -33,9 +33,9 @@ export function PlayerCard({ player }: { player: Player }) {
         <div className="h-12 w-12 rounded-full bg-blue-muted" />
       )}
 
-      <div className="flex-1">
-        <p className="font-medium text-white">{player.display_name}</p>
-        <p className="text-xs text-grey-light">
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium text-white">{player.display_name}</p>
+        <p className="truncate text-xs text-grey-light">
           {player.riot_game_name}#{player.riot_tag_line}
         </p>
         <div className="mt-1.5 flex items-center gap-2">
@@ -48,7 +48,7 @@ export function PlayerCard({ player }: { player: Player }) {
         </div>
       </div>
 
-      <div className="text-right">
+      <div className="shrink-0 text-right">
         <p className="tabular-nums font-semibold text-white">
           {formatWinLoss(player.wins, player.losses)}
         </p>

@@ -6,13 +6,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const supabase = await createClient();
   const { data: state } = await supabase
     .from("sync_state")
-    .select("riot_key_valid")
+    .select("riot_key_valid, last_sync_status")
     .eq("id", 1)
     .single();
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <Navbar />
+      <Navbar initialSyncing={state?.last_sync_status === "running"} />
       {state && !state.riot_key_valid && <KeyExpiredBanner />}
       {children}
     </div>

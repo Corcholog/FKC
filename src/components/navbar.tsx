@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 export function Navbar() {
   const router = useRouter();
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -14,33 +17,56 @@ export function Navbar() {
     router.refresh();
   }
 
-  return (
-    <header className="flex items-center justify-between border-b border-border bg-navy px-4 py-3 sm:px-6">
-      <Link href="/" className="font-semibold text-white">
-        Fake Clan
-      </Link>
+  async function handleSync() {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch("/api/sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncMessage(data.error ?? "Sync failed.");
+      } else {
+        setSyncMessage(`Synced: ${data.newMatches} new match(es), ${data.playersProcessed} player(s).`);
+        router.refresh();
+      }
+    } catch {
+      setSyncMessage("Sync failed — network error.");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
-      <div className="flex items-center gap-3">
-        <Link href="/admin" className="text-sm text-grey-light transition-colors hover:text-white">
-          Admin
+  return (
+    <header className="flex flex-col gap-2 border-b border-border bg-navy px-4 py-3 sm:px-6">
+      <div className="flex items-center justify-between">
+        <Link href="/" className="font-semibold text-white">
+          Fake Clan
         </Link>
-        {/* Sync engine lands in Phase 3; key-expiry indicator lands in Phase 7 */}
-        <button
-          type="button"
-          disabled
-          title="Coming in Phase 3"
-          className="rounded-md bg-blue-muted px-3 py-1.5 text-sm text-grey-light opacity-50"
-        >
-          Sync
-        </button>
-        <button
-          type="button"
-          onClick={handleSignOut}
-          className="text-sm text-grey-light transition-colors hover:text-white"
-        >
-          Sign out
-        </button>
+
+        <div className="flex items-center gap-3">
+          <Link href="/admin" className="text-sm text-grey-light transition-colors hover:text-white">
+            Admin
+          </Link>
+          {/* Key-expiry indicator lands in Phase 7 */}
+          <button
+            type="button"
+            onClick={handleSync}
+            disabled={syncing}
+            className="rounded-md bg-blue-muted px-3 py-1.5 text-sm text-white transition-colors hover:bg-blue-primary disabled:opacity-50"
+          >
+            {syncing ? "Syncing…" : "Sync"}
+          </button>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="text-sm text-grey-light transition-colors hover:text-white"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
+
+      {syncMessage && <p className="text-xs text-grey-light">{syncMessage}</p>}
     </header>
   );
 }

@@ -32,6 +32,12 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // API routes handle their own auth (e.g. /api/sync accepts either a session
+  // or a CRON_SECRET bearer token) and must return JSON, not an HTML redirect.
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    return supabaseResponse;
+  }
+
   const isPublicPath = PUBLIC_PATHS.includes(request.nextUrl.pathname);
 
   if (!user && !isPublicPath) {

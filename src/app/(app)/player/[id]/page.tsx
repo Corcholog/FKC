@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { formatRank, formatWinLoss, formatWinRate } from "@/lib/rank";
 import { MatchRow } from "@/components/match-row";
+import { AiSummaryCard } from "@/components/ai-summary-card";
 
 type MatchParticipantRow = {
   id: string;
@@ -37,6 +38,12 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
 
   const version = await getLatestVersion();
   const championMap = await getChampionMap(version);
+
+  const { data: aiSummary } = await supabase
+    .from("player_ai_summaries")
+    .select("summary_text, generated_at, stale")
+    .eq("player_id", id)
+    .maybeSingle();
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -77,6 +84,13 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
           </p>
         </div>
       </div>
+
+      <AiSummaryCard
+        playerId={id}
+        initialSummary={aiSummary?.summary_text ?? null}
+        initialGeneratedAt={aiSummary?.generated_at ?? null}
+        isStale={!aiSummary || aiSummary.stale}
+      />
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Match history</h2>

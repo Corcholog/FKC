@@ -55,11 +55,21 @@ export async function runSync(admin: SupabaseClient): Promise<SyncSummary> {
   }
 
   const summary: SyncSummary = { playersProcessed: 0, newMatches: 0, excludedMatches: 0 };
+  // Tracked players touched by a genuinely new match this run — not just
+  // whoever's loop happened to discover it, since a shared game links every
+  // tracked participant regardless of which player's fetch found it first.
+  const playersWithNewMatches = new Set<string>();
 
   for (const player of (players ?? []) as Player[]) {
-    await syncPlayerMatches(admin, player, apiKey, puuidToPlayerId, summary);
+    await syncPlayerMatches(admin, player, apiKey, puuidToPlayerId, summary, playersWithNewMatches);
     await refreshPlayerRank(admin, player, apiKey);
     summary.playersProcessed += 1;
+  }
+
+  for (const playerId of playersWithNewMatches) {
+    await admin
+      .from("player_ai_summaries")
+      .upsert({ player_id: playerId, stale: true }, { onConflict: "player_id" });
   }
 
   return summary;
@@ -71,6 +81,7 @@ async function syncPlayerMatches(
   apiKey: string,
   puuidToPlayerId: Map<string, string>,
   summary: SyncSummary,
+  playersWithNewMatches: Set<string>,
 ) {
   let start = 0;
 
@@ -161,6 +172,10 @@ async function syncPlayerMatches(
         .from("match_participants")
         .insert(participantRows);
       if (insertParticipantsError) throw new Error(insertParticipantsError.message);
+
+      for (const row of participantRows) {
+        if (row.player_id) playersWithNewMatches.add(row.player_id);
+      }
 
       summary.newMatches += 1;
     }

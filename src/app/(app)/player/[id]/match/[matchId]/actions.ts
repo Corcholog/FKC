@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { NoteFormState } from "./notes-form-state";
 
@@ -11,6 +12,13 @@ async function requireSession() {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated.");
   return supabase;
+}
+
+// Notes feed the AI summary (Phase 8) — any add/edit/delete invalidates it.
+async function markSummaryStale(supabase: SupabaseClient, playerId: string) {
+  await supabase
+    .from("player_ai_summaries")
+    .upsert({ player_id: playerId, stale: true }, { onConflict: "player_id" });
 }
 
 export async function addNote(
@@ -37,6 +45,7 @@ export async function addNote(
     });
     if (error) return { error: error.message };
 
+    await markSummaryStale(supabase, playerId);
     revalidatePath(`/player/${playerId}/match/${matchId}`);
     return { success: true };
   } catch (e) {
@@ -66,6 +75,7 @@ export async function updateNote(
       .eq("id", id);
     if (error) return { error: error.message };
 
+    await markSummaryStale(supabase, playerId);
     revalidatePath(`/player/${playerId}/match/${matchId}`);
     return { success: true };
   } catch (e) {
@@ -79,5 +89,6 @@ export async function deleteNote(id: string, playerId: string, matchId: string):
   const { error } = await supabase.from("match_notes").delete().eq("id", id);
   if (error) throw new Error(error.message);
 
+  await markSummaryStale(supabase, playerId);
   revalidatePath(`/player/${playerId}/match/${matchId}`);
 }

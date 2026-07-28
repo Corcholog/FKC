@@ -105,7 +105,7 @@ export function MatchRow({
         <p className="tabular-nums">{formatDuration(match.gameDurationSeconds)}</p>
       </div>
 
-      <div className="shrink-0 text-right">
+      <div className="w-24 shrink-0 text-right">
         <p className={`text-sm font-semibold ${match.win ? "text-win" : "text-loss"}`}>
           {match.win ? "Win" : "Loss"}
         </p>

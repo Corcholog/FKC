@@ -174,6 +174,31 @@ export async function updatePlayer(
   }
 }
 
+export async function updateRiotKey(
+  _prevState: PlayerFormState,
+  formData: FormData,
+): Promise<PlayerFormState> {
+  try {
+    const supabase = await requireSession();
+
+    const key = (formData.get("riotApiKey") as string)?.trim();
+    if (!key) return { error: "Riot API key is required." };
+
+    // Optimistic reset — flips back to false on the next sync if it's still bad.
+    const { error } = await supabase
+      .from("sync_state")
+      .update({ riot_api_key: key, riot_key_valid: true, last_error: null })
+      .eq("id", 1);
+    if (error) return { error: error.message };
+
+    revalidatePath("/admin");
+    revalidatePath("/");
+    return { success: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
 export async function deletePlayer(id: string): Promise<void> {
   const supabase = await requireSession();
 

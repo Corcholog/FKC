@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { AddPlayerForm } from "@/components/admin/add-player-form";
 import { PlayerRow } from "@/components/admin/player-row";
+import { SyncStatusSection } from "@/components/admin/sync-status-section";
 
 export default async function AdminPage() {
   const supabase = await createClient();
@@ -8,6 +9,11 @@ export default async function AdminPage() {
     .from("players")
     .select("id, riot_game_name, riot_tag_line, display_name, avatar_url")
     .order("display_name");
+  const { data: syncState } = await supabase
+    .from("sync_state")
+    .select("riot_key_valid, last_sync_status, last_sync_finished_at, last_error")
+    .eq("id", 1)
+    .single();
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6">
@@ -15,6 +21,15 @@ export default async function AdminPage() {
         <h1 className="mb-1 text-xl font-semibold text-white">Admin</h1>
         <p className="text-sm text-grey-light">Add, edit, or remove tracked players.</p>
       </div>
+
+      {syncState && (
+        <section>
+          <h2 className="mb-3 text-sm font-medium tracking-wide text-grey-light uppercase">
+            Sync status
+          </h2>
+          <SyncStatusSection state={syncState} />
+        </section>
+      )}
 
       <section>
         <h2 className="mb-3 text-sm font-medium tracking-wide text-grey-light uppercase">

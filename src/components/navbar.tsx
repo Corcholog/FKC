@@ -27,8 +27,10 @@ export function Navbar() {
         setSyncMessage(data.error ?? "Sync failed.");
       } else {
         setSyncMessage(`Synced: ${data.newMatches} new match(es), ${data.playersProcessed} player(s).`);
-        router.refresh();
       }
+      // Refresh either way — a failed sync may have just flipped riot_key_valid,
+      // and the banner/status live in server-rendered layout data.
+      router.refresh();
     } catch {
       setSyncMessage("Sync failed — network error.");
     } finally {
@@ -47,7 +49,6 @@ export function Navbar() {
           <Link href="/admin" className="text-sm text-grey-light transition-colors hover:text-white">
             Admin
           </Link>
-          {/* Key-expiry indicator lands in Phase 7 */}
           <button
             type="button"
             onClick={handleSync}

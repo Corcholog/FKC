@@ -145,6 +145,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
             const toChampion = (p: ParticipantRow): TeamComposChampion => ({
               championId: p.champion_id,
               championName: p.champion_name,
+              isSelf: p.id === viewer.id,
             });
 
             const allies = participants

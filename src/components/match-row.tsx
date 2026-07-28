@@ -6,6 +6,7 @@ import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/d
 export type TeamComposChampion = {
   championId: number;
   championName: string;
+  isSelf?: boolean;
 };
 
 type MatchRowData = {
@@ -42,7 +43,13 @@ function TeamComposRow({
         return url ? (
           // eslint-disable-next-line @next/next/no-img-element -- many tiny decorative
           // icons per row; next/image's optimizer overhead isn't worth it at this size.
-          <img key={i} src={url} alt={name} title={name} className="h-7 w-7 rounded-sm" />
+          <img
+            key={i}
+            src={url}
+            alt={name}
+            title={name}
+            className={`h-7 w-7 rounded-sm ${c.isSelf ? "ring-2 ring-blue-bright" : ""}`}
+          />
         ) : (
           <div key={i} className="h-7 w-7 rounded-sm bg-blue-muted" />
         );
@@ -90,7 +97,8 @@ export function MatchRow({
         </div>
       </div>
 
-      <div className="hidden w-16 shrink-0 flex-row items-center justify-center gap-1.5 sm:flex">
+      {/* Compact opponent hint on narrow screens, where the full team comps below don't fit. */}
+      <div className="flex w-16 shrink-0 flex-row items-center justify-center gap-1.5 md:hidden">
         <span className="text-xs font-medium tracking-wide text-grey-mid uppercase">vs</span>
         {opponentIconUrl ? (
           <img src={opponentIconUrl} alt={opponentName ?? ""} title={opponentName ?? ""} className="h-7 w-7 rounded-sm" />
@@ -99,6 +107,7 @@ export function MatchRow({
         )}
       </div>
 
+      {/* Full team comps once there's room — replaces the "vs" hint above, not alongside it. */}
       <div className="hidden shrink-0 flex-col items-center justify-center gap-1 md:flex">
         <TeamComposRow champions={match.allies} version={version} championMap={championMap} />
         <TeamComposRow champions={match.enemies} version={version} championMap={championMap} />

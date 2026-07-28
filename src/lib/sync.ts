@@ -75,6 +75,55 @@ export async function runSync(admin: SupabaseClient): Promise<SyncSummary> {
   return summary;
 }
 
+// Full re-fetch of one player's history since TRACKING_START_DATE, bypassing
+// the normal incremental "stop at first known match" shortcut — used when a
+// player's Riot ID (and therefore puuid) changes, since their new puuid has
+// no overlap with anything already stored and needs a real backfill rather
+// than waiting for the next daily sync to slowly discover it.
+export async function backfillPlayerHistory(
+  admin: SupabaseClient,
+  playerId: string,
+): Promise<SyncSummary> {
+  const { data: syncStateRow, error: syncStateError } = await admin
+    .from("sync_state")
+    .select("riot_api_key")
+    .eq("id", 1)
+    .single();
+
+  if (syncStateError || !syncStateRow?.riot_api_key) {
+    throw new Error("No Riot API key set in sync_state.");
+  }
+  const apiKey = syncStateRow.riot_api_key as string;
+
+  const { data: players, error: playersError } = await admin
+    .from("players")
+    .select("id, riot_puuid, platform");
+  if (playersError) throw new Error(playersError.message);
+
+  const player = (players ?? []).find((p) => p.id === playerId) as Player | undefined;
+  if (!player) throw new Error("Player not found.");
+
+  const puuidToPlayerId = new Map<string, string>();
+  for (const p of (players ?? []) as Player[]) {
+    puuidToPlayerId.set(p.riot_puuid, p.id);
+  }
+
+  const summary: SyncSummary = { playersProcessed: 0, newMatches: 0, excludedMatches: 0 };
+  const playersWithNewMatches = new Set<string>();
+
+  await syncPlayerMatches(admin, player, apiKey, puuidToPlayerId, summary, playersWithNewMatches);
+  await refreshPlayerRank(admin, player, apiKey);
+  summary.playersProcessed = 1;
+
+  for (const touchedId of playersWithNewMatches) {
+    await admin
+      .from("player_ai_summaries")
+      .upsert({ player_id: touchedId, stale: true }, { onConflict: "player_id" });
+  }
+
+  return summary;
+}
+
 async function syncPlayerMatches(
   admin: SupabaseClient,
   player: Player,

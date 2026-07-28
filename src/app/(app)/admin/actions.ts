@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPuuidByRiotId, describeRiotError } from "@/lib/riot";
+import { backfillPlayerHistory, RiotKeyInvalidError } from "@/lib/sync";
 
 import type { PlayerFormState } from "./form-state";
 
@@ -166,6 +167,40 @@ export async function updatePlayer(
 
     const { error } = await supabase.from("players").update(update).eq("id", id);
     if (error) return { error: error.message };
+
+    // Riot ID changed means a new puuid — old history was tied to the old
+    // account and has nothing in common with the new one, so wait-for-the-
+    // next-daily-sync won't reliably catch up (see the pagination-cap edge
+    // case noted in syncPlayerMatches). Backfill this player's full history
+    // since the tracking start date right now instead.
+    if (puuid) {
+      const admin = createAdminClient();
+      try {
+        const backfillSummary = await backfillPlayerHistory(admin, id);
+        revalidatePath("/admin");
+        revalidatePath("/");
+        revalidatePath(`/player/${id}`);
+        return {
+          success: true,
+          message: `Riot ID updated — backfilled ${backfillSummary.newMatches} match(es) since tracking started.`,
+        };
+      } catch (e) {
+        const isKeyInvalid = e instanceof RiotKeyInvalidError;
+        if (isKeyInvalid) {
+          await admin.from("sync_state").update({ riot_key_valid: false }).eq("id", 1);
+        }
+        const detail = isKeyInvalid
+          ? "Riot API key is invalid or expired."
+          : e instanceof Error
+            ? e.message
+            : "Unknown error.";
+        revalidatePath("/admin");
+        return {
+          success: true,
+          message: `Riot ID updated, but the history backfill failed: ${detail} Run a regular sync once the issue is resolved.`,
+        };
+      }
+    }
 
     revalidatePath("/admin");
     return { success: true };

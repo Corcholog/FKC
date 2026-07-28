@@ -6,7 +6,6 @@ import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/d
 export type TeamComposChampion = {
   championId: number;
   championName: string;
-  isOpponent?: boolean;
 };
 
 type MatchRowData = {
@@ -21,6 +20,7 @@ type MatchRowData = {
   totalCs: number;
   gameCreation: string;
   gameDurationSeconds: number;
+  opponent: TeamComposChampion | null;
   allies: TeamComposChampion[];
   enemies: TeamComposChampion[];
 };
@@ -42,13 +42,7 @@ function TeamComposRow({
         return url ? (
           // eslint-disable-next-line @next/next/no-img-element -- many tiny decorative
           // icons per row; next/image's optimizer overhead isn't worth it at this size.
-          <img
-            key={i}
-            src={url}
-            alt={name}
-            title={name}
-            className={`h-7 w-7 rounded-sm ${c.isOpponent ? "ring-2 ring-red-500" : ""}`}
-          />
+          <img key={i} src={url} alt={name} title={name} className="h-7 w-7 rounded-sm" />
         ) : (
           <div key={i} className="h-7 w-7 rounded-sm bg-blue-muted" />
         );
@@ -70,6 +64,10 @@ export function MatchRow({
 }) {
   const iconUrl = championIconUrl(match.championId, version, championMap);
   const displayName = championDisplayName(match.championId, championMap, match.championName);
+  const opponentIconUrl = match.opponent ? championIconUrl(match.opponent.championId, version, championMap) : null;
+  const opponentName = match.opponent
+    ? championDisplayName(match.opponent.championId, championMap, match.opponent.championName)
+    : null;
 
   return (
     <Link
@@ -90,6 +88,15 @@ export function MatchRow({
             {formatKDA(match.kills, match.deaths, match.assists)}
           </p>
         </div>
+      </div>
+
+      <div className="hidden w-16 shrink-0 flex-row items-center justify-center gap-1.5 sm:flex">
+        <span className="text-xs font-medium tracking-wide text-grey-mid uppercase">vs</span>
+        {opponentIconUrl ? (
+          <img src={opponentIconUrl} alt={opponentName ?? ""} title={opponentName ?? ""} className="h-7 w-7 rounded-sm" />
+        ) : (
+          <div className="h-7 w-7 rounded-sm bg-blue-muted" />
+        )}
       </div>
 
       <div className="hidden shrink-0 flex-col items-center justify-center gap-1 md:flex">

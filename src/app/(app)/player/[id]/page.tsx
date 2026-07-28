@@ -145,20 +145,20 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
             const toChampion = (p: ParticipantRow): TeamComposChampion => ({
               championId: p.champion_id,
               championName: p.champion_name,
-              isOpponent:
-                p.team_id !== viewer.team_id &&
-                !!viewer.team_position &&
-                p.team_position === viewer.team_position,
             });
 
             const allies = participants
               .filter((p) => p.team_id === viewer.team_id)
               .sort(byRole)
               .map(toChampion);
-            const enemies = participants
+            const enemyParticipants = participants
               .filter((p) => p.team_id !== viewer.team_id)
-              .sort(byRole)
-              .map(toChampion);
+              .sort(byRole);
+            const enemies = enemyParticipants.map(toChampion);
+            const opponentParticipant = viewer.team_position
+              ? enemyParticipants.find((p) => p.team_position === viewer.team_position)
+              : undefined;
+            const opponent = opponentParticipant ? toChampion(opponentParticipant) : null;
 
             return (
               <MatchRow
@@ -175,6 +175,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                   totalCs: viewer.total_cs,
                   gameCreation: m.game_creation,
                   gameDurationSeconds: m.game_duration_seconds,
+                  opponent,
                   allies,
                   enemies,
                 }}

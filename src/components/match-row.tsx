@@ -35,7 +35,7 @@ function TeamComposRow({
   championMap: Map<number, ChampionInfo>;
 }) {
   return (
-    <div className="flex gap-0.5">
+    <div className="flex gap-1">
       {champions.map((c, i) => {
         const url = championIconUrl(c.championId, version, championMap);
         const name = championDisplayName(c.championId, championMap, c.championName);
@@ -47,10 +47,10 @@ function TeamComposRow({
             src={url}
             alt={name}
             title={name}
-            className={`h-4 w-4 rounded-sm ${c.isOpponent ? "ring-2 ring-blue-bright" : ""}`}
+            className={`h-7 w-7 rounded-sm ${c.isOpponent ? "ring-2 ring-blue-bright" : ""}`}
           />
         ) : (
-          <div key={i} className="h-4 w-4 rounded-sm bg-blue-muted" />
+          <div key={i} className="h-7 w-7 rounded-sm bg-blue-muted" />
         );
       })}
     </div>
@@ -92,12 +92,12 @@ export function MatchRow({
         </div>
       </div>
 
-      <div className="hidden shrink-0 flex-col gap-0.5 md:flex">
+      <div className="hidden shrink-0 flex-col items-center justify-center gap-1 md:flex">
         <TeamComposRow champions={match.allies} version={version} championMap={championMap} />
         <TeamComposRow champions={match.enemies} version={version} championMap={championMap} />
       </div>
 
-      <div className="hidden shrink-0 text-right text-xs text-grey-light sm:block">
+      <div className="hidden w-28 shrink-0 text-right text-xs text-grey-light sm:block">
         <p className="tabular-nums">{formatPerMinute(match.totalCs, match.gameDurationSeconds)} CS/min</p>
         <p className="tabular-nums">
           {formatPerMinute(match.damageDealtToChampions, match.gameDurationSeconds)} dmg/min

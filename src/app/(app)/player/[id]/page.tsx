@@ -5,6 +5,7 @@ import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { formatRank, formatWinLoss, formatWinRate } from "@/lib/rank";
 import { MatchRow, type TeamComposChampion } from "@/components/match-row";
 import { AiSummaryCard } from "@/components/ai-summary-card";
+import { sortByRole } from "@/lib/roles";
 
 type MatchListRow = {
   id: string;
@@ -27,13 +28,6 @@ type ParticipantRow = {
   damage_dealt_to_champions: number;
   total_cs: number;
 };
-
-const ROLE_ORDER: Record<string, number> = { TOP: 0, JUNGLE: 1, MIDDLE: 2, BOTTOM: 3, UTILITY: 4 };
-function byRole(a: ParticipantRow, b: ParticipantRow): number {
-  const ra = ROLE_ORDER[a.team_position ?? ""] ?? 5;
-  const rb = ROLE_ORDER[b.team_position ?? ""] ?? 5;
-  return ra - rb;
-}
 
 export default async function PlayerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -148,13 +142,8 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
               isSelf: p.id === viewer.id,
             });
 
-            const allies = participants
-              .filter((p) => p.team_id === viewer.team_id)
-              .sort(byRole)
-              .map(toChampion);
-            const enemyParticipants = participants
-              .filter((p) => p.team_id !== viewer.team_id)
-              .sort(byRole);
+            const allies = sortByRole(participants.filter((p) => p.team_id === viewer.team_id)).map(toChampion);
+            const enemyParticipants = sortByRole(participants.filter((p) => p.team_id !== viewer.team_id));
             const enemies = enemyParticipants.map(toChampion);
             const opponentParticipant = viewer.team_position
               ? enemyParticipants.find((p) => p.team_position === viewer.team_position)

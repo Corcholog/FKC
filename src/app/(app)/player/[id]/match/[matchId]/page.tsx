@@ -4,6 +4,7 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { getLatestVersion, getChampionMap, championIconUrl, championDisplayName, type ChampionInfo } from "@/lib/ddragon";
 import { formatDuration, formatKDA, formatRelativeTime } from "@/lib/format";
+import { sortByRole } from "@/lib/roles";
 import { NotesSection } from "@/components/notes-section";
 
 type Participant = {
@@ -13,6 +14,7 @@ type Participant = {
   riot_tag_line: string | null;
   player_id: string | null;
   team_id: number;
+  team_position: string | null;
   champion_id: number;
   champion_name: string;
   win: boolean;
@@ -47,7 +49,7 @@ function ParticipantRow({
         <div className="h-7 w-7 rounded bg-blue-muted" />
       )}
       <p className="min-w-0 flex-1 truncate text-xs text-white">{name}</p>
-      <p className="tabular-nums text-xs text-grey-light">
+      <p className="tabular-nums w-20 text-xs text-grey-light">
         {formatKDA(participant.kills, participant.deaths, participant.assists)}
       </p>
       <p className="tabular-nums w-16 text-right text-xs text-grey-light">
@@ -57,6 +59,19 @@ function ParticipantRow({
         {participant.gold_earned.toLocaleString()}
       </p>
       <p className="tabular-nums w-10 text-right text-xs text-grey-light">{participant.total_cs}</p>
+    </div>
+  );
+}
+
+function ParticipantHeader() {
+  return (
+    <div className="flex items-center gap-2 border-b border-border pb-1">
+      <div className="h-7 w-7 shrink-0" />
+      <p className="min-w-0 flex-1 text-[10px] font-medium tracking-wide text-grey-mid uppercase">Player</p>
+      <p className="w-20 text-[10px] font-medium tracking-wide text-grey-mid uppercase">KDA</p>
+      <p className="w-16 text-right text-[10px] font-medium tracking-wide text-grey-mid uppercase">Dmg</p>
+      <p className="w-14 text-right text-[10px] font-medium tracking-wide text-grey-mid uppercase">Gold</p>
+      <p className="w-10 text-right text-[10px] font-medium tracking-wide text-grey-mid uppercase">CS</p>
     </div>
   );
 }
@@ -79,7 +94,7 @@ export default async function MatchDetailPage({
   const { data: participants } = await supabase
     .from("match_participants")
     .select(
-      "id, puuid, riot_game_name, riot_tag_line, player_id, team_id, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, gold_earned, total_cs",
+      "id, puuid, riot_game_name, riot_tag_line, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, gold_earned, total_cs",
     )
     .eq("match_id", matchId)
     .returns<Participant[]>();
@@ -87,8 +102,8 @@ export default async function MatchDetailPage({
 
   const viewer = participants.find((p) => p.player_id === id);
   const allyTeamId = viewer?.team_id ?? 100;
-  const allies = participants.filter((p) => p.team_id === allyTeamId);
-  const enemies = participants.filter((p) => p.team_id !== allyTeamId);
+  const allies = sortByRole(participants.filter((p) => p.team_id === allyTeamId));
+  const enemies = sortByRole(participants.filter((p) => p.team_id !== allyTeamId));
 
   const version = await getLatestVersion();
   const championMap = await getChampionMap(version);
@@ -120,6 +135,7 @@ export default async function MatchDetailPage({
 
       <div className="rounded-lg bg-blue-muted/30 p-3">
         <p className="mb-1 text-xs font-medium tracking-wide text-grey-light uppercase">Allies</p>
+        <ParticipantHeader />
         {allies.map((p) => (
           <ParticipantRow key={p.puuid} participant={p} version={version} championMap={championMap} />
         ))}
@@ -127,6 +143,7 @@ export default async function MatchDetailPage({
 
       <div className="rounded-lg bg-bg-tertiary p-3">
         <p className="mb-1 text-xs font-medium tracking-wide text-grey-light uppercase">Enemies</p>
+        <ParticipantHeader />
         {enemies.map((p) => (
           <ParticipantRow key={p.puuid} participant={p} version={version} championMap={championMap} />
         ))}

@@ -4,8 +4,10 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { getLatestVersion, getChampionMap, championIconUrl } from "@/lib/ddragon";
 import { formatDuration, formatKDA, formatRelativeTime } from "@/lib/format";
+import { NotesSection } from "@/components/notes-section";
 
 type Participant = {
+  id: string;
   puuid: string;
   riot_game_name: string | null;
   riot_tag_line: string | null;
@@ -76,7 +78,7 @@ export default async function MatchDetailPage({
   const { data: participants } = await supabase
     .from("match_participants")
     .select(
-      "puuid, riot_game_name, riot_tag_line, player_id, team_id, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, gold_earned, total_cs",
+      "id, puuid, riot_game_name, riot_tag_line, player_id, team_id, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, gold_earned, total_cs",
     )
     .eq("match_id", matchId)
     .returns<Participant[]>();
@@ -89,6 +91,16 @@ export default async function MatchDetailPage({
 
   const version = await getLatestVersion();
   const championMap = await getChampionMap(version);
+
+  const notes = viewer
+    ? (
+        await supabase
+          .from("match_notes")
+          .select("id, note, author_name, created_at")
+          .eq("match_participant_id", viewer.id)
+          .order("created_at", { ascending: false })
+      ).data ?? []
+    : [];
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-8 sm:px-6">
@@ -118,6 +130,10 @@ export default async function MatchDetailPage({
           <ParticipantRow key={p.puuid} participant={p} version={version} championMap={championMap} />
         ))}
       </div>
+
+      {viewer && (
+        <NotesSection matchParticipantId={viewer.id} playerId={id} matchId={matchId} notes={notes} />
+      )}
     </main>
   );
 }

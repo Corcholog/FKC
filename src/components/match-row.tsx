@@ -1,7 +1,13 @@
 import Link from "next/link";
 import Image from "next/image";
-import { formatDuration, formatKDA, formatRelativeTime } from "@/lib/format";
-import { championIconUrl } from "@/lib/ddragon";
+import { formatDuration, formatKDA, formatPerMinute, formatRelativeTime } from "@/lib/format";
+import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/ddragon";
+
+export type TeamComposChampion = {
+  championId: number;
+  championName: string;
+  isOpponent?: boolean;
+};
 
 type MatchRowData = {
   matchId: string;
@@ -12,11 +18,44 @@ type MatchRowData = {
   deaths: number;
   assists: number;
   damageDealtToChampions: number;
-  goldEarned: number;
   totalCs: number;
   gameCreation: string;
   gameDurationSeconds: number;
+  allies: TeamComposChampion[];
+  enemies: TeamComposChampion[];
 };
+
+function TeamComposRow({
+  champions,
+  version,
+  championMap,
+}: {
+  champions: TeamComposChampion[];
+  version: string;
+  championMap: Map<number, ChampionInfo>;
+}) {
+  return (
+    <div className="flex gap-0.5">
+      {champions.map((c, i) => {
+        const url = championIconUrl(c.championId, version, championMap);
+        const name = championDisplayName(c.championId, championMap, c.championName);
+        return url ? (
+          // eslint-disable-next-line @next/next/no-img-element -- many tiny decorative
+          // icons per row; next/image's optimizer overhead isn't worth it at this size.
+          <img
+            key={i}
+            src={url}
+            alt={name}
+            title={name}
+            className={`h-4 w-4 rounded-sm ${c.isOpponent ? "ring-2 ring-blue-bright" : ""}`}
+          />
+        ) : (
+          <div key={i} className="h-4 w-4 rounded-sm bg-blue-muted" />
+        );
+      })}
+    </div>
+  );
+}
 
 export function MatchRow({
   match,
@@ -26,10 +65,11 @@ export function MatchRow({
 }: {
   match: MatchRowData;
   version: string;
-  championMap: Map<number, string>;
+  championMap: Map<number, ChampionInfo>;
   playerId: string;
 }) {
   const iconUrl = championIconUrl(match.championId, version, championMap);
+  const displayName = championDisplayName(match.championId, championMap, match.championName);
 
   return (
     <Link
@@ -38,30 +78,34 @@ export function MatchRow({
         match.win ? "border-l-win" : "border-l-loss"
       }`}
     >
-      {iconUrl ? (
-        <Image src={iconUrl} alt={match.championName} width={40} height={40} className="h-10 w-10 rounded-md" />
-      ) : (
-        <div className="h-10 w-10 rounded-md bg-blue-muted" />
-      )}
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        {iconUrl ? (
+          <Image src={iconUrl} alt={displayName} width={40} height={40} className="h-10 w-10 shrink-0 rounded-md" />
+        ) : (
+          <div className="h-10 w-10 shrink-0 rounded-md bg-blue-muted" />
+        )}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-white">{displayName}</p>
+          <p className="tabular-nums text-xs text-grey-light">
+            {formatKDA(match.kills, match.deaths, match.assists)}
+          </p>
+        </div>
+      </div>
 
-      <div className="flex-1">
-        <p className="text-sm font-medium text-white">{match.championName}</p>
-        <p className="tabular-nums text-xs text-grey-light">
-          {formatKDA(match.kills, match.deaths, match.assists)}
+      <div className="hidden shrink-0 flex-col gap-0.5 md:flex">
+        <TeamComposRow champions={match.allies} version={version} championMap={championMap} />
+        <TeamComposRow champions={match.enemies} version={version} championMap={championMap} />
+      </div>
+
+      <div className="hidden shrink-0 text-right text-xs text-grey-light sm:block">
+        <p className="tabular-nums">{formatPerMinute(match.totalCs, match.gameDurationSeconds)} CS/min</p>
+        <p className="tabular-nums">
+          {formatPerMinute(match.damageDealtToChampions, match.gameDurationSeconds)} dmg/min
         </p>
-      </div>
-
-      <div className="hidden text-right text-xs text-grey-light sm:block">
-        <p className="tabular-nums">{match.damageDealtToChampions.toLocaleString()} dmg</p>
-        <p className="tabular-nums">{match.goldEarned.toLocaleString()} gold</p>
-      </div>
-
-      <div className="hidden text-right text-xs text-grey-light sm:block">
-        <p className="tabular-nums">{match.totalCs} CS</p>
         <p className="tabular-nums">{formatDuration(match.gameDurationSeconds)}</p>
       </div>
 
-      <div className="text-right">
+      <div className="shrink-0 text-right">
         <p className={`text-sm font-semibold ${match.win ? "text-win" : "text-loss"}`}>
           {match.win ? "Win" : "Loss"}
         </p>

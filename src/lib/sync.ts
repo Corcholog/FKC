@@ -156,6 +156,7 @@ async function syncPlayerMatches(
         riot_game_name: p.riotIdGameName ?? null,
         riot_tag_line: p.riotIdTagline ?? null,
         team_id: p.teamId,
+        team_position: p.teamPosition || null,
         champion_id: p.championId,
         champion_name: p.championName,
         win: p.win,

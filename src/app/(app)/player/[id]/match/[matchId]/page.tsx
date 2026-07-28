@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
-import { getLatestVersion, getChampionMap, championIconUrl } from "@/lib/ddragon";
+import { getLatestVersion, getChampionMap, championIconUrl, championDisplayName, type ChampionInfo } from "@/lib/ddragon";
 import { formatDuration, formatKDA, formatRelativeTime } from "@/lib/format";
 import { NotesSection } from "@/components/notes-section";
 
@@ -31,17 +31,18 @@ function ParticipantRow({
 }: {
   participant: Participant;
   version: string;
-  championMap: Map<number, string>;
+  championMap: Map<number, ChampionInfo>;
 }) {
   const iconUrl = championIconUrl(participant.champion_id, version, championMap);
+  const championName = championDisplayName(participant.champion_id, championMap, participant.champion_name);
   const name = participant.riot_game_name
     ? `${participant.riot_game_name}#${participant.riot_tag_line}`
-    : participant.champion_name;
+    : championName;
 
   return (
     <div className="flex items-center gap-2 py-1.5">
       {iconUrl ? (
-        <Image src={iconUrl} alt={participant.champion_name} width={28} height={28} className="h-7 w-7 rounded" />
+        <Image src={iconUrl} alt={championName} width={28} height={28} className="h-7 w-7 rounded" />
       ) : (
         <div className="h-7 w-7 rounded bg-blue-muted" />
       )}

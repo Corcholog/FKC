@@ -32,3 +32,8 @@ export function formatDuration(seconds: number): string {
 export function formatKDA(kills: number, deaths: number, assists: number): string {
   return `${kills} / ${deaths} / ${assists}`;
 }
+
+export function formatPerMinute(total: number, gameDurationSeconds: number): string {
+  if (gameDurationSeconds <= 0) return "0.0";
+  return (total / (gameDurationSeconds / 60)).toFixed(1);
+}

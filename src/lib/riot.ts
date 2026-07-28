@@ -43,6 +43,7 @@ export type MatchParticipantDto = {
   riotIdGameName?: string;
   riotIdTagline?: string;
   teamId: number;
+  teamPosition?: string; // TOP/JUNGLE/MIDDLE/BOTTOM/UTILITY, "" if Riot couldn't determine it
   championId: number;
   championName: string;
   win: boolean;

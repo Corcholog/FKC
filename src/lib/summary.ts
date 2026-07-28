@@ -1,10 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateText } from "@/lib/gemini";
 import { formatRank, formatWinLoss, formatWinRate } from "@/lib/rank";
+import { getLatestVersion, getChampionMap, championDisplayName } from "@/lib/ddragon";
 
 const RECENT_MATCH_LIMIT = 50;
 
 type RecentMatchRow = {
+  champion_id: number;
   champion_name: string;
   win: boolean;
   kills: number;
@@ -20,7 +22,7 @@ type MatchWithParticipant = {
 
 type NoteRow = {
   note: string;
-  match_participants: { champion_name: string } | null;
+  match_participants: { champion_id: number; champion_name: string } | null;
 };
 
 export type SummaryResult = { summaryText: string; generatedAt: string } | { notEnoughData: true };
@@ -43,23 +45,40 @@ export async function generatePlayerSummary(
   // 50 most recent, silently feeding stale/arbitrary history into the prompt.
   const { data: recentMatchesRaw } = await supabase
     .from("matches")
-    .select("game_creation, match_participants!inner(champion_name, win, kills, deaths, assists, total_cs, player_id)")
+    .select(
+      "game_creation, match_participants!inner(champion_id, champion_name, win, kills, deaths, assists, total_cs, player_id)",
+    )
     .eq("match_participants.player_id", playerId)
     .order("game_creation", { ascending: false })
     .limit(RECENT_MATCH_LIMIT)
     .returns<MatchWithParticipant[]>();
 
-  const recentMatches = (recentMatchesRaw ?? []).map((m) => m.match_participants[0]);
-
   const { data: notes } = await supabase
     .from("match_notes")
-    .select("note, match_participants!inner(champion_name, player_id)")
+    .select("note, match_participants!inner(champion_id, champion_name, player_id)")
     .eq("match_participants.player_id", playerId)
     .order("created_at", { ascending: false })
     .returns<NoteRow[]>();
 
-  const matches = recentMatches;
-  const noteRows = notes ?? [];
+  // championName stored on match_participants is Riot's internal codename
+  // (e.g. "MonkeyKing" for Wukong), not the display name — resolve through
+  // DDragon before this ever reaches the prompt. Same fix as the UI side.
+  const version = await getLatestVersion();
+  const championMap = await getChampionMap(version);
+  const resolveName = (championId: number, fallback: string) =>
+    championDisplayName(championId, championMap, fallback);
+
+  const matches = (recentMatchesRaw ?? []).map((m) => {
+    const p = m.match_participants[0];
+    return { ...p, champion_name: resolveName(p.champion_id, p.champion_name) };
+  });
+
+  const noteRows = (notes ?? []).map((n) => ({
+    ...n,
+    match_participants: n.match_participants
+      ? { ...n.match_participants, champion_name: resolveName(n.match_participants.champion_id, n.match_participants.champion_name) }
+      : null,
+  }));
 
   if (matches.length === 0 && noteRows.length === 0) {
     return { notEnoughData: true };

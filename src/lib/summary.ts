@@ -11,7 +11,11 @@ type RecentMatchRow = {
   deaths: number;
   assists: number;
   total_cs: number;
-  matches: { game_creation: string } | null;
+};
+
+type MatchWithParticipant = {
+  game_creation: string;
+  match_participants: RecentMatchRow[];
 };
 
 type NoteRow = {
@@ -32,13 +36,20 @@ export async function generatePlayerSummary(
     .single();
   if (playerError || !player) throw new Error("Player not found.");
 
-  const { data: recentMatches } = await supabase
-    .from("match_participants")
-    .select("champion_name, win, kills, deaths, assists, total_cs, matches!inner(game_creation)")
-    .eq("player_id", playerId)
-    .order("game_creation", { foreignTable: "matches", ascending: false })
+  // Query from matches (not match_participants) so game_creation is a true
+  // top-level column — see the same fix/comment in player/[id]/page.tsx.
+  // Getting this right actually matters here: with the broken order the
+  // .limit(50) below was capping to 50 games in ~insertion order, not the
+  // 50 most recent, silently feeding stale/arbitrary history into the prompt.
+  const { data: recentMatchesRaw } = await supabase
+    .from("matches")
+    .select("game_creation, match_participants!inner(champion_name, win, kills, deaths, assists, total_cs, player_id)")
+    .eq("match_participants.player_id", playerId)
+    .order("game_creation", { ascending: false })
     .limit(RECENT_MATCH_LIMIT)
-    .returns<RecentMatchRow[]>();
+    .returns<MatchWithParticipant[]>();
+
+  const recentMatches = (recentMatchesRaw ?? []).map((m) => m.match_participants[0]);
 
   const { data: notes } = await supabase
     .from("match_notes")
@@ -47,7 +58,7 @@ export async function generatePlayerSummary(
     .order("created_at", { ascending: false })
     .returns<NoteRow[]>();
 
-  const matches = recentMatches ?? [];
+  const matches = recentMatches;
   const noteRows = notes ?? [];
 
   if (matches.length === 0 && noteRows.length === 0) {

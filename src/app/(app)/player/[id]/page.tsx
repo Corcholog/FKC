@@ -6,18 +6,22 @@ import { formatRank, formatWinLoss, formatWinRate } from "@/lib/rank";
 import { MatchRow } from "@/components/match-row";
 import { AiSummaryCard } from "@/components/ai-summary-card";
 
-type MatchParticipantRow = {
+type MatchWithParticipant = {
   id: string;
-  champion_id: number;
-  champion_name: string;
-  win: boolean;
-  kills: number;
-  deaths: number;
-  assists: number;
-  damage_dealt_to_champions: number;
-  gold_earned: number;
-  total_cs: number;
-  matches: { id: string; game_creation: string; game_duration_seconds: number } | null;
+  game_creation: string;
+  game_duration_seconds: number;
+  match_participants: {
+    id: string;
+    champion_id: number;
+    champion_name: string;
+    win: boolean;
+    kills: number;
+    deaths: number;
+    assists: number;
+    damage_dealt_to_champions: number;
+    gold_earned: number;
+    total_cs: number;
+  }[];
 };
 
 export default async function PlayerDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,14 +31,19 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
   const { data: player } = await supabase.from("players").select("*").eq("id", id).single();
   if (!player) notFound();
 
+  // Query from matches (not match_participants) so game_creation is a true
+  // top-level column — PostgREST's foreignTable order only reorders embedded
+  // to-many collections within each parent, it can't reorder the parent rows
+  // by a column in a to-one join, so ordering "through" match_participants
+  // silently no-ops and returns rows in insertion order instead.
   const { data: history } = await supabase
-    .from("match_participants")
+    .from("matches")
     .select(
-      "id, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, gold_earned, total_cs, matches!inner(id, game_creation, game_duration_seconds)",
+      "id, game_creation, game_duration_seconds, match_participants!inner(id, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, gold_earned, total_cs, player_id)",
     )
-    .eq("player_id", id)
-    .order("game_creation", { foreignTable: "matches", ascending: false })
-    .returns<MatchParticipantRow[]>();
+    .eq("match_participants.player_id", id)
+    .order("game_creation", { ascending: false })
+    .returns<MatchWithParticipant[]>();
 
   const version = await getLatestVersion();
   const championMap = await getChampionMap(version);
@@ -97,28 +106,31 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
         {!history || history.length === 0 ? (
           <p className="text-sm text-grey-mid">No tracked matches yet.</p>
         ) : (
-          history.map((h) => (
+          history.map((m) => {
+            const p = m.match_participants[0];
+            return (
             <MatchRow
-              key={h.id}
+              key={p.id}
               match={{
-                matchId: h.matches!.id,
-                championId: h.champion_id,
-                championName: h.champion_name,
-                win: h.win,
-                kills: h.kills,
-                deaths: h.deaths,
-                assists: h.assists,
-                damageDealtToChampions: h.damage_dealt_to_champions,
-                goldEarned: h.gold_earned,
-                totalCs: h.total_cs,
-                gameCreation: h.matches!.game_creation,
-                gameDurationSeconds: h.matches!.game_duration_seconds,
+                matchId: m.id,
+                championId: p.champion_id,
+                championName: p.champion_name,
+                win: p.win,
+                kills: p.kills,
+                deaths: p.deaths,
+                assists: p.assists,
+                damageDealtToChampions: p.damage_dealt_to_champions,
+                goldEarned: p.gold_earned,
+                totalCs: p.total_cs,
+                gameCreation: m.game_creation,
+                gameDurationSeconds: m.game_duration_seconds,
               }}
               version={version}
               championMap={championMap}
               playerId={id}
             />
-          ))
+            );
+          })
         )}
       </section>
     </main>

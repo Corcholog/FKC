@@ -31,9 +31,10 @@ type Player = {
 /**
  * Creates the player's own login so they can write notes on their games. There's
  * no signup route by design — an admin sets the initial password here and hands
- * it over; the player can change it later from /account.
+ * it over; the player can change it later from /account. They always sign in
+ * with their display name, never an email (see resolve_login_email).
  */
-function LoginControls({ player, loginEmail }: { player: Player; loginEmail: string | null }) {
+function LoginControls({ player }: { player: Player }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -65,7 +66,7 @@ function LoginControls({ player, loginEmail }: { player: Player; loginEmail: str
     return (
       <div className="flex items-center gap-2 text-xs text-grey-light">
         <KeyRound className="h-3.5 w-3.5 text-gold" />
-        <span className="truncate">{loginEmail ?? "Login linked"}</span>
+        <span className="truncate">Login linked</span>
         {removeError && <span className="text-loss">{removeError}</span>}
         <Dialog open={removeOpen} onOpenChange={setRemoveOpen}>
           <DialogTrigger render={<Button type="button" variant="ghost" size="xs" className="text-loss hover:text-danger" />}>
@@ -102,16 +103,12 @@ function LoginControls({ player, loginEmail }: { player: Player; loginEmail: str
           <DialogHeader>
             <DialogTitle>Create a login for {player.display_name}</DialogTitle>
             <DialogDescription>
-              They&apos;ll be able to add notes to their own games. Share these credentials with
-              them — they can change the password from the Account page.
+              They&apos;ll sign in with their display name, &quot;{player.display_name}&quot;, and this
+              password — share it with them. They can change it later from the Account page.
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col gap-3 py-4">
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-grey-light">Email</Label>
-              <Input name="email" type="email" required autoComplete="off" />
-            </div>
             <div className="flex flex-col gap-1">
               <Label className="text-xs text-grey-light">Initial password</Label>
               <Input name="password" type="text" required minLength={8} autoComplete="off" />
@@ -131,7 +128,7 @@ function LoginControls({ player, loginEmail }: { player: Player; loginEmail: str
   );
 }
 
-export function PlayerRow({ player, loginEmail }: { player: Player; loginEmail: string | null }) {
+export function PlayerRow({ player }: { player: Player }) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -232,7 +229,7 @@ export function PlayerRow({ player, loginEmail }: { player: Player; loginEmail: 
 
         <div className="flex shrink-0 items-center gap-1">
           <div className="mr-1 hidden sm:block">
-            <LoginControls player={player} loginEmail={loginEmail} />
+            <LoginControls player={player} />
           </div>
           {deleteError && <p className="text-xs text-loss">{deleteError}</p>}
           <Button
@@ -270,7 +267,7 @@ export function PlayerRow({ player, loginEmail }: { player: Player; loginEmail: 
       </div>
 
       <div className="sm:hidden">
-        <LoginControls player={player} loginEmail={loginEmail} />
+        <LoginControls player={player} />
       </div>
 
       {resultMessage && <p className="text-xs text-grey-light">{resultMessage}</p>}

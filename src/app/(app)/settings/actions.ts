@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -271,7 +272,16 @@ export async function deletePlayer(id: string): Promise<void> {
 // Accounts are created here rather than through a public signup route — the
 // site stays private. players.user_id is revoked from the `authenticated` role
 // (see docs/schema.sql), so linking must go through the service-role client.
+//
+// Supabase Auth has no username-only mode — every row in auth.users needs an
+// email. Since a player only ever signs in with their display name (see
+// resolve_login_email in docs/schema.sql), that email is never seen or typed
+// by anyone: assign a random address on the RFC 2606 "always invalid" TLD, purely
+// to satisfy Supabase's format check. email_confirm below means nothing is ever
+// sent to it.
 // ------------------------------------------------------------
+
+const PLACEHOLDER_EMAIL_DOMAIN = "player.invalid";
 
 export async function createPlayerLogin(
   _prevState: PlayerFormState,
@@ -281,20 +291,20 @@ export async function createPlayerLogin(
     await requireSession();
 
     const playerId = formData.get("playerId") as string;
-    const email = (formData.get("email") as string)?.trim().toLowerCase();
     const password = formData.get("password") as string;
 
-    if (!playerId || !email || !password) {
-      return { error: "Email and password are required." };
+    if (!playerId || !password) {
+      return { error: "Password is required." };
     }
     if (password.length < 8) {
       return { error: "Password must be at least 8 characters." };
     }
 
     const admin = createAdminClient();
+    const placeholderEmail = `${randomUUID()}@${PLACEHOLDER_EMAIL_DOMAIN}`;
 
     const { data: created, error: createError } = await admin.auth.admin.createUser({
-      email,
+      email: placeholderEmail,
       password,
       email_confirm: true, // no SMTP configured — the account is usable immediately
     });
@@ -318,7 +328,7 @@ export async function createPlayerLogin(
     }
 
     revalidatePath("/settings");
-    return { success: true, message: `Login created for ${email}.` };
+    return { success: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong." };
   }

@@ -37,6 +37,12 @@ export function formatKDA(kills: number, deaths: number, assists: number): strin
   return `${kills} / ${deaths} / ${assists}`;
 }
 
+// The (K+A)/D ratio as a display string — distinct from formatKDA above, which
+// renders the raw "k / d / a" triple.
+export function formatKdaRatio(ratio: number): string {
+  return ratio.toFixed(2);
+}
+
 export function formatPerMinute(total: number, gameDurationSeconds: number): string {
   if (gameDurationSeconds <= 0) return "0.0";
   return (total / (gameDurationSeconds / 60)).toFixed(1);

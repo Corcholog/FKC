@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+const INVALID_CREDENTIALS = "Invalid display name/email or password.";
+
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -20,10 +22,29 @@ export default function LoginPage() {
     setError(null);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const trimmed = identifier.trim();
 
-    if (error) {
-      setError(error.message);
+    // A display name is easier to remember than an email, but auth.users only
+    // has an email column — resolve the display name to its linked account's
+    // email first. Text with an "@" is treated as an email and used as-is.
+    let email = trimmed;
+    if (!trimmed.includes("@")) {
+      const { data: resolved, error: resolveError } = await supabase.rpc("resolve_login_email", {
+        p_display_name: trimmed,
+      });
+      if (resolveError || !resolved) {
+        // Same message as a wrong password — don't reveal whether the name exists.
+        setError(INVALID_CREDENTIALS);
+        setLoading(false);
+        return;
+      }
+      email = resolved;
+    }
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (signInError) {
+      setError(INVALID_CREDENTIALS);
       setLoading(false);
       return;
     }
@@ -41,16 +62,16 @@ export default function LoginPage() {
         <h1 className="font-heading mb-6 text-xl font-semibold text-white">Fake Clan SoloQ Tracker</h1>
 
         <div className="mb-4 flex flex-col gap-1.5">
-          <Label htmlFor="email" className="text-xs text-grey-light">
-            Email
+          <Label htmlFor="identifier" className="text-xs text-grey-light">
+            Display name or email
           </Label>
           <Input
-            id="email"
-            type="email"
-            autoComplete="email"
+            id="identifier"
+            type="text"
+            autoComplete="username"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
           />
         </div>
 

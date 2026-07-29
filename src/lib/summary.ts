@@ -141,5 +141,5 @@ ${matchLines || "No recent games recorded."}
 Notes the group has left on this player's games:
 ${noteLines || "No notes yet."}
 
-Write a concise 3-5 sentence natural-language summary of how this player has been performing recently, weaving in the notes where relevant. Casual tone, like a friend recapping their session — not a formal report. Do not use markdown formatting.`;
+Write a concise 3-5 sentence natural-language summary of how this player has been performing recently, weaving in the notes where relevant. Casual tone, like a friend recapping their session — not a formal report. Do not use markdown formatting. You can roast the player a bit. All output must be in natural Rioplatense Spanish (Argentina), as if one friend were talking to another. Feel free to use casual gaming slang. Do not use English except for League of Legends terms, champion names, or player names.`;
 }

@@ -5,7 +5,6 @@ import { addNote, updateNote, deleteNote } from "@/app/(app)/player/[slug]/match
 import { emptyNoteFormState, type NoteFormState } from "@/app/(app)/player/[slug]/match/[riotMatchId]/notes-form-state";
 import { formatRelativeTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -21,6 +20,7 @@ import {
 type Note = {
   id: string;
   note: string;
+  author_user_id: string | null;
   author_name: string | null;
   created_at: string;
 };
@@ -28,9 +28,13 @@ type Note = {
 function NoteItem({
   note,
   playerId,
+  authorLabel,
+  isOwn,
 }: {
   note: Note;
   playerId: string;
+  authorLabel: string | null;
+  isOwn: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -81,33 +85,35 @@ function NoteItem({
       <p className="text-sm text-white">{note.note}</p>
       <div className="mt-1.5 flex items-center justify-between">
         <p className="text-xs text-grey-mid">
-          {note.author_name ? `${note.author_name} · ` : ""}
+          {authorLabel ? `${authorLabel} · ` : ""}
           {formatRelativeTime(note.created_at)}
         </p>
-        <div className="flex items-center gap-1">
-          {deleteError && <p className="text-xs text-loss">{deleteError}</p>}
-          <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>
-            Edit
-          </Button>
+        {isOwn && (
+          <div className="flex items-center gap-1">
+            {deleteError && <p className="text-xs text-loss">{deleteError}</p>}
+            <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>
+              Edit
+            </Button>
 
-          <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-            <DialogTrigger render={<Button type="button" variant="ghost" size="sm" className="text-loss hover:text-danger" />}>
-              Delete
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Delete this note?</DialogTitle>
-                <DialogDescription>This can&apos;t be undone.</DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
-                <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting}>
-                  {deleting ? "Deleting…" : "Delete"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+            <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+              <DialogTrigger render={<Button type="button" variant="ghost" size="sm" className="text-loss hover:text-danger" />}>
+                Delete
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete this note?</DialogTitle>
+                  <DialogDescription>This can&apos;t be undone.</DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+                  <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting}>
+                    {deleting ? "Deleting…" : "Delete"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
       </div>
     </li>
   );
@@ -116,11 +122,18 @@ function NoteItem({
 export function NotesSection({
   matchParticipantId,
   playerId,
+  playerName,
   notes,
+  canAddNote,
+  currentUserId,
 }: {
   matchParticipantId: string;
   playerId: string;
+  /** Display name of the player whose game this is — the only person who can write here. */
+  playerName: string;
   notes: Note[];
+  canAddNote: boolean;
+  currentUserId: string | null;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [state, formAction, pending] = useActionState(async (prevState: NoteFormState, formData: FormData) => {
@@ -136,31 +149,42 @@ export function NotesSection({
       {notes.length > 0 ? (
         <ul className="flex flex-col gap-2">
           {notes.map((n) => (
-            <NoteItem key={n.id} note={n} playerId={playerId} />
+            <NoteItem
+              key={n.id}
+              note={n}
+              playerId={playerId}
+              // Only this player can write here, so an owned note is theirs;
+              // older notes predate logins and fall back to the free-text name.
+              authorLabel={n.author_user_id ? playerName : n.author_name}
+              isOwn={currentUserId !== null && n.author_user_id === currentUserId}
+            />
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-grey-mid">No notes yet.</p>
+        <p className="text-sm text-grey-mid">
+          {canAddNote ? "No notes yet — add one below." : `${playerName} hasn't added any notes to this game.`}
+        </p>
       )}
 
-      <form ref={formRef} action={formAction} className="flex flex-col gap-2">
-        <input type="hidden" name="matchParticipantId" value={matchParticipantId} />
-        <input type="hidden" name="playerId" value={playerId} />
-        <Textarea
-          name="note"
-          placeholder="e.g. died overextending at 14 min, should've backed"
-          required
-          rows={2}
-          className="text-sm"
-        />
-        <div className="flex items-center gap-2">
-          <Input name="authorName" placeholder="Your name (optional)" className="flex-1" />
-          <Button type="submit" disabled={pending}>
-            {pending ? "Adding…" : "Add note"}
-          </Button>
-        </div>
-        {state?.error && <p className="text-sm text-loss">{state.error}</p>}
-      </form>
+      {canAddNote && (
+        <form ref={formRef} action={formAction} className="flex flex-col gap-2">
+          <input type="hidden" name="matchParticipantId" value={matchParticipantId} />
+          <input type="hidden" name="playerId" value={playerId} />
+          <Textarea
+            name="note"
+            placeholder="e.g. died overextending at 14 min, should've backed"
+            required
+            rows={2}
+            className="text-sm"
+          />
+          <div className="flex justify-end">
+            <Button type="submit" disabled={pending}>
+              {pending ? "Adding…" : "Add note"}
+            </Button>
+          </div>
+          {state?.error && <p className="text-sm text-loss">{state.error}</p>}
+        </form>
+      )}
     </section>
   );
 }

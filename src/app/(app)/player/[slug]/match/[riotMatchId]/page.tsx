@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap, championIconUrl, championDisplayName, type ChampionInfo } from "@/lib/ddragon";
 import { formatDuration, formatKDA, formatRelativeTime } from "@/lib/format";
 import { sortByRole } from "@/lib/roles";
@@ -95,7 +96,11 @@ export default async function MatchDetailPage({
   const { slug, riotMatchId } = await params;
   const supabase = await createClient();
 
-  const { data: player } = await supabase.from("players").select("id, slug").eq("slug", slug).single();
+  const { data: player } = await supabase
+    .from("players")
+    .select("id, slug, display_name")
+    .eq("slug", slug)
+    .single();
   if (!player) notFound();
   const id = player.id;
 
@@ -127,11 +132,14 @@ export default async function MatchDetailPage({
     ? (
         await supabase
           .from("match_notes")
-          .select("id, note, author_name, created_at")
+          .select("id, note, author_user_id, author_name, created_at")
           .eq("match_participant_id", viewer.id)
           .order("created_at", { ascending: false })
       ).data ?? []
     : [];
+
+  // Who's reading this page — only the player whose game it is may write notes.
+  const session = await getSession();
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-8 sm:px-6">
@@ -189,7 +197,14 @@ export default async function MatchDetailPage({
       </Card>
 
       {viewer && (
-        <NotesSection matchParticipantId={viewer.id} playerId={id} notes={notes} />
+        <NotesSection
+          matchParticipantId={viewer.id}
+          playerId={id}
+          playerName={player.display_name}
+          notes={notes}
+          canAddNote={session?.player?.id === id}
+          currentUserId={session?.user.id ?? null}
+        />
       )}
     </main>
   );

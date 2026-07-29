@@ -7,8 +7,9 @@ import {
 } from "@/lib/riot";
 
 // Games before this date are out of scope (docs/01_PRD.md §4.6) — the app's
-// stated tracking start, not a ranked reset.
-const TRACKING_START_DATE = new Date("2026-07-29T00:00:00Z");
+// stated tracking start, not a ranked reset. Expressed in UTC: 2026-07-29 12:00
+// America/Argentina/Buenos Aires (UTC-3, no DST since 2009) = 2026-07-29T15:00:00Z.
+const TRACKING_START_DATE = new Date("2026-07-29T15:00:00Z");
 
 const MAX_MATCH_IDS_PER_PLAYER = 200; // pagination safety cap, see docs/04_RIOT_API_INTEGRATION.md §3
 const MATCH_ID_PAGE_SIZE = 20;

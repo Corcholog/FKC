@@ -2,7 +2,7 @@
 
 Private web app for tracking a small group's League of Legends Solo/Duo ranked games on LAS. Next.js (App Router) + TypeScript + Tailwind, Supabase (Postgres + Auth), Vercel, Riot Games API, Gemini.
 
-Not a public product — everything here sits behind a single shared login for one private friend group.
+Not a public product — everything here sits behind a login for one private friend group. There's no signup: a shared viewer account reads everything, and each roster player gets their own account (created from the Settings page) so they can write notes on their own games.
 
 ## Setup
 
@@ -18,8 +18,8 @@ See [.env.local.example](.env.local.example) for the full list and where each va
 
 ### Database
 
-Run the schema SQL against a fresh Supabase project's SQL Editor before first use. (Kept locally, not in this repo — ask if you need it re-shared.)
+Run the schema SQL against a fresh Supabase project's SQL Editor before first use. For an existing project, run the numbered files in `docs/migrations/` instead. (Both kept locally, not in this repo — ask if you need them re-shared.)
 
 ## Status
 
-MVP complete (Phases 0–9 of `docs/06_ROADMAP.md`) plus Phase 10 (per-player champion tierlist). Phase 11 (private per-player AI chat) is the only roadmap item not yet started. See commit history for progress.
+MVP complete (Phases 0–9 of `docs/06_ROADMAP.md`), plus Phase 10 (per-player champion tierlist) and Phase 11 (per-player accounts + owned notes). Phase 12 (private per-player AI chat) is the only roadmap item not yet started. See commit history for progress.

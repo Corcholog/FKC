@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { updatePlayer, deletePlayer } from "@/app/(app)/settings/actions";
+import { useActionState, useRef, useState } from "react";
+import { KeyRound } from "lucide-react";
+import { updatePlayer, deletePlayer, createPlayerLogin, removePlayerLogin } from "@/app/(app)/settings/actions";
 import { emptyPlayerFormState, type PlayerFormState } from "@/app/(app)/settings/form-state";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -24,9 +25,113 @@ type Player = {
   riot_tag_line: string;
   display_name: string;
   avatar_url: string | null;
+  user_id: string | null;
 };
 
-export function PlayerRow({ player }: { player: Player }) {
+/**
+ * Creates the player's own login so they can write notes on their games. There's
+ * no signup route by design — an admin sets the initial password here and hands
+ * it over; the player can change it later from /account.
+ */
+function LoginControls({ player, loginEmail }: { player: Player; loginEmail: string | null }) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [state, formAction, pending] = useActionState(async (prevState: PlayerFormState, formData: FormData) => {
+    const result = await createPlayerLogin(prevState, formData);
+    if (result.success) {
+      formRef.current?.reset();
+      setCreateOpen(false);
+    }
+    return result;
+  }, emptyPlayerFormState);
+
+  async function handleRemove() {
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      await removePlayerLogin(player.id);
+      setRemoveOpen(false);
+    } catch (e) {
+      setRemoveError(e instanceof Error ? e.message : "Failed to remove login.");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  if (player.user_id) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-grey-light">
+        <KeyRound className="h-3.5 w-3.5 text-gold" />
+        <span className="truncate">{loginEmail ?? "Login linked"}</span>
+        {removeError && <span className="text-loss">{removeError}</span>}
+        <Dialog open={removeOpen} onOpenChange={setRemoveOpen}>
+          <DialogTrigger render={<Button type="button" variant="ghost" size="xs" className="text-loss hover:text-danger" />}>
+            Remove login
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Remove {player.display_name}&apos;s login?</DialogTitle>
+              <DialogDescription>
+                They&apos;ll lose access to the site. Their existing notes stay visible but become
+                read-only, and they stay on the roster.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+              <Button type="button" variant="destructive" onClick={handleRemove} disabled={removing}>
+                {removing ? "Removing…" : "Remove login"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <DialogTrigger render={<Button type="button" variant="outline" size="xs" />}>
+        Create login
+      </DialogTrigger>
+      <DialogContent>
+        <form ref={formRef} action={formAction}>
+          <input type="hidden" name="playerId" value={player.id} />
+          <DialogHeader>
+            <DialogTitle>Create a login for {player.display_name}</DialogTitle>
+            <DialogDescription>
+              They&apos;ll be able to add notes to their own games. Share these credentials with
+              them — they can change the password from the Account page.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-3 py-4">
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-grey-light">Email</Label>
+              <Input name="email" type="email" required autoComplete="off" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-grey-light">Initial password</Label>
+              <Input name="password" type="text" required minLength={8} autoComplete="off" />
+            </div>
+            {state?.error && <p className="text-sm text-loss">{state.error}</p>}
+          </div>
+
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Creating…" : "Create login"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function PlayerRow({ player, loginEmail }: { player: Player; loginEmail: string | null }) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -72,7 +177,9 @@ export function PlayerRow({ player }: { player: Player }) {
 
           <div className="flex flex-col gap-1">
             <Label className="text-xs text-grey-light">Display name</Label>
-            <Input name="displayName" defaultValue={player.display_name} required />
+            <p className="flex h-9 items-center text-sm text-grey-light" title="Permanent — it's also this player's login name">
+              {player.display_name}
+            </p>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -124,6 +231,9 @@ export function PlayerRow({ player }: { player: Player }) {
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          <div className="mr-1 hidden sm:block">
+            <LoginControls player={player} loginEmail={loginEmail} />
+          </div>
           {deleteError && <p className="text-xs text-loss">{deleteError}</p>}
           <Button
             type="button"
@@ -145,7 +255,7 @@ export function PlayerRow({ player }: { player: Player }) {
               <DialogHeader>
                 <DialogTitle>Remove {player.display_name}?</DialogTitle>
                 <DialogDescription>
-                  This also deletes their notes and AI summary. This can&apos;t be undone.
+                  This also deletes their notes, AI summary, and login. This can&apos;t be undone.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
@@ -157,6 +267,10 @@ export function PlayerRow({ player }: { player: Player }) {
             </DialogContent>
           </Dialog>
         </div>
+      </div>
+
+      <div className="sm:hidden">
+        <LoginControls player={player} loginEmail={loginEmail} />
       </div>
 
       {resultMessage && <p className="text-xs text-grey-light">{resultMessage}</p>}

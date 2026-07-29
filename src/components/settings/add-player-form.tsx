@@ -35,7 +35,7 @@ export function AddPlayerForm() {
         <Label htmlFor="displayName" className="text-xs text-grey-light">
           Display name
         </Label>
-        <Input id="displayName" name="displayName" required />
+        <Input id="displayName" name="displayName" required title="Permanent once added — also doubles as their login name" />
       </div>
 
       <div className="flex flex-col gap-1">
@@ -54,6 +54,10 @@ export function AddPlayerForm() {
       <Button type="submit" disabled={pending} size="sm">
         {pending ? "Adding…" : "Add player"}
       </Button>
+
+      <p className="w-full text-xs text-grey-mid">
+        Display name can&apos;t be changed later — it also doubles as this player&apos;s login name.
+      </p>
 
       {state?.error && <p className="w-full text-sm text-loss">{state.error}</p>}
     </form>

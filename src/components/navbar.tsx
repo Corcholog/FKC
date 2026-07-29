@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Users, Swords, Trophy, Settings, Menu, Loader2 } from "lucide-react";
+import { LayoutDashboard, Users, Swords, Trophy, Settings, Menu, Loader2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -59,7 +59,14 @@ function NavLink({
   );
 }
 
-export function Navbar({ initialSyncing = false }: { initialSyncing?: boolean }) {
+export function Navbar({
+  initialSyncing = false,
+  accountLabel,
+}: {
+  initialSyncing?: boolean;
+  /** Who's signed in — the linked player's display name, or their email. */
+  accountLabel?: string | null;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [syncing, setSyncing] = useState(initialSyncing);
@@ -137,6 +144,19 @@ export function Navbar({ initialSyncing = false }: { initialSyncing?: boolean })
             {!syncing && <Swords className="h-4 w-4" />}
           </Button>
 
+          {accountLabel && (
+            <Link
+              href="/account"
+              className={cn(
+                "hidden max-w-40 items-center gap-1.5 truncate rounded-md px-2 py-1.5 text-sm transition-colors sm:inline-flex",
+                pathname === "/account" ? "text-gold-bright" : "text-grey-light hover:text-white",
+              )}
+            >
+              <UserRound className="h-4 w-4 shrink-0" />
+              <span className="truncate">{accountLabel}</span>
+            </Link>
+          )}
+
           <Button type="button" variant="ghost" size="sm" onClick={handleSignOut} className="hidden sm:inline-flex">
             Sign out
           </Button>
@@ -168,6 +188,15 @@ export function Navbar({ initialSyncing = false }: { initialSyncing?: boolean })
                 ))}
               </nav>
               <div className="mt-auto flex flex-col gap-2 border-t border-border p-4 sm:hidden">
+                {accountLabel && (
+                  <NavLink
+                    href="/account"
+                    label={accountLabel}
+                    Icon={UserRound}
+                    active={pathname === "/account"}
+                    onNavigate={() => setSheetOpen(false)}
+                  />
+                )}
                 <Button type="button" variant="ghost" size="sm" onClick={handleSignOut}>
                   Sign out
                 </Button>

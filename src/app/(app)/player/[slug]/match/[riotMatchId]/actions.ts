@@ -2,17 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
+import { requireSessionPlayer } from "@/lib/auth";
 import type { NoteFormState } from "./notes-form-state";
 
-async function requireSession() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated.");
-  return supabase;
-}
+const NOT_YOUR_GAME = "You can only write notes on your own games.";
+const NOT_YOUR_NOTE = "You can only edit your own notes.";
 
 // Notes feed the AI summary (Phase 8) — any add/edit/delete invalidates it.
 async function markSummaryStale(supabase: SupabaseClient, playerId: string) {
@@ -26,21 +20,34 @@ export async function addNote(
   formData: FormData,
 ): Promise<NoteFormState> {
   try {
-    const supabase = await requireSession();
+    const { supabase, user, player } = await requireSessionPlayer();
 
     const matchParticipantId = formData.get("matchParticipantId") as string;
     const note = (formData.get("note") as string)?.trim();
-    const authorName = (formData.get("authorName") as string)?.trim();
     const playerId = formData.get("playerId") as string;
 
     if (!matchParticipantId || !note) {
       return { error: "Note text is required." };
     }
 
+    // The shared viewer login owns no games.
+    if (!player) return { error: NOT_YOUR_GAME };
+
+    // RLS enforces this too (notes_insert_own), but checking here turns a raw
+    // policy violation into a readable message.
+    const { data: participant } = await supabase
+      .from("match_participants")
+      .select("player_id")
+      .eq("id", matchParticipantId)
+      .maybeSingle();
+    if (!participant || participant.player_id !== player.id) {
+      return { error: NOT_YOUR_GAME };
+    }
+
     const { error } = await supabase.from("match_notes").insert({
       match_participant_id: matchParticipantId,
       note,
-      author_name: authorName || null,
+      author_user_id: user.id,
     });
     if (error) return { error: error.message };
 
@@ -57,7 +64,7 @@ export async function updateNote(
   formData: FormData,
 ): Promise<NoteFormState> {
   try {
-    const supabase = await requireSession();
+    const { supabase } = await requireSessionPlayer();
 
     const id = formData.get("id") as string;
     const note = (formData.get("note") as string)?.trim();
@@ -67,11 +74,15 @@ export async function updateNote(
       return { error: "Note text is required." };
     }
 
-    const { error } = await supabase
+    // An RLS-blocked update is not an error — it just matches zero rows, so the
+    // returned rows are what actually tells us whether the write landed.
+    const { data, error } = await supabase
       .from("match_notes")
       .update({ note, updated_at: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", id)
+      .select("id");
     if (error) return { error: error.message };
+    if (!data || data.length === 0) return { error: NOT_YOUR_NOTE };
 
     await markSummaryStale(supabase, playerId);
     revalidatePath("/player/[slug]/match/[riotMatchId]", "page");
@@ -82,10 +93,15 @@ export async function updateNote(
 }
 
 export async function deleteNote(id: string, playerId: string): Promise<void> {
-  const supabase = await requireSession();
+  const { supabase } = await requireSessionPlayer();
 
-  const { error } = await supabase.from("match_notes").delete().eq("id", id);
+  const { data, error } = await supabase
+    .from("match_notes")
+    .delete()
+    .eq("id", id)
+    .select("id");
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error(NOT_YOUR_NOTE);
 
   await markSummaryStale(supabase, playerId);
   revalidatePath("/player/[slug]/match/[riotMatchId]", "page");

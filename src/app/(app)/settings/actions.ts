@@ -2,22 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireSession } from "@/lib/auth";
 import { getPuuidByRiotId, describeRiotError } from "@/lib/riot";
 import { backfillPlayerHistory, RiotKeyInvalidError } from "@/lib/sync";
 import { playerSlug } from "@/lib/slug";
 
 import type { PlayerFormState } from "./form-state";
-
-async function requireSession() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated.");
-  return supabase;
-}
 
 async function getRiotApiKey(supabase: SupabaseClient) {
   const { data, error } = await supabase
@@ -65,7 +56,7 @@ export async function addPlayer(
   formData: FormData,
 ): Promise<PlayerFormState> {
   try {
-    const supabase = await requireSession();
+    const { supabase } = await requireSession();
 
     const gameName = (formData.get("gameName") as string)?.trim();
     const tagLine = (formData.get("tagLine") as string)?.trim();
@@ -102,7 +93,7 @@ export async function addPlayer(
       return {
         error:
           error.code === "23505"
-            ? "This player (or their Riot ID) is already tracked."
+            ? "This player's Riot ID or display name is already tracked."
             : error.message,
       };
     }
@@ -121,17 +112,16 @@ export async function updatePlayer(
   formData: FormData,
 ): Promise<PlayerFormState> {
   try {
-    const supabase = await requireSession();
+    const { supabase } = await requireSession();
 
     const id = formData.get("id") as string;
     const gameName = (formData.get("gameName") as string)?.trim();
     const tagLine = (formData.get("tagLine") as string)?.trim();
-    const displayName = (formData.get("displayName") as string)?.trim();
     const avatarFile = formData.get("avatar") as File | null;
     const removeAvatar = formData.get("removeAvatar") === "on";
 
-    if (!id || !gameName || !tagLine || !displayName) {
-      return { error: "Game name, tag line, and display name are required." };
+    if (!id || !gameName || !tagLine) {
+      return { error: "Game name and tag line are required." };
     }
 
     const { data: existing, error: fetchError } = await supabase
@@ -169,7 +159,6 @@ export async function updatePlayer(
     const update: Record<string, unknown> = {
       riot_game_name: gameName,
       riot_tag_line: tagLine,
-      display_name: displayName,
       slug: playerSlug(gameName, tagLine),
       avatar_url: avatarUrl,
     };
@@ -231,7 +220,7 @@ export async function updateRiotKey(
   formData: FormData,
 ): Promise<PlayerFormState> {
   try {
-    const supabase = await requireSession();
+    const { supabase } = await requireSession();
 
     const key = (formData.get("riotApiKey") as string)?.trim();
     if (!key) return { error: "Riot API key is required." };
@@ -252,11 +241,11 @@ export async function updateRiotKey(
 }
 
 export async function deletePlayer(id: string): Promise<void> {
-  const supabase = await requireSession();
+  const { supabase } = await requireSession();
 
   const { data: existing } = await supabase
     .from("players")
-    .select("avatar_url")
+    .select("avatar_url, user_id")
     .eq("id", id)
     .single();
 
@@ -265,7 +254,99 @@ export async function deletePlayer(id: string): Promise<void> {
 
   await deleteAvatar((existing?.avatar_url as string | null) ?? null);
 
+  // Don't leave an orphan login that can still sign in with no player attached.
+  const linkedUserId = (existing?.user_id as string | null) ?? null;
+  if (linkedUserId) {
+    await createAdminClient().auth.admin.deleteUser(linkedUserId);
+  }
+
   revalidatePath("/settings");
   revalidatePath("/");
   revalidatePath("/team");
+}
+
+// ------------------------------------------------------------
+// Player logins
+//
+// Accounts are created here rather than through a public signup route — the
+// site stays private. players.user_id is revoked from the `authenticated` role
+// (see docs/schema.sql), so linking must go through the service-role client.
+// ------------------------------------------------------------
+
+export async function createPlayerLogin(
+  _prevState: PlayerFormState,
+  formData: FormData,
+): Promise<PlayerFormState> {
+  try {
+    await requireSession();
+
+    const playerId = formData.get("playerId") as string;
+    const email = (formData.get("email") as string)?.trim().toLowerCase();
+    const password = formData.get("password") as string;
+
+    if (!playerId || !email || !password) {
+      return { error: "Email and password are required." };
+    }
+    if (password.length < 8) {
+      return { error: "Password must be at least 8 characters." };
+    }
+
+    const admin = createAdminClient();
+
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true, // no SMTP configured — the account is usable immediately
+    });
+    if (createError || !created.user) {
+      return { error: createError?.message ?? "Could not create the login." };
+    }
+
+    const { error: linkError } = await admin
+      .from("players")
+      .update({ user_id: created.user.id })
+      .eq("id", playerId);
+    if (linkError) {
+      // Roll back so a failed link doesn't strand an unusable auth user.
+      await admin.auth.admin.deleteUser(created.user.id);
+      return {
+        error:
+          linkError.code === "23505"
+            ? "That login is already linked to another player."
+            : linkError.message,
+      };
+    }
+
+    revalidatePath("/settings");
+    return { success: true, message: `Login created for ${email}.` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+/**
+ * Deletes the auth user and clears the link. Not a pure unlink: an orphan login
+ * with no player attached could still sign in and read the whole private site.
+ * Their notes survive but lose their author (author_user_id is `on delete set
+ * null`), so they become read-only until a new login writes new ones.
+ */
+export async function removePlayerLogin(playerId: string): Promise<void> {
+  await requireSession();
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("players")
+    .select("user_id")
+    .eq("id", playerId)
+    .single();
+
+  const linkedUserId = (existing?.user_id as string | null) ?? null;
+  if (!linkedUserId) return;
+
+  const { error } = await admin.from("players").update({ user_id: null }).eq("id", playerId);
+  if (error) throw new Error(error.message);
+
+  await admin.auth.admin.deleteUser(linkedUserId);
+
+  revalidatePath("/settings");
 }

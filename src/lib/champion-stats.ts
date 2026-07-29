@@ -3,6 +3,9 @@ export type ChampionStatInput = {
   champion_id: number;
   champion_name: string;
   win: boolean;
+  kills: number;
+  deaths: number;
+  assists: number;
   total_cs: number;
   damage_dealt_to_champions: number;
   game_duration_seconds: number;
@@ -13,6 +16,9 @@ export type ChampionAgg = {
   championName: string;
   games: number;
   wins: number;
+  kills: number;
+  deaths: number;
+  assists: number;
   totalCs: number;
   totalDamage: number;
   totalDurationSeconds: number;
@@ -31,12 +37,18 @@ export function topChampionsByPlayer(rows: ChampionStatInput[], limit = 5): Map<
       championName: row.champion_name,
       games: 0,
       wins: 0,
+      kills: 0,
+      deaths: 0,
+      assists: 0,
       totalCs: 0,
       totalDamage: 0,
       totalDurationSeconds: 0,
     };
     agg.games += 1;
     if (row.win) agg.wins += 1;
+    agg.kills += row.kills;
+    agg.deaths += row.deaths;
+    agg.assists += row.assists;
     agg.totalCs += row.total_cs;
     agg.totalDamage += row.damage_dealt_to_champions;
     agg.totalDurationSeconds += row.game_duration_seconds;
@@ -62,4 +74,10 @@ export function allChampionsByPlayer(rows: ChampionStatInput[]): Map<string, Cha
 
 export function championWinRate(agg: ChampionAgg): number {
   return agg.games === 0 ? 0 : Math.round((agg.wins / agg.games) * 100);
+}
+
+// Same deathless convention as player-stats' kdaRatio: a 0-death aggregate
+// divides by 1 instead of blowing up.
+export function championKdaRatio(agg: ChampionAgg): number {
+  return (agg.kills + agg.assists) / Math.max(agg.deaths, 1);
 }

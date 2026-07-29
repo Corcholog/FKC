@@ -1,6 +1,14 @@
 import Link from "next/link";
 import Image from "next/image";
-import { formatDuration, formatKDA, formatKillParticipation, formatPerMinute, formatRelativeTime } from "@/lib/format";
+import {
+  formatDuration,
+  formatKDA,
+  formatKdaRatio,
+  formatKillParticipation,
+  formatPerMinute,
+  formatRelativeTime,
+  kdaRatioForGame,
+} from "@/lib/format";
 import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/ddragon";
 
 export type TeamComposChampion = {
@@ -100,7 +108,9 @@ export function MatchRow({
           )}
           <p className="truncate text-sm font-medium text-white">{displayName}</p>
           <p className="tabular-nums text-xs text-grey-light">
-            {formatKDA(match.kills, match.deaths, match.assists)} - {" "}
+            {formatKDA(match.kills, match.deaths, match.assists)} ({formatKdaRatio(
+              kdaRatioForGame(match.kills, match.deaths, match.assists),
+            )} KDA) - {" "}
             {formatKillParticipation(match.kills, match.assists, teamKills)} KP
           </p>
         </div>

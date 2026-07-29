@@ -3,6 +3,7 @@ import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { sortByRole } from "@/lib/roles";
 import { MatchRow, type TeamComposChampion } from "@/components/match-row";
 import { MatchesFilter } from "@/components/matches-filter";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const MATCH_LIMIT = 50;
 
@@ -126,11 +127,19 @@ export default async function MatchesPage({
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-2xl font-semibold text-white">Matches</h1>
-          <p className="text-sm text-grey-light">
-            {selectedPlayer ? `${selectedPlayer.display_name}'s match history.` : "Every tracked match across the squad."}
-          </p>
+        <div className="flex items-center gap-3">
+          {selectedPlayer && (
+            <Avatar size="lg">
+              {selectedPlayer.avatar_url && <AvatarImage src={selectedPlayer.avatar_url} alt="" />}
+              <AvatarFallback>{selectedPlayer.display_name.slice(0, 2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+          )}
+          <div>
+            <h1 className="font-heading text-2xl font-semibold text-white">Matches</h1>
+            <p className="text-sm text-grey-light">
+              {selectedPlayer ? `${selectedPlayer.display_name}'s match history.` : "Every tracked match across the squad."}
+            </p>
+          </div>
         </div>
         <MatchesFilter players={players ?? []} selectedId={selectedPlayer?.slug ?? null} />
       </div>

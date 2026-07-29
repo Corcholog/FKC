@@ -43,6 +43,13 @@ export function formatKdaRatio(ratio: number): string {
   return ratio.toFixed(2);
 }
 
+// (K+A)/D for a single game, same deathless convention as the lifetime
+// aggregate in player-stats.ts — folded in next to the raw "k / d / a" triple
+// so nobody has to do the division by hand.
+export function kdaRatioForGame(kills: number, deaths: number, assists: number): number {
+  return (kills + assists) / Math.max(deaths, 1);
+}
+
 export function formatPerMinute(total: number, gameDurationSeconds: number): string {
   if (gameDurationSeconds <= 0) return "0.0";
   return (total / (gameDurationSeconds / 60)).toFixed(1);

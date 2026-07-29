@@ -1,32 +1,69 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import { LayoutDashboard, Users, Swords, Trophy, Settings, Menu, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 
-function SyncSpinner() {
+const NAV_ITEMS = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/team", label: "Team", icon: Users },
+  { href: "/matches", label: "Matches", icon: Swords },
+  { href: "/champions", label: "Champions", icon: Trophy },
+  { href: "/settings", label: "Settings", icon: Settings },
+];
+
+function Crest() {
+  // Placeholder crest — swap for the real Fake Clan PNG (e.g. next/image
+  // src="/fake-clan-logo.png") once provided; layout doesn't need to change.
   return (
-    <svg
-      className="h-3.5 w-3.5 animate-spin text-white"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
+    <div className="hex-clip flex h-8 w-8 shrink-0 items-center justify-center bg-gradient-to-br from-gold-muted via-gold-muted to-gold font-heading text-xs font-bold text-gold-bright">
+      FC
+    </div>
+  );
+}
+
+function NavLink({
+  href,
+  label,
+  Icon,
+  active,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  active: boolean;
+  onNavigate?: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className={cn(
+        "relative flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        active ? "text-gold-bright" : "text-grey-light hover:text-white",
+      )}
     >
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-      />
-    </svg>
+      <Icon className="h-4 w-4" />
+      {label}
+      {active && (
+        <span className="absolute inset-x-2 -bottom-[9px] hidden h-0.5 rounded-full bg-gold sm:block" />
+      )}
+    </Link>
   );
 }
 
 export function Navbar({ initialSyncing = false }: { initialSyncing?: boolean }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [syncing, setSyncing] = useState(initialSyncing);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -37,60 +74,108 @@ export function Navbar({ initialSyncing = false }: { initialSyncing?: boolean })
 
   async function handleSync() {
     setSyncing(true);
-    setSyncMessage(null);
     try {
       const res = await fetch("/api/sync", { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
-        setSyncMessage(data.error ?? "Sync failed.");
+        toast.error(data.error ?? "Sync failed.");
       } else {
-        setSyncMessage(`Synced: ${data.newMatches} new match(es), ${data.playersProcessed} player(s).`);
+        toast.success(`Synced: ${data.newMatches} new match(es), ${data.playersProcessed} player(s).`);
       }
-      // Refresh either way — a failed sync may have just flipped riot_key_valid,
-      // and the banner/status live in server-rendered layout data.
       router.refresh();
     } catch {
-      setSyncMessage("Sync failed — network error.");
+      toast.error("Sync failed — network error.");
     } finally {
       setSyncing(false);
     }
   }
 
   return (
-    <header className="flex flex-col gap-2 border-b border-border bg-navy px-4 py-3 sm:px-6">
-      <div className="flex items-center justify-between gap-2">
-        <Link href="/" className="font-semibold text-white">
-          Fake Clan
-        </Link>
-
-        <div className="flex items-center gap-2 sm:gap-3">
-          <Link
-            href="/admin"
-            className="text-sm text-grey-light transition-colors hover:text-white"
-          >
-            Admin
+    <header className="sticky top-0 z-40 border-b border-border bg-navy/95 backdrop-blur supports-backdrop-filter:bg-navy/80">
+      <div className="flex items-center justify-between gap-2 px-4 py-3 sm:px-6">
+        <div className="flex items-center gap-6">
+          <Link href="/" className="flex items-center gap-2">
+            <Crest />
+            <span className="font-heading hidden text-base font-semibold tracking-wide text-white sm:inline">
+              Fake Clan
+            </span>
           </Link>
-          <button
+
+          <nav className="hidden items-center gap-1 md:flex">
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                label={item.label}
+                Icon={item.icon}
+                active={pathname === item.href}
+              />
+            ))}
+          </nav>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
             type="button"
             onClick={handleSync}
             disabled={syncing}
-            className="flex items-center gap-1.5 rounded-md bg-blue-muted px-3 py-1.5 text-sm text-white transition-colors hover:bg-blue-primary disabled:opacity-50"
+            size="sm"
+            className="hidden sm:inline-flex"
           >
-            {syncing && <SyncSpinner />}
-            <span className="hidden sm:inline">{syncing ? "Syncing…" : "Sync"}</span>
-            <span className="sm:hidden">{syncing ? "…" : "Sync"}</span>
-          </button>
-          <button
+            {syncing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {syncing ? "Syncing…" : "Sync"}
+          </Button>
+          <Button
             type="button"
-            onClick={handleSignOut}
-            className="text-sm text-grey-light transition-colors hover:text-white"
+            onClick={handleSync}
+            disabled={syncing}
+            size="icon-sm"
+            className="sm:hidden"
+            aria-label="Sync"
           >
+            <Loader2 className={cn("h-4 w-4", syncing ? "animate-spin" : "hidden")} />
+            {!syncing && <Swords className="h-4 w-4" />}
+          </Button>
+
+          <Button type="button" variant="ghost" size="sm" onClick={handleSignOut} className="hidden sm:inline-flex">
             Sign out
-          </button>
+          </Button>
+
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+            <SheetTrigger
+              render={<Button variant="ghost" size="icon-sm" aria-label="Open menu" />}
+              className="md:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </SheetTrigger>
+            <SheetContent side="left" className="bg-bg-secondary">
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <Crest />
+                  Fake Clan
+                </SheetTitle>
+              </SheetHeader>
+              <nav className="flex flex-col gap-1 px-2">
+                {NAV_ITEMS.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    href={item.href}
+                    label={item.label}
+                    Icon={item.icon}
+                    active={pathname === item.href}
+                    onNavigate={() => setSheetOpen(false)}
+                  />
+                ))}
+              </nav>
+              <div className="mt-auto flex flex-col gap-2 border-t border-border p-4 sm:hidden">
+                <Button type="button" variant="ghost" size="sm" onClick={handleSignOut}>
+                  Sign out
+                </Button>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
-
-      {syncMessage && <p className="text-xs text-grey-light">{syncMessage}</p>}
     </header>
   );
 }

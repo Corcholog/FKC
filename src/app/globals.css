@@ -1,35 +1,96 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* This app has one permanent dark theme, no light/dark toggle — shadcn's
+   tokens are mapped directly onto our hextech palette in :root rather than
+   keeping shadcn's own light-mode defaults + a separate .dark block.
+
+   Hextech direction (replacing the earlier softer navy+gold pass): near-black
+   backgrounds, LoL-gold as the primary accent with a thin-border/glow
+   treatment instead of soft drop shadows, hextech cyan as a secondary
+   accent, cream body text, and sharp/angular corners (--radius dropped from
+   16px to 4px — every rounded-* utility across the app is wired through the
+   calc chain below, so this one change re-sharpens every card/button/input
+   at once). All accent/status colors re-verified at >=4.5:1 against
+   --color-bg-secondary (WCAG AA) — see the contrast check run before this
+   pass, which also fixed --color-loss (previously ~3.1:1 against grey-mid). */
 
 :root {
   /* backgrounds, darkest to lightest */
-  --color-bg-primary: #0a0e17; /* page background, near-black */
-  --color-bg-secondary: #121a2b; /* cards, panels — dark navy */
-  --color-bg-tertiary: #1b263f; /* nested cards, hover surfaces */
+  --color-bg-primary: #0a0d12; /* page background, near-black */
+  --color-bg-secondary: #10151d; /* cards, panels */
+  --color-bg-tertiary: #171e28; /* nested cards, hover surfaces */
 
   /* structure */
-  --color-navy: #1e2e52; /* navbar, section headers */
-  --color-border: #2a3654; /* dividers, card borders */
+  --color-navy: #0d1117; /* navbar */
+  --color-border: #26303e; /* dividers, card borders */
 
-  /* accent (interactive) */
-  --color-blue-primary: #3b82f6; /* buttons, links, active states */
-  --color-blue-bright: #5fa1ff; /* hover state for the above */
-  --color-blue-muted: #2c4677; /* secondary buttons, badges */
+  /* accent (interactive) — hextech gold is the primary accent */
+  --color-gold: #c89b3c;
+  --color-gold-bright: #e8c87a;
+  --color-gold-muted: #4a3c1e;
+
+  /* hextech cyan — secondary accent (rank/status, not primary CTAs) */
+  --color-cyan: #0ac8b9;
+  --color-cyan-bright: #4fe0d4;
+  --color-cyan-muted: #123a37;
 
   /* text */
-  --color-white: #f1f4f9; /* primary text */
-  --color-grey-light: #9aa6bd; /* secondary text, labels */
-  --color-grey-mid: #5c6786; /* disabled/muted text, placeholders */
-  --color-black: #05070c; /* deepest shadows/accents only */
+  --color-white: #f0e6d2; /* warm cream, not pure white */
+  --color-grey-light: #a8a296;
+  --color-grey-mid: #8a887f;
+  --color-black: #050301;
 
-  /* win/loss — see docs/05_DESIGN_SYSTEM.md for the green/red alternative */
-  --color-win: #5fa1ff; /* lighter blue = win */
-  --color-loss: #5c6786; /* muted grey = loss */
+  /* win/loss — standard green/red, re-picked for real contrast against the
+     near-black background (the earlier grey-based loss color read at ~3.1:1) */
+  --color-win: #3fbf6f;
+  --color-loss: #e2504a;
 
-  /* single narrow exception to the blue/navy/grey palette, same reasoning as
-     win/loss above: the expired-key state must read as urgent at a glance
-     (docs/05_DESIGN_SYSTEM.md navbar note) */
-  --color-warning: #f59e0b;
-  --color-warning-bg: #3a2a0f;
+  /* key-expiry warning */
+  --color-warning: #e8a020;
+  --color-warning-bg: #332209;
+
+  /* destructive actions (delete/remove) — distinct hue from --color-loss so
+     the two red/orange meanings (in-game loss vs. destructive UI action)
+     don't visually collide */
+  --color-danger: #e5484d;
+  --color-danger-bg: #331313;
+
+  /* shadcn token mapping */
+  --background: var(--color-bg-primary);
+  --foreground: var(--color-white);
+  --card: var(--color-bg-secondary);
+  --card-foreground: var(--color-white);
+  --popover: var(--color-bg-tertiary);
+  --popover-foreground: var(--color-white);
+  --primary: var(--color-gold);
+  --primary-foreground: var(--color-black);
+  --secondary: var(--color-cyan-muted);
+  --secondary-foreground: var(--color-white);
+  --muted: var(--color-bg-tertiary);
+  --muted-foreground: var(--color-grey-light);
+  --accent: var(--color-bg-tertiary);
+  --accent-foreground: var(--color-gold-bright);
+  --destructive: var(--color-danger);
+  --destructive-foreground: var(--color-white);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-gold);
+  --chart-1: var(--color-gold);
+  --chart-2: var(--color-cyan);
+  --chart-3: var(--color-win);
+  --chart-4: var(--color-grey-light);
+  --chart-5: var(--color-grey-mid);
+  --radius: 0.25rem; /* 4px — sharp/angular, not the old 16px rounded-card look */
+  --sidebar: var(--color-bg-secondary);
+  --sidebar-foreground: var(--color-white);
+  --sidebar-primary: var(--color-gold);
+  --sidebar-primary-foreground: var(--color-black);
+  --sidebar-accent: var(--color-bg-tertiary);
+  --sidebar-accent-foreground: var(--color-white);
+  --sidebar-border: var(--color-border);
+  --sidebar-ring: var(--color-gold);
 }
 
 @theme inline {
@@ -38,9 +99,12 @@
   --color-bg-tertiary: var(--color-bg-tertiary);
   --color-navy: var(--color-navy);
   --color-border: var(--color-border);
-  --color-blue-primary: var(--color-blue-primary);
-  --color-blue-bright: var(--color-blue-bright);
-  --color-blue-muted: var(--color-blue-muted);
+  --color-gold: var(--color-gold);
+  --color-gold-bright: var(--color-gold-bright);
+  --color-gold-muted: var(--color-gold-muted);
+  --color-cyan: var(--color-cyan);
+  --color-cyan-bright: var(--color-cyan-bright);
+  --color-cyan-muted: var(--color-cyan-muted);
   --color-white: var(--color-white);
   --color-grey-light: var(--color-grey-light);
   --color-grey-mid: var(--color-grey-mid);
@@ -49,8 +113,49 @@
   --color-loss: var(--color-loss);
   --color-warning: var(--color-warning);
   --color-warning-bg: var(--color-warning-bg);
+  --color-danger: var(--color-danger);
+  --color-danger-bg: var(--color-danger-bg);
   --font-sans: var(--font-geist-sans);
+  --font-heading: var(--font-display);
   --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 body {
@@ -61,4 +166,60 @@ body {
 /* stat tables (KDA, damage, gold, CS) per docs/05_DESIGN_SYSTEM.md */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* Hextech card treatment: thin gold hairline + glow-on-hover, replacing the
+   earlier soft-shadow-and-lift hover style. Shared by every interactive
+   card/row (PlayerCard, MatchRow, champion tier cards, dashboard stat cards)
+   so the look stays centralized instead of repeating long arbitrary-value
+   classes per component.
+
+   Wrapped in @layer components (not left unlayered) so Tailwind's utilities
+   layer — e.g. MatchRow's border-l-4 border-l-win/loss — still wins the
+   cascade over this class's own `border` shorthand. Cascade layers give
+   unlayered rules implicit top priority regardless of source order, so
+   without this wrapper the win/loss accent bar collapses to panel-hex's 1px
+   border color instead of the intended 4px win/loss color. */
+@layer components {
+  .panel-hex {
+    background: var(--color-bg-secondary);
+    border: 1px solid color-mix(in oklch, var(--color-gold) 30%, var(--color-border));
+    box-shadow: 0 2px 10px -6px rgba(0, 0, 0, 0.7);
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease,
+      background-color 150ms ease;
+  }
+  a.panel-hex:hover,
+  .panel-hex.is-interactive:hover {
+    border-color: color-mix(in oklch, var(--color-gold) 70%, transparent);
+    box-shadow:
+      0 0 16px -3px color-mix(in oklch, var(--color-gold) 45%, transparent),
+      0 2px 10px -6px rgba(0, 0, 0, 0.7);
+    background: var(--color-bg-tertiary);
+  }
+
+  /* Angular corner-cut for hero panels (dashboard stats, player header, team
+     cards) — the signature hextech panel shape, used selectively rather than
+     on every dense list row. */
+  .panel-hex-clip {
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%);
+  }
+
+  /* Hexagon crest shape for the navbar mark. */
+  .hex-clip {
+    clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0% 50%);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }

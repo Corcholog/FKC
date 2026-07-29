@@ -1,12 +1,12 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPuuidByRiotId, describeRiotError } from "@/lib/riot";
 import { backfillPlayerHistory, RiotKeyInvalidError } from "@/lib/sync";
+import { playerSlug } from "@/lib/slug";
 
 import type { PlayerFormState } from "./form-state";
 
@@ -85,15 +85,14 @@ export async function addPlayer(
       return { error: describeRiotError(e, gameName, tagLine) };
     }
 
-    const playerId = randomUUID();
-    const avatarUrl = avatarFile && avatarFile.size > 0 ? await uploadAvatar(avatarFile, playerId) : null;
+    const avatarUrl = avatarFile && avatarFile.size > 0 ? await uploadAvatar(avatarFile, puuid) : null;
 
     const { error } = await supabase.from("players").insert({
-      id: playerId,
-      riot_puuid: puuid,
+      id: puuid,
       riot_game_name: gameName,
       riot_tag_line: tagLine,
       display_name: displayName,
+      slug: playerSlug(gameName, tagLine),
       avatar_url: avatarUrl,
       platform: "LA2",
     });
@@ -101,11 +100,16 @@ export async function addPlayer(
     if (error) {
       if (avatarUrl) await deleteAvatar(avatarUrl);
       return {
-        error: error.code === "23505" ? "This player is already tracked." : error.message,
+        error:
+          error.code === "23505"
+            ? "This player (or their Riot ID) is already tracked."
+            : error.message,
       };
     }
 
-    revalidatePath("/admin");
+    revalidatePath("/settings");
+    revalidatePath("/");
+    revalidatePath("/team");
     return { success: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong." };
@@ -138,20 +142,25 @@ export async function updatePlayer(
 
     if (fetchError || !existing) return { error: "Player not found." };
 
-    let puuid: string | undefined;
+    let newPuuid: string | undefined;
     if (existing.riot_game_name !== gameName || existing.riot_tag_line !== tagLine) {
       const apiKey = await getRiotApiKey(supabase);
       try {
-        puuid = await getPuuidByRiotId(gameName, tagLine, apiKey);
+        newPuuid = await getPuuidByRiotId(gameName, tagLine, apiKey);
       } catch (e) {
         return { error: describeRiotError(e, gameName, tagLine) };
       }
     }
 
+    // A cosmetic Riot ID rename resolves to the same puuid — only a genuine
+    // account swap on this roster slot changes it and needs history backfilled.
+    const accountChanged = newPuuid !== undefined && newPuuid !== id;
+    const finalId = accountChanged ? (newPuuid as string) : id;
+
     let avatarUrl = existing.avatar_url as string | null;
     if (avatarFile && avatarFile.size > 0) {
       await deleteAvatar(avatarUrl);
-      avatarUrl = await uploadAvatar(avatarFile, id);
+      avatarUrl = await uploadAvatar(avatarFile, finalId);
     } else if (removeAvatar) {
       await deleteAvatar(avatarUrl);
       avatarUrl = null;
@@ -161,25 +170,33 @@ export async function updatePlayer(
       riot_game_name: gameName,
       riot_tag_line: tagLine,
       display_name: displayName,
+      slug: playerSlug(gameName, tagLine),
       avatar_url: avatarUrl,
     };
-    if (puuid) update.riot_puuid = puuid;
+    if (accountChanged) update.id = finalId;
 
     const { error } = await supabase.from("players").update(update).eq("id", id);
-    if (error) return { error: error.message };
+    if (error) {
+      return {
+        error:
+          error.code === "23505"
+            ? "This Riot ID conflicts with another tracked player."
+            : error.message,
+      };
+    }
 
-    // Riot ID changed means a new puuid — old history was tied to the old
-    // account and has nothing in common with the new one, so wait-for-the-
-    // next-daily-sync won't reliably catch up (see the pagination-cap edge
-    // case noted in syncPlayerMatches). Backfill this player's full history
-    // since the tracking start date right now instead.
-    if (puuid) {
+    // A genuine account swap means the new puuid's history has nothing in
+    // common with the old one, so wait-for-the-next-daily-sync won't reliably
+    // catch up (see the pagination-cap edge case noted in syncPlayerMatches).
+    // Backfill this player's full history since the tracking start date now.
+    if (accountChanged) {
       const admin = createAdminClient();
       try {
-        const backfillSummary = await backfillPlayerHistory(admin, id);
-        revalidatePath("/admin");
+        const backfillSummary = await backfillPlayerHistory(admin, finalId);
+        revalidatePath("/settings");
         revalidatePath("/");
-        revalidatePath(`/player/${id}`);
+        revalidatePath("/team");
+        revalidatePath("/player/[slug]", "page");
         return {
           success: true,
           message: `Riot ID updated — backfilled ${backfillSummary.newMatches} match(es) since tracking started.`,
@@ -194,7 +211,7 @@ export async function updatePlayer(
           : e instanceof Error
             ? e.message
             : "Unknown error.";
-        revalidatePath("/admin");
+        revalidatePath("/settings");
         return {
           success: true,
           message: `Riot ID updated, but the history backfill failed: ${detail} Run a regular sync once the issue is resolved.`,
@@ -202,7 +219,7 @@ export async function updatePlayer(
       }
     }
 
-    revalidatePath("/admin");
+    revalidatePath("/settings");
     return { success: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong." };
@@ -226,7 +243,7 @@ export async function updateRiotKey(
       .eq("id", 1);
     if (error) return { error: error.message };
 
-    revalidatePath("/admin");
+    revalidatePath("/settings");
     revalidatePath("/");
     return { success: true };
   } catch (e) {
@@ -248,5 +265,7 @@ export async function deletePlayer(id: string): Promise<void> {
 
   await deleteAvatar((existing?.avatar_url as string | null) ?? null);
 
-  revalidatePath("/admin");
+  revalidatePath("/settings");
+  revalidatePath("/");
+  revalidatePath("/team");
 }

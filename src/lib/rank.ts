@@ -34,6 +34,10 @@ export function rankTierColor(tier: string | null): string {
   return (tier && TIER_COLORS[tier]) || "var(--color-border)";
 }
 
+export function isApexTier(tier: string | null): boolean {
+  return !!tier && APEX_TIERS.has(tier);
+}
+
 const DIVISION_WORSENESS: Record<string, number> = { I: 0, II: 1, III: 2, IV: 3 };
 
 export type RankSnapshot = {

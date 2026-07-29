@@ -1,11 +1,14 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getLatestVersion, getChampionMap, championIconUrl, championDisplayName, type ChampionInfo } from "@/lib/ddragon";
 import { formatDuration, formatKDA, formatRelativeTime } from "@/lib/format";
 import { sortByRole } from "@/lib/roles";
 import { NotesSection } from "@/components/notes-section";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 type Participant = {
   id: string;
@@ -30,10 +33,12 @@ function ParticipantRow({
   participant,
   version,
   championMap,
+  isViewer,
 }: {
   participant: Participant;
   version: string;
   championMap: Map<number, ChampionInfo>;
+  isViewer: boolean;
 }) {
   const iconUrl = championIconUrl(participant.champion_id, version, championMap);
   const championName = championDisplayName(participant.champion_id, championMap, participant.champion_name);
@@ -42,11 +47,17 @@ function ParticipantRow({
     : championName;
 
   return (
-    <div className="flex items-center gap-2 py-1.5">
+    <div className={`flex items-center gap-2 rounded-lg px-1.5 py-1.5 ${isViewer ? "bg-gold-muted/30" : ""}`}>
       {iconUrl ? (
-        <Image src={iconUrl} alt={championName} width={28} height={28} className="h-7 w-7 rounded" />
+        <Image
+          src={iconUrl}
+          alt={championName}
+          width={28}
+          height={28}
+          className={`h-7 w-7 rounded-md ${isViewer ? "ring-2 ring-gold" : ""}`}
+        />
       ) : (
-        <div className="h-7 w-7 rounded bg-blue-muted" />
+        <div className="h-7 w-7 rounded-md bg-gold-muted" />
       )}
       <p className="min-w-0 flex-1 truncate text-xs text-white">{name}</p>
       <p className="tabular-nums w-20 text-xs text-grey-light">
@@ -65,7 +76,7 @@ function ParticipantRow({
 
 function ParticipantHeader() {
   return (
-    <div className="flex items-center gap-2 border-b border-border pb-1">
+    <div className="flex items-center gap-2 border-b border-border px-1.5 pb-1.5">
       <div className="h-7 w-7 shrink-0" />
       <p className="min-w-0 flex-1 text-[10px] font-medium tracking-wide text-grey-mid uppercase">Player</p>
       <p className="w-20 text-[10px] font-medium tracking-wide text-grey-mid uppercase">KDA</p>
@@ -79,15 +90,19 @@ function ParticipantHeader() {
 export default async function MatchDetailPage({
   params,
 }: {
-  params: Promise<{ id: string; matchId: string }>;
+  params: Promise<{ slug: string; riotMatchId: string }>;
 }) {
-  const { id, matchId } = await params;
+  const { slug, riotMatchId } = await params;
   const supabase = await createClient();
+
+  const { data: player } = await supabase.from("players").select("id, slug").eq("slug", slug).single();
+  if (!player) notFound();
+  const id = player.id;
 
   const { data: match } = await supabase
     .from("matches")
     .select("id, game_creation, game_duration_seconds")
-    .eq("id", matchId)
+    .eq("riot_match_id", riotMatchId)
     .single();
   if (!match) notFound();
 
@@ -96,7 +111,7 @@ export default async function MatchDetailPage({
     .select(
       "id, puuid, riot_game_name, riot_tag_line, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, gold_earned, total_cs",
     )
-    .eq("match_id", matchId)
+    .eq("match_id", match.id)
     .returns<Participant[]>();
   if (!participants || participants.length === 0) notFound();
 
@@ -120,37 +135,61 @@ export default async function MatchDetailPage({
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-8 sm:px-6">
-      <Link href={`/player/${id}`} className="text-sm text-grey-light hover:text-white">
-        ← Back
+      <Link href={`/player/${slug}`} className="flex items-center gap-1.5 text-sm text-grey-light hover:text-white">
+        <ArrowLeft className="h-4 w-4" />
+        Back
       </Link>
 
       <div className="flex items-center justify-between">
-        <p className={`font-semibold ${viewer?.win ? "text-win" : "text-loss"}`}>
+        <Badge
+          variant="outline"
+          className={`text-sm font-semibold ${viewer?.win ? "border-win/40 text-win" : "border-loss/40 text-loss"}`}
+        >
           {viewer ? (viewer.win ? "Win" : "Loss") : "Match"}
-        </p>
+        </Badge>
         <p className="text-xs text-grey-light">
           {formatRelativeTime(match.game_creation)} · {formatDuration(match.game_duration_seconds)}
         </p>
       </div>
 
-      <div className="rounded-lg bg-blue-muted/30 p-3">
-        <p className="mb-1 text-xs font-medium tracking-wide text-grey-light uppercase">Allies</p>
-        <ParticipantHeader />
-        {allies.map((p) => (
-          <ParticipantRow key={p.puuid} participant={p} version={version} championMap={championMap} />
-        ))}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">Allies</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-0.5">
+          <ParticipantHeader />
+          {allies.map((p) => (
+            <ParticipantRow
+              key={p.puuid}
+              participant={p}
+              version={version}
+              championMap={championMap}
+              isViewer={p.id === viewer?.id}
+            />
+          ))}
+        </CardContent>
+      </Card>
 
-      <div className="rounded-lg bg-bg-tertiary p-3">
-        <p className="mb-1 text-xs font-medium tracking-wide text-grey-light uppercase">Enemies</p>
-        <ParticipantHeader />
-        {enemies.map((p) => (
-          <ParticipantRow key={p.puuid} participant={p} version={version} championMap={championMap} />
-        ))}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">Enemies</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-0.5">
+          <ParticipantHeader />
+          {enemies.map((p) => (
+            <ParticipantRow
+              key={p.puuid}
+              participant={p}
+              version={version}
+              championMap={championMap}
+              isViewer={false}
+            />
+          ))}
+        </CardContent>
+      </Card>
 
       {viewer && (
-        <NotesSection matchParticipantId={viewer.id} playerId={id} matchId={matchId} notes={notes} />
+        <NotesSection matchParticipantId={viewer.id} playerId={id} notes={notes} />
       )}
     </main>
   );

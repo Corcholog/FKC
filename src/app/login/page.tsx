@@ -3,6 +3,9 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,49 +36,43 @@ export default function LoginPage() {
     <main className="flex flex-1 items-center justify-center px-4">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-lg border border-border bg-bg-secondary p-8"
+        className="w-full max-w-sm border border-border bg-bg-secondary p-8 shadow-[0_0_20px_-4px_rgba(200,155,60,0.12)]"
       >
-        <h1 className="mb-6 text-xl font-semibold text-white">Fake Clan SoloQ Tracker</h1>
+        <h1 className="font-heading mb-6 text-xl font-semibold text-white">Fake Clan SoloQ Tracker</h1>
 
-        <div className="mb-4">
-          <label htmlFor="email" className="mb-1 block text-sm text-grey-light">
+        <div className="mb-4 flex flex-col gap-1.5">
+          <Label htmlFor="email" className="text-xs text-grey-light">
             Email
-          </label>
-          <input
+          </Label>
+          <Input
             id="email"
             type="email"
             autoComplete="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-border bg-bg-tertiary px-3 py-2 text-white outline-none focus:border-blue-primary"
           />
         </div>
 
-        <div className="mb-6">
-          <label htmlFor="password" className="mb-1 block text-sm text-grey-light">
+        <div className="mb-6 flex flex-col gap-1.5">
+          <Label htmlFor="password" className="text-xs text-grey-light">
             Password
-          </label>
-          <input
+          </Label>
+          <Input
             id="password"
             type="password"
             autoComplete="current-password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-border bg-bg-tertiary px-3 py-2 text-white outline-none focus:border-blue-primary"
           />
         </div>
 
         {error && <p className="mb-4 text-sm text-loss">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md bg-blue-primary px-4 py-2 font-medium text-white transition-colors hover:bg-blue-bright disabled:opacity-50"
-        >
+        <Button type="submit" disabled={loading} className="w-full">
           {loading ? "Signing in…" : "Sign in"}
-        </button>
+        </Button>
       </form>
     </main>
   );

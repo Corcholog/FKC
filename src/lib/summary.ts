@@ -39,7 +39,7 @@ export async function generatePlayerSummary(
   if (playerError || !player) throw new Error("Player not found.");
 
   // Query from matches (not match_participants) so game_creation is a true
-  // top-level column — see the same fix/comment in player/[id]/page.tsx.
+  // top-level column — see the same fix/comment in player/[slug]/page.tsx.
   // Getting this right actually matters here: with the broken order the
   // .limit(50) below was capping to 50 games in ~insertion order, not the
   // 50 most recent, silently feeding stale/arbitrary history into the prompt.

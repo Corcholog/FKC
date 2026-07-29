@@ -1,0 +1,73 @@
+import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
+import { allChampionsByPlayer, type ChampionStatInput } from "@/lib/champion-stats";
+import { ChampionsFilter } from "@/components/champions-filter";
+import { ChampionTierList } from "@/components/champion-tier-list";
+
+type PlayerRow = {
+  id: string;
+  slug: string;
+  display_name: string;
+};
+
+export default async function ChampionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ player?: string }>;
+}) {
+  const { player: playerParam } = await searchParams;
+  const supabase = await createClient();
+
+  const { data: players } = await supabase
+    .from("players")
+    .select("id, slug, display_name")
+    .order("display_name")
+    .returns<PlayerRow[]>();
+
+  if (!players || players.length === 0) {
+    return (
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+        <div>
+          <h1 className="font-heading text-2xl font-semibold text-white">Champions</h1>
+          <p className="text-sm text-grey-light">Per-player champion tierlist.</p>
+        </div>
+        <p className="text-sm text-grey-mid">No players tracked yet.</p>
+      </main>
+    );
+  }
+
+  const selectedPlayer = players.find((p) => p.slug === playerParam) ?? players[0];
+  if (playerParam && !players.some((p) => p.slug === playerParam)) notFound();
+
+  const { data: statRows } = await supabase
+    .from("match_participants")
+    .select(
+      "player_id, champion_id, champion_name, win, total_cs, damage_dealt_to_champions, matches!inner(game_duration_seconds)",
+    )
+    .eq("player_id", selectedPlayer.id)
+    .returns<(Omit<ChampionStatInput, "game_duration_seconds"> & { matches: { game_duration_seconds: number } | null })[]>();
+
+  const flatRows: ChampionStatInput[] = (statRows ?? []).map((r) => ({
+    ...r,
+    game_duration_seconds: r.matches?.game_duration_seconds ?? 0,
+  }));
+  const champions = allChampionsByPlayer(flatRows).get(selectedPlayer.id) ?? [];
+
+  const version = await getLatestVersion();
+  const championMap = await getChampionMap(version);
+
+  return (
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-2xl font-semibold text-white">Champions</h1>
+          <p className="text-sm text-grey-light">{selectedPlayer.display_name}&apos;s champion tierlist.</p>
+        </div>
+        <ChampionsFilter players={players} selectedId={selectedPlayer.slug} />
+      </div>
+
+      <ChampionTierList champions={champions} version={version} championMap={championMap} />
+    </main>
+  );
+}

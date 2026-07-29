@@ -54,6 +54,12 @@ export function topChampionsByPlayer(rows: ChampionStatInput[], limit = 5): Map<
   return result;
 }
 
+// Same grouping as topChampionsByPlayer but returns every champion played,
+// sorted by games desc — used for the /champions full tierlist page.
+export function allChampionsByPlayer(rows: ChampionStatInput[]): Map<string, ChampionAgg[]> {
+  return topChampionsByPlayer(rows, Infinity);
+}
+
 export function championWinRate(agg: ChampionAgg): number {
   return agg.games === 0 ? 0 : Math.round((agg.wins / agg.games) * 100);
 }

@@ -52,13 +52,12 @@ export function AiSummaryCard({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerId, isStale]);
 
   if (!isStale && !summary) return null;
 
   return (
-    <div className="rounded-lg border-l-4 border-l-blue-primary bg-bg-tertiary p-4">
+    <div className="border-l-4 border-l-gold bg-bg-secondary p-4 shadow-[0_2px_10px_-6px_rgba(0,0,0,0.7)]">
       <p className="mb-1.5 text-xs font-medium tracking-wide text-grey-light uppercase">AI Summary</p>
 
       {loading ? (

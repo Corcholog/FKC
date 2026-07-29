@@ -19,8 +19,7 @@ function sleep(ms: number) {
 }
 
 type Player = {
-  id: string;
-  riot_puuid: string;
+  id: string; // == riot_puuid, players.id is keyed by the Riot account's puuid
   platform: string;
 };
 
@@ -46,13 +45,10 @@ export async function runSync(admin: SupabaseClient): Promise<SyncSummary> {
 
   const { data: players, error: playersError } = await admin
     .from("players")
-    .select("id, riot_puuid, platform");
+    .select("id, platform");
   if (playersError) throw new Error(playersError.message);
 
-  const puuidToPlayerId = new Map<string, string>();
-  for (const p of (players ?? []) as Player[]) {
-    puuidToPlayerId.set(p.riot_puuid, p.id);
-  }
+  const knownPlayerIds = new Set((players ?? []).map((p) => p.id as string));
 
   const summary: SyncSummary = { playersProcessed: 0, newMatches: 0, excludedMatches: 0 };
   // Tracked players touched by a genuinely new match this run — not just
@@ -61,7 +57,7 @@ export async function runSync(admin: SupabaseClient): Promise<SyncSummary> {
   const playersWithNewMatches = new Set<string>();
 
   for (const player of (players ?? []) as Player[]) {
-    await syncPlayerMatches(admin, player, apiKey, puuidToPlayerId, summary, playersWithNewMatches);
+    await syncPlayerMatches(admin, player, apiKey, knownPlayerIds, summary, playersWithNewMatches);
     await refreshPlayerRank(admin, player, apiKey);
     summary.playersProcessed += 1;
   }
@@ -97,21 +93,18 @@ export async function backfillPlayerHistory(
 
   const { data: players, error: playersError } = await admin
     .from("players")
-    .select("id, riot_puuid, platform");
+    .select("id, platform");
   if (playersError) throw new Error(playersError.message);
 
   const player = (players ?? []).find((p) => p.id === playerId) as Player | undefined;
   if (!player) throw new Error("Player not found.");
 
-  const puuidToPlayerId = new Map<string, string>();
-  for (const p of (players ?? []) as Player[]) {
-    puuidToPlayerId.set(p.riot_puuid, p.id);
-  }
+  const knownPlayerIds = new Set((players ?? []).map((p) => p.id as string));
 
   const summary: SyncSummary = { playersProcessed: 0, newMatches: 0, excludedMatches: 0 };
   const playersWithNewMatches = new Set<string>();
 
-  await syncPlayerMatches(admin, player, apiKey, puuidToPlayerId, summary, playersWithNewMatches);
+  await syncPlayerMatches(admin, player, apiKey, knownPlayerIds, summary, playersWithNewMatches);
   await refreshPlayerRank(admin, player, apiKey);
   summary.playersProcessed = 1;
 
@@ -128,7 +121,7 @@ async function syncPlayerMatches(
   admin: SupabaseClient,
   player: Player,
   apiKey: string,
-  puuidToPlayerId: Map<string, string>,
+  knownPlayerIds: Set<string>,
   summary: SyncSummary,
   playersWithNewMatches: Set<string>,
 ) {
@@ -138,7 +131,7 @@ async function syncPlayerMatches(
     await sleep(RIOT_CALL_DELAY_MS);
     let matchIds: string[];
     try {
-      matchIds = await getRankedSoloMatchIds(player.riot_puuid, apiKey, {
+      matchIds = await getRankedSoloMatchIds(player.id, apiKey, {
         start,
         count: MATCH_ID_PAGE_SIZE,
       });
@@ -200,7 +193,7 @@ async function syncPlayerMatches(
 
       const participantRows = match.info.participants.map((p) => ({
         match_id: insertedMatch.id,
-        player_id: puuidToPlayerId.get(p.puuid) ?? null,
+        player_id: knownPlayerIds.has(p.puuid) ? p.puuid : null,
         puuid: p.puuid,
         riot_game_name: p.riotIdGameName ?? null,
         riot_tag_line: p.riotIdTagline ?? null,
@@ -239,10 +232,21 @@ async function refreshPlayerRank(admin: SupabaseClient, player: Player, apiKey: 
   await sleep(RIOT_CALL_DELAY_MS);
   let entry;
   try {
-    entry = await getRankedSoloEntry(player.riot_puuid, player.platform, apiKey);
+    entry = await getRankedSoloEntry(player.id, player.platform, apiKey);
   } catch (e) {
     throw toSyncError(e);
   }
+
+  // wins/losses are this app's own tracked record (since TRACKING_START_DATE),
+  // not Riot's live ranked-season totals — every row here is already within
+  // that window since syncPlayerMatches refuses to insert anything older.
+  const { data: participantRows, error: participantsError } = await admin
+    .from("match_participants")
+    .select("win")
+    .eq("player_id", player.id);
+  if (participantsError) throw new Error(participantsError.message);
+  const wins = (participantRows ?? []).filter((r) => r.win).length;
+  const losses = (participantRows ?? []).length - wins;
 
   const { error } = await admin
     .from("players")
@@ -250,8 +254,8 @@ async function refreshPlayerRank(admin: SupabaseClient, player: Player, apiKey: 
       tier: entry?.tier ?? null,
       division: entry?.rank ?? null,
       league_points: entry?.leaguePoints ?? null,
-      wins: entry?.wins ?? 0,
-      losses: entry?.losses ?? 0,
+      wins,
+      losses,
       rank_updated_at: new Date().toISOString(),
     })
     .eq("id", player.id);

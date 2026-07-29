@@ -23,6 +23,10 @@ export function formatRelativeTime(iso: string): string {
   return "a while ago";
 }
 
+export function isoDaysAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 export function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -36,4 +40,9 @@ export function formatKDA(kills: number, deaths: number, assists: number): strin
 export function formatPerMinute(total: number, gameDurationSeconds: number): string {
   if (gameDurationSeconds <= 0) return "0.0";
   return (total / (gameDurationSeconds / 60)).toFixed(1);
+}
+
+export function formatKillParticipation(kills: number, assists: number, teamKills: number): string {
+  if (teamKills <= 0) return "0%";
+  return `${Math.round(((kills + assists) / teamKills) * 100)}%`;
 }

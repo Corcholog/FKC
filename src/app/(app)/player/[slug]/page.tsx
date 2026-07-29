@@ -1,14 +1,21 @@
 import { notFound } from "next/navigation";
-import Image from "next/image";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
-import { formatRank, formatWinLoss, formatWinRate } from "@/lib/rank";
+import { formatWinLoss, formatWinRate } from "@/lib/rank";
 import { MatchRow, type TeamComposChampion } from "@/components/match-row";
 import { AiSummaryCard } from "@/components/ai-summary-card";
+import { RankBadge } from "@/components/rank-badge";
+import { WinrateRing } from "@/components/winrate-ring";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card, CardContent } from "@/components/ui/card";
 import { sortByRole } from "@/lib/roles";
+
+const RECENT_FORM_LIMIT = 5;
 
 type MatchListRow = {
   id: string;
+  riot_match_id: string;
   game_creation: string;
   game_duration_seconds: number;
 };
@@ -29,29 +36,33 @@ type ParticipantRow = {
   total_cs: number;
 };
 
-export default async function PlayerDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function PlayerDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
   const supabase = await createClient();
 
-  const { data: player } = await supabase.from("players").select("*").eq("id", id).single();
+  const { data: player } = await supabase.from("players").select("*").eq("slug", slug).single();
   if (!player) notFound();
+  const id = player.id;
 
   // Query from matches (not match_participants) so game_creation is a true
   // top-level column — PostgREST's foreignTable order only reorders embedded
   // to-many collections within each parent, it can't reorder the parent rows
   // by a column in a to-one join, so ordering "through" match_participants
   // silently no-ops and returns rows in insertion order instead.
-  const { data: matchList } = await supabase
+  const { data: matchListFull } = await supabase
     .from("matches")
-    .select("id, game_creation, game_duration_seconds, match_participants!inner(player_id)")
+    .select("id, riot_match_id, game_creation, game_duration_seconds, match_participants!inner(player_id)")
     .eq("match_participants.player_id", id)
     .order("game_creation", { ascending: false })
+    .limit(RECENT_FORM_LIMIT)
     .returns<MatchListRow[]>();
+
+  const matchList = matchListFull ?? [];
 
   // Separate bulk fetch for every participant (both teams) of those matches —
   // the filtered embed above only returns the one row matching player_id, not
   // all 10, so full team compositions need their own unfiltered query.
-  const matchIds = (matchList ?? []).map((m) => m.id);
+  const matchIds = matchList.map((m) => m.id);
   const { data: allParticipants } =
     matchIds.length > 0
       ? await supabase
@@ -79,45 +90,41 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
     .eq("player_id", id)
     .maybeSingle();
 
+  const totalGames = (player.wins ?? 0) + (player.losses ?? 0);
+  const winRatePct = totalGames === 0 ? 0 : Math.round(((player.wins ?? 0) / totalGames) * 100);
+
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
-      <div className="flex items-center gap-4 rounded-lg border border-border bg-bg-secondary p-4">
-        {player.avatar_url ? (
-          <Image
-            src={player.avatar_url}
-            alt=""
-            width={64}
-            height={64}
-            className="h-16 w-16 rounded-full object-cover"
-          />
-        ) : (
-          <div className="h-16 w-16 rounded-full bg-blue-muted" />
-        )}
+    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+      <Card className="panel-hex panel-hex-clip">
+        <CardContent className="flex items-center gap-4">
+          <Avatar className="h-16 w-16">
+            {player.avatar_url && <AvatarImage src={player.avatar_url} alt="" />}
+            <AvatarFallback className="text-lg">{player.display_name.slice(0, 2).toUpperCase()}</AvatarFallback>
+          </Avatar>
 
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-semibold text-white">{player.display_name}</h1>
-          <p className="truncate text-xs text-grey-light">
-            {player.riot_game_name}#{player.riot_tag_line}
-          </p>
-          <div className="mt-1.5 flex items-center gap-2">
-            <span className="rounded-full bg-blue-muted px-2 py-0.5 text-xs text-white">
-              {formatRank(player.tier, player.division)}
-            </span>
-            {player.tier && (
-              <span className="tabular-nums text-xs text-grey-light">{player.league_points ?? 0} LP</span>
-            )}
+          <div className="min-w-0 flex-1">
+            <h1 className="font-heading truncate text-xl font-semibold text-white">{player.display_name}</h1>
+            <p className="truncate text-xs text-grey-light">
+              {player.riot_game_name}#{player.riot_tag_line}
+            </p>
+            <div className="mt-2">
+              <RankBadge tier={player.tier} division={player.division} leaguePoints={player.league_points} />
+            </div>
           </div>
-        </div>
 
-        <div className="shrink-0 text-right">
-          <p className="tabular-nums font-semibold text-white">
-            {formatWinLoss(player.wins, player.losses)}
-          </p>
-          <p className="tabular-nums text-xs text-grey-light">
-            {formatWinRate(player.wins, player.losses)}
-          </p>
-        </div>
-      </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <div className="text-right">
+              <p className="tabular-nums font-semibold text-white">
+                {formatWinLoss(player.wins, player.losses)}
+              </p>
+              <p className="tabular-nums text-xs text-grey-light">
+                {formatWinRate(player.wins, player.losses)}
+              </p>
+            </div>
+            <WinrateRing percentage={winRatePct} />
+          </div>
+        </CardContent>
+      </Card>
 
       <AiSummaryCard
         playerId={id}
@@ -127,8 +134,13 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
       />
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Match history</h2>
-        {!matchList || matchList.length === 0 ? (
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Recent form</h2>
+          <Link href={`/matches?player=${player.slug}`} className="text-xs text-gold-bright hover:underline">
+            View full history →
+          </Link>
+        </div>
+        {matchList.length === 0 ? (
           <p className="text-sm text-grey-mid">No tracked matches yet.</p>
         ) : (
           matchList.map((m) => {
@@ -139,6 +151,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
             const toChampion = (p: ParticipantRow): TeamComposChampion => ({
               championId: p.champion_id,
               championName: p.champion_name,
+              kills: p.kills,
               isSelf: p.id === viewer.id,
             });
 
@@ -154,7 +167,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
               <MatchRow
                 key={viewer.id}
                 match={{
-                  matchId: m.id,
+                  riotMatchId: m.riot_match_id,
                   championId: viewer.champion_id,
                   championName: viewer.champion_name,
                   win: viewer.win,
@@ -171,7 +184,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ i
                 }}
                 version={version}
                 championMap={championMap}
-                playerId={id}
+                playerSlug={player.slug}
               />
             );
           })

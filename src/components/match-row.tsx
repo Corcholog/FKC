@@ -1,16 +1,17 @@
 import Link from "next/link";
 import Image from "next/image";
-import { formatDuration, formatKDA, formatPerMinute, formatRelativeTime } from "@/lib/format";
+import { formatDuration, formatKDA, formatKillParticipation, formatPerMinute, formatRelativeTime } from "@/lib/format";
 import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/ddragon";
 
 export type TeamComposChampion = {
   championId: number;
   championName: string;
+  kills: number;
   isSelf?: boolean;
 };
 
 type MatchRowData = {
-  matchId: string;
+  riotMatchId: string;
   championId: number;
   championName: string;
   win: boolean;
@@ -41,17 +42,16 @@ function TeamComposRow({
         const url = championIconUrl(c.championId, version, championMap);
         const name = championDisplayName(c.championId, championMap, c.championName);
         return url ? (
-          // eslint-disable-next-line @next/next/no-img-element -- many tiny decorative
-          // icons per row; next/image's optimizer overhead isn't worth it at this size.
+          // eslint-disable-next-line @next/next/no-img-element -- tiny decorative icons, next/image overhead isn't worth it here
           <img
             key={i}
             src={url}
             alt={name}
             title={name}
-            className={`h-7 w-7 rounded-sm ${c.isSelf ? "ring-2 ring-blue-bright" : ""}`}
+            className={`h-8 w-8 rounded-sm ${c.isSelf ? "ring-2 ring-gold" : ""}`}
           />
         ) : (
-          <div key={i} className="h-7 w-7 rounded-sm bg-blue-muted" />
+          <div key={i} className="h-8 w-8 rounded-sm bg-gold-muted" />
         );
       })}
     </div>
@@ -62,12 +62,16 @@ export function MatchRow({
   match,
   version,
   championMap,
-  playerId,
+  playerSlug,
+  playerName,
 }: {
   match: MatchRowData;
   version: string;
   championMap: Map<number, ChampionInfo>;
-  playerId: string;
+  playerSlug: string;
+  /** Shown above the champion name when this row appears outside a single
+   * player's own page (e.g. a squad-wide feed) so it's clear whose game it is. */
+  playerName?: string;
 }) {
   const iconUrl = championIconUrl(match.championId, version, championMap);
   const displayName = championDisplayName(match.championId, championMap, match.championName);
@@ -75,11 +79,12 @@ export function MatchRow({
   const opponentName = match.opponent
     ? championDisplayName(match.opponent.championId, championMap, match.opponent.championName)
     : null;
+  const teamKills = match.allies.reduce((sum, c) => sum + c.kills, 0);
 
   return (
     <Link
-      href={`/player/${playerId}/match/${match.matchId}`}
-      className={`flex items-center gap-3 rounded-lg border-l-4 bg-bg-secondary p-3 transition-colors hover:bg-bg-tertiary ${
+      href={`/player/${playerSlug}/match/${match.riotMatchId}`}
+      className={`panel-hex @container flex items-center gap-3 border-l-4 p-3 ${
         match.win ? "border-l-win" : "border-l-loss"
       }`}
     >
@@ -87,33 +92,44 @@ export function MatchRow({
         {iconUrl ? (
           <Image src={iconUrl} alt={displayName} width={40} height={40} className="h-10 w-10 shrink-0 rounded-md" />
         ) : (
-          <div className="h-10 w-10 shrink-0 rounded-md bg-blue-muted" />
+          <div className="h-10 w-10 shrink-0 rounded-md bg-gold-muted" />
         )}
         <div className="min-w-0">
+          {playerName && (
+            <p className="truncate text-[10px] font-medium tracking-wide text-gold-bright uppercase">{playerName}</p>
+          )}
           <p className="truncate text-sm font-medium text-white">{displayName}</p>
           <p className="tabular-nums text-xs text-grey-light">
-            {formatKDA(match.kills, match.deaths, match.assists)}
+            {formatKDA(match.kills, match.deaths, match.assists)} - {" "}
+            {formatKillParticipation(match.kills, match.assists, teamKills)} KP
           </p>
         </div>
       </div>
 
-      {/* Compact opponent hint on narrow screens, where the full team comps below don't fit. */}
-      <div className="flex w-16 shrink-0 flex-row items-center justify-center gap-1.5 md:hidden">
+      {/* Compact opponent hint when the row itself doesn't have room for the
+          full team comps below — a container query, not a viewport
+          breakpoint, since this row can end up inside a narrower grid column
+          (e.g. the dashboard's 2-column layout) even on a wide screen. */}
+      <div className="flex w-16 shrink-0 flex-row items-center justify-center gap-1.5 @[800px]:hidden">
         <span className="text-xs font-medium tracking-wide text-grey-mid uppercase">vs</span>
         {opponentIconUrl ? (
           <img src={opponentIconUrl} alt={opponentName ?? ""} title={opponentName ?? ""} className="h-7 w-7 rounded-sm" />
         ) : (
-          <div className="h-7 w-7 rounded-sm bg-blue-muted" />
+          <div className="h-7 w-7 rounded-sm bg-gold-muted" />
         )}
       </div>
 
-      {/* Full team comps once there's room — replaces the "vs" hint above, not alongside it. */}
-      <div className="hidden shrink-0 flex-col items-center justify-center gap-1 md:flex">
+      {/* Full team comps once the row itself has room — allies centered on the
+          left, enemies on the right, so the ally/enemy split reads at a
+          glance instead of stacking two rows. Replaces the "vs" hint above,
+          not alongside it. */}
+      <div className="hidden shrink-0 items-center gap-2.5 @[800px]:flex">
         <TeamComposRow champions={match.allies} version={version} championMap={championMap} />
+        <span className="text-[10px] font-semibold tracking-wide text-grey-mid uppercase">vs</span>
         <TeamComposRow champions={match.enemies} version={version} championMap={championMap} />
       </div>
 
-      <div className="hidden w-28 shrink-0 text-right text-xs text-grey-light sm:block">
+      <div className="hidden w-28 shrink-0 text-right text-xs text-grey-light @[420px]:block">
         <p className="tabular-nums">{formatPerMinute(match.totalCs, match.gameDurationSeconds)} CS/min</p>
         <p className="tabular-nums">
           {formatPerMinute(match.damageDealtToChampions, match.gameDurationSeconds)} dmg/min

@@ -32,7 +32,6 @@ export async function addNote(
     const note = (formData.get("note") as string)?.trim();
     const authorName = (formData.get("authorName") as string)?.trim();
     const playerId = formData.get("playerId") as string;
-    const matchId = formData.get("matchId") as string;
 
     if (!matchParticipantId || !note) {
       return { error: "Note text is required." };
@@ -46,7 +45,7 @@ export async function addNote(
     if (error) return { error: error.message };
 
     await markSummaryStale(supabase, playerId);
-    revalidatePath(`/player/${playerId}/match/${matchId}`);
+    revalidatePath("/player/[slug]/match/[riotMatchId]", "page");
     return { success: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong." };
@@ -63,7 +62,6 @@ export async function updateNote(
     const id = formData.get("id") as string;
     const note = (formData.get("note") as string)?.trim();
     const playerId = formData.get("playerId") as string;
-    const matchId = formData.get("matchId") as string;
 
     if (!id || !note) {
       return { error: "Note text is required." };
@@ -76,19 +74,19 @@ export async function updateNote(
     if (error) return { error: error.message };
 
     await markSummaryStale(supabase, playerId);
-    revalidatePath(`/player/${playerId}/match/${matchId}`);
+    revalidatePath("/player/[slug]/match/[riotMatchId]", "page");
     return { success: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong." };
   }
 }
 
-export async function deleteNote(id: string, playerId: string, matchId: string): Promise<void> {
+export async function deleteNote(id: string, playerId: string): Promise<void> {
   const supabase = await requireSession();
 
   const { error } = await supabase.from("match_notes").delete().eq("id", id);
   if (error) throw new Error(error.message);
 
   await markSummaryStale(supabase, playerId);
-  revalidatePath(`/player/${playerId}/match/${matchId}`);
+  revalidatePath("/player/[slug]/match/[riotMatchId]", "page");
 }

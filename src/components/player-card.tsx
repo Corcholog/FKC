@@ -1,12 +1,17 @@
 import Link from "next/link";
-import Image from "next/image";
-import { formatRank, formatWinLoss, formatWinRate, rankTierColor } from "@/lib/rank";
+import { rankTierColor } from "@/lib/rank";
+import { formatWinLoss, formatWinRate } from "@/lib/rank";
 import { formatPerMinute } from "@/lib/format";
 import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/ddragon";
 import { championWinRate, type ChampionAgg } from "@/lib/champion-stats";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card } from "@/components/ui/card";
+import { RankBadge } from "@/components/rank-badge";
+import { WinrateRing } from "@/components/winrate-ring";
 
 type Player = {
   id: string;
+  slug: string;
   display_name: string;
   riot_game_name: string;
   riot_tag_line: string;
@@ -32,11 +37,11 @@ function ChampionChip({
   const winRate = championWinRate(champ);
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-1 rounded-md bg-bg-tertiary px-1.5 py-2">
+    <div className="flex flex-1 flex-col items-center gap-1 rounded-lg bg-bg-tertiary px-1.5 py-2">
       {url ? (
-        <img src={url} alt={name} title={name} className="h-6 w-6 rounded-sm" />
+        <img src={url} alt={name} title={name} className="h-9 w-9 rounded-md" />
       ) : (
-        <div className="h-6 w-6 rounded-sm bg-blue-muted" />
+        <div className="h-9 w-9 rounded-md bg-gold-muted" />
       )}
       <p className="tabular-nums text-xs text-white">
         {winRate}% <span className="text-grey-mid">({champ.games})</span>
@@ -62,55 +67,56 @@ export function PlayerCard({
   version: string;
   championMap: Map<number, ChampionInfo>;
 }) {
-  return (
-    <Link
-      href={`/player/${player.id}`}
-      style={{ borderColor: rankTierColor(player.tier) }}
-      className="flex flex-col gap-3 rounded-lg border-2 bg-bg-secondary p-4 transition-colors hover:bg-bg-tertiary"
-    >
-      <div className="flex items-center gap-4">
-        {player.avatar_url ? (
-          <Image
-            src={player.avatar_url}
-            alt=""
-            width={48}
-            height={48}
-            className="h-12 w-12 rounded-full object-cover"
-          />
-        ) : (
-          <div className="h-12 w-12 rounded-full bg-blue-muted" />
-        )}
+  const color = rankTierColor(player.tier);
+  const totalGames = (player.wins ?? 0) + (player.losses ?? 0);
+  const winRatePct = totalGames === 0 ? 0 : Math.round(((player.wins ?? 0) / totalGames) * 100);
 
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-white">{player.display_name}</p>
-          <p className="truncate text-xs text-grey-light">
-            {player.riot_game_name}#{player.riot_tag_line}
-          </p>
-          <div className="mt-1.5 flex items-center gap-2">
-            <span className="rounded-full bg-blue-muted px-2 py-0.5 text-xs text-white">
-              {formatRank(player.tier, player.division)}
-            </span>
-            {player.tier && (
-              <span className="tabular-nums text-xs text-grey-light">{player.league_points ?? 0} LP</span>
-            )}
+  return (
+    <Link href={`/player/${player.slug}`}>
+      <Card
+        style={
+          {
+            "--tier-color": color,
+            borderColor: `color-mix(in oklch, ${color} 55%, transparent)`,
+          } as React.CSSProperties
+        }
+        className="panel-hex-clip gap-3 border-2 shadow-[0_2px_10px_-6px_rgba(0,0,0,0.7)] transition-all duration-150 hover:bg-bg-tertiary hover:shadow-[0_0_18px_-4px_var(--tier-color)]"
+      >
+        <div className="flex items-center gap-4 px-4">
+          <Avatar className="h-16 w-16">
+            {player.avatar_url && <AvatarImage src={player.avatar_url} alt="" />}
+            <AvatarFallback className="text-lg">{player.display_name.slice(0, 2).toUpperCase()}</AvatarFallback>
+          </Avatar>
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-lg font-semibold text-white">{player.display_name}</p>
+            <p className="truncate text-xs text-grey-light">
+              {player.riot_game_name}#{player.riot_tag_line}
+            </p>
+            <div className="mt-2">
+              <RankBadge tier={player.tier} division={player.division} leaguePoints={player.league_points} size="lg" />
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-3">
+            <div className="text-right">
+              <p className="tabular-nums text-lg font-semibold text-white">
+                {formatWinLoss(player.wins, player.losses)}
+              </p>
+              <p className="tabular-nums text-sm text-grey-light">{formatWinRate(player.wins, player.losses)}</p>
+            </div>
+            <WinrateRing percentage={winRatePct} size={56} strokeWidth={5} />
           </div>
         </div>
 
-        <div className="shrink-0 text-right">
-          <p className="tabular-nums font-semibold text-white">
-            {formatWinLoss(player.wins, player.losses)}
-          </p>
-          <p className="tabular-nums text-xs text-grey-light">{formatWinRate(player.wins, player.losses)}</p>
-        </div>
-      </div>
-
-      {topChampions.length > 0 && (
-        <div className="flex gap-1.5 border-t border-border pt-3">
-          {topChampions.map((c) => (
-            <ChampionChip key={c.championId} champ={c} version={version} championMap={championMap} />
-          ))}
-        </div>
-      )}
+        {topChampions.length > 0 && (
+          <div className="flex gap-1.5 border-t border-border px-4 pt-3">
+            {topChampions.map((c) => (
+              <ChampionChip key={c.championId} champ={c} version={version} championMap={championMap} />
+            ))}
+          </div>
+        )}
+      </Card>
     </Link>
   );
 }

@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap, championIconUrl, championDisplayName, type ChampionInfo } from "@/lib/ddragon";
-import { formatDuration, formatKDA, formatRelativeTime } from "@/lib/format";
+import { formatDuration, formatKDA, formatKdaRatio, formatRelativeTime, kdaRatioForGame } from "@/lib/format";
 import { sortByRole } from "@/lib/roles";
 import { NotesSection } from "@/components/notes-section";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,9 +61,12 @@ function ParticipantRow({
         <div className="h-7 w-7 rounded-md bg-gold-muted" />
       )}
       <p className="min-w-0 flex-1 truncate text-xs text-white">{name}</p>
-      <p className="tabular-nums w-20 text-xs text-grey-light">
-        {formatKDA(participant.kills, participant.deaths, participant.assists)}
-      </p>
+      <div className="w-24 text-xs text-grey-light">
+        <p className="tabular-nums">{formatKDA(participant.kills, participant.deaths, participant.assists)}</p>
+        <p className="tabular-nums text-[10px] text-grey-mid">
+          {formatKdaRatio(kdaRatioForGame(participant.kills, participant.deaths, participant.assists))} KDA
+        </p>
+      </div>
       <p className="tabular-nums w-16 text-right text-xs text-grey-light">
         {participant.damage_dealt_to_champions.toLocaleString()}
       </p>
@@ -80,7 +83,7 @@ function ParticipantHeader() {
     <div className="flex items-center gap-2 border-b border-border px-1.5 pb-1.5">
       <div className="h-7 w-7 shrink-0" />
       <p className="min-w-0 flex-1 text-[10px] font-medium tracking-wide text-grey-mid uppercase">Player</p>
-      <p className="w-20 text-[10px] font-medium tracking-wide text-grey-mid uppercase">KDA</p>
+      <p className="w-24 text-[10px] font-medium tracking-wide text-grey-mid uppercase">KDA</p>
       <p className="w-16 text-right text-[10px] font-medium tracking-wide text-grey-mid uppercase">Dmg</p>
       <p className="w-14 text-right text-[10px] font-medium tracking-wide text-grey-mid uppercase">Gold</p>
       <p className="w-10 text-right text-[10px] font-medium tracking-wide text-grey-mid uppercase">CS</p>

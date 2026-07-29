@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { formatPerMinute } from "@/lib/format";
+import { formatKdaRatio, formatPerMinute } from "@/lib/format";
 import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/ddragon";
-import { championWinRate, type ChampionAgg } from "@/lib/champion-stats";
+import { championKdaRatio, championWinRate, type ChampionAgg } from "@/lib/champion-stats";
 import { Button } from "@/components/ui/button";
 
 type SortKey = "games" | "winrate";
@@ -68,6 +68,7 @@ export function ChampionTierList({
                 <p className="w-full truncate text-sm font-medium text-white">{name}</p>
                 <p className="font-heading tabular-nums text-xl font-semibold text-white">{winRate}%</p>
                 <p className="tabular-nums text-xs text-grey-light">{champ.games} games</p>
+                <p className="tabular-nums text-xs text-grey-light">{formatKdaRatio(championKdaRatio(champ))} KDA</p>
                 <div className="flex gap-2 text-xs text-grey-light">
                   <span className="tabular-nums">
                     {formatPerMinute(champ.totalCs, champ.totalDurationSeconds)} CS/min

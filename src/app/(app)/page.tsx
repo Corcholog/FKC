@@ -2,10 +2,21 @@ import Link from "next/link";
 import { Users, Swords, BarChart3, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
-import { formatRelativeTime, isoDaysAgo } from "@/lib/format";
+import { formatRelativeTime, formatKdaRatio, isoDaysAgo } from "@/lib/format";
 import { sortByRole } from "@/lib/roles";
 import { rankSortKey, formatWinRate } from "@/lib/rank";
+import {
+  aggregatePlayerStats,
+  csPerMinute,
+  damagePerMinute,
+  deathsPerGame,
+  kdaRatio,
+  pickAward,
+  playerWinRate,
+  type PlayerStatInput,
+} from "@/lib/player-stats";
 import { MatchRow, type TeamComposChampion } from "@/components/match-row";
+import { AwardTile } from "@/components/award-tile";
 import { RankBadge } from "@/components/rank-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +60,12 @@ type ParticipantRow = {
   total_cs: number;
 };
 
+// game_duration_seconds lives on matches, so it arrives nested and gets
+// flattened onto the row before aggregation — same as /team and /champions.
+type AwardStatRow = Omit<PlayerStatInput, "game_duration_seconds"> & {
+  matches: { game_duration_seconds: number } | null;
+};
+
 function QuickLinkRow({ href, icon: Icon, label }: { href: string; icon: typeof Users; label: string }) {
   return (
     <Link
@@ -66,10 +83,16 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const weekAgoIso = isoDaysAgo(7);
 
-  // These four are independent of each other — run them concurrently instead
-  // of paying for four sequential round trips.
-  const [{ data: players }, { data: syncState }, { data: weekRows }, { data: matchListFull }, version] =
-    await Promise.all([
+  // These five are independent of each other — run them concurrently instead
+  // of paying for five sequential round trips.
+  const [
+    { data: players },
+    { data: syncState },
+    { data: weekRows },
+    { data: matchListFull },
+    { data: awardRows },
+    version,
+  ] = await Promise.all([
       supabase
         .from("players")
         .select("id, slug, display_name, avatar_url, tier, division, league_points, wins, losses")
@@ -94,6 +117,15 @@ export default async function DashboardPage() {
         .order("game_creation", { ascending: false })
         .limit(ACTIVITY_MATCH_LIMIT)
         .returns<MatchListRow[]>(),
+      // Every tracked player's full history, for the award tiles below. Same
+      // unbounded-select shape as /team and /champions.
+      supabase
+        .from("match_participants")
+        .select(
+          "player_id, team_position, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, matches!inner(game_duration_seconds)",
+        )
+        .not("player_id", "is", null)
+        .returns<AwardStatRow[]>(),
       getLatestVersion(),
     ]);
 
@@ -118,6 +150,73 @@ export default async function DashboardPage() {
       mostActivePlayer = playersById.get(playerId) ?? null;
     }
   }
+
+  const awardStats = aggregatePlayerStats(
+    (awardRows ?? []).map((r) => ({ ...r, game_duration_seconds: r.matches?.game_duration_seconds ?? 0 })),
+  );
+  const roster = players ?? [];
+  const award = (
+    score: (agg: Parameters<typeof kdaRatio>[0]) => number,
+    direction: "max" | "min",
+    csOnly = false,
+  ) =>
+    pickAward(
+      roster,
+      awardStats,
+      (p) => p.id,
+      score,
+      (agg) => (csOnly ? agg.csGames : agg.games),
+      direction,
+    );
+
+  // Sub-text doubles as the honesty check on each tile: with no minimum-games
+  // gate, a leader off two games should be visibly a leader off two games.
+  const gamesSub = (games: number) => `${games} game${games === 1 ? "" : "s"}`;
+  const csSub = (games: number) => `${gamesSub(games)} · excl. support`;
+
+  const oneDecimal = (v: number) => v.toFixed(1);
+
+  const awards: {
+    label: string;
+    tone: "good" | "bad" | "neutral";
+    result: ReturnType<typeof award>;
+    format: (value: number) => string;
+    sub: (games: number) => string;
+  }[] = [
+    { label: "Best KDA", tone: "good", result: award(kdaRatio, "max"), format: formatKdaRatio, sub: gamesSub },
+    { label: "Worst KDA", tone: "bad", result: award(kdaRatio, "min"), format: formatKdaRatio, sub: gamesSub },
+    { label: "Best CS/min", tone: "good", result: award(csPerMinute, "max", true), format: oneDecimal, sub: csSub },
+    { label: "Worst CS/min", tone: "bad", result: award(csPerMinute, "min", true), format: oneDecimal, sub: csSub },
+    {
+      label: "Highest winrate",
+      tone: "good",
+      result: award(playerWinRate, "max"),
+      format: (v) => `${v}%`,
+      sub: gamesSub,
+    },
+    {
+      label: "Most games",
+      tone: "neutral",
+      result: award((a) => a.games, "max"),
+      format: (v) => String(v),
+      sub: gamesSub,
+    },
+    {
+      label: "Best damage/min",
+      tone: "good",
+      result: award(damagePerMinute, "max"),
+      // Four-digit figure in a headline font — a tenth of a damage point is noise.
+      format: (v) => Math.round(v).toLocaleString("en-US"),
+      sub: gamesSub,
+    },
+    {
+      label: "Most deaths/game",
+      tone: "bad",
+      result: award(deathsPerGame, "max"),
+      format: oneDecimal,
+      sub: gamesSub,
+    },
+  ];
 
   const matchList = matchListFull ?? [];
   const matchIds = matchList.map((m) => m.id);
@@ -207,6 +306,22 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
           </div>
+
+          <section className="flex flex-col gap-2">
+            <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Awards</h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {awards.map(({ label, tone, result, format, sub }) => (
+                <AwardTile
+                  key={label}
+                  label={label}
+                  tone={tone}
+                  player={result?.player ?? null}
+                  value={result ? format(result.value) : ""}
+                  sub={result ? sub(result.games) : undefined}
+                />
+              ))}
+            </div>
+          </section>
 
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Recent activity</h2>

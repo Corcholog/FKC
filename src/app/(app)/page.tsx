@@ -64,32 +64,46 @@ function QuickLinkRow({ href, icon: Icon, label }: { href: string; icon: typeof 
 
 export default async function DashboardPage() {
   const supabase = await createClient();
+  const weekAgoIso = isoDaysAgo(7);
 
-  const { data: players } = await supabase
-    .from("players")
-    .select("id, slug, display_name, avatar_url, tier, division, league_points, wins, losses")
-    .returns<PlayerRow[]>();
+  // These four are independent of each other — run them concurrently instead
+  // of paying for four sequential round trips.
+  const [{ data: players }, { data: syncState }, { data: weekRows }, { data: matchListFull }, version] =
+    await Promise.all([
+      supabase
+        .from("players")
+        .select("id, slug, display_name, avatar_url, tier, division, league_points, wins, losses")
+        .returns<PlayerRow[]>(),
+      supabase
+        .from("sync_state")
+        .select("riot_key_valid, last_sync_status, last_sync_finished_at")
+        .eq("id", 1)
+        .single(),
+      supabase
+        .from("match_participants")
+        .select("player_id, matches!inner(game_creation)")
+        .not("player_id", "is", null)
+        .gte("matches.game_creation", weekAgoIso)
+        .returns<{ player_id: string }[]>(),
+      // Query from matches (true top-level order, proven safe) rather than
+      // ordering "through" an embedded match_participants collection.
+      supabase
+        .from("matches")
+        .select("id, riot_match_id, game_creation, game_duration_seconds, match_participants!inner(player_id)")
+        .not("match_participants.player_id", "is", null)
+        .order("game_creation", { ascending: false })
+        .limit(ACTIVITY_MATCH_LIMIT)
+        .returns<MatchListRow[]>(),
+      getLatestVersion(),
+    ]);
+
   const playersById = new Map((players ?? []).map((p) => [p.id, p]));
   const rosterSorted = [...(players ?? [])].sort((a, b) => rankSortKey(a) - rankSortKey(b));
-
-  const { data: syncState } = await supabase
-    .from("sync_state")
-    .select("riot_key_valid, last_sync_status, last_sync_finished_at")
-    .eq("id", 1)
-    .single();
 
   const totalWins = (players ?? []).reduce((sum, p) => sum + (p.wins ?? 0), 0);
   const totalLosses = (players ?? []).reduce((sum, p) => sum + (p.losses ?? 0), 0);
   const totalGames = totalWins + totalLosses;
   const groupWinRate = totalGames === 0 ? null : Math.round((totalWins / totalGames) * 100);
-
-  const weekAgoIso = isoDaysAgo(7);
-  const { data: weekRows } = await supabase
-    .from("match_participants")
-    .select("player_id, matches!inner(game_creation)")
-    .not("player_id", "is", null)
-    .gte("matches.game_creation", weekAgoIso)
-    .returns<{ player_id: string }[]>();
 
   const gamesThisWeek = weekRows?.length ?? 0;
   const weeklyCountByPlayer = new Map<string, number>();
@@ -105,28 +119,20 @@ export default async function DashboardPage() {
     }
   }
 
-  // Query from matches (true top-level order, proven safe) rather than
-  // ordering "through" an embedded match_participants collection.
-  const { data: matchListFull } = await supabase
-    .from("matches")
-    .select("id, riot_match_id, game_creation, game_duration_seconds, match_participants!inner(player_id)")
-    .not("match_participants.player_id", "is", null)
-    .order("game_creation", { ascending: false })
-    .limit(ACTIVITY_MATCH_LIMIT)
-    .returns<MatchListRow[]>();
-
   const matchList = matchListFull ?? [];
   const matchIds = matchList.map((m) => m.id);
-  const { data: allParticipants } =
+  const [{ data: allParticipants }, championMap] = await Promise.all([
     matchIds.length > 0
-      ? await supabase
+      ? supabase
           .from("match_participants")
           .select(
             "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs",
           )
           .in("match_id", matchIds)
           .returns<ParticipantRow[]>()
-      : { data: [] as ParticipantRow[] };
+      : Promise.resolve({ data: [] as ParticipantRow[] }),
+    getChampionMap(version),
+  ]);
 
   const participantsByMatch = new Map<string, ParticipantRow[]>();
   for (const p of allParticipants ?? []) {
@@ -134,9 +140,6 @@ export default async function DashboardPage() {
     list.push(p);
     participantsByMatch.set(p.match_id, list);
   }
-
-  const version = await getLatestVersion();
-  const championMap = await getChampionMap(version);
 
   const activityEntries = matchList.flatMap((m) => {
     const participants = participantsByMatch.get(m.id) ?? [];

@@ -40,22 +40,35 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
   const { slug } = await params;
   const supabase = await createClient();
 
-  const { data: player } = await supabase.from("players").select("*").eq("slug", slug).single();
+  const [{ data: player }, version] = await Promise.all([
+    supabase.from("players").select("*").eq("slug", slug).single(),
+    getLatestVersion(),
+  ]);
   if (!player) notFound();
   const id = player.id;
 
-  // Query from matches (not match_participants) so game_creation is a true
-  // top-level column — PostgREST's foreignTable order only reorders embedded
-  // to-many collections within each parent, it can't reorder the parent rows
-  // by a column in a to-one join, so ordering "through" match_participants
-  // silently no-ops and returns rows in insertion order instead.
-  const { data: matchListFull } = await supabase
-    .from("matches")
-    .select("id, riot_match_id, game_creation, game_duration_seconds, match_participants!inner(player_id)")
-    .eq("match_participants.player_id", id)
-    .order("game_creation", { ascending: false })
-    .limit(RECENT_FORM_LIMIT)
-    .returns<MatchListRow[]>();
+  // These three only depend on `id`/`version`, not on each other — run them
+  // concurrently instead of three sequential round trips.
+  const [{ data: matchListFull }, { data: aiSummary }, championMap] = await Promise.all([
+    // Query from matches (not match_participants) so game_creation is a true
+    // top-level column — PostgREST's foreignTable order only reorders embedded
+    // to-many collections within each parent, it can't reorder the parent rows
+    // by a column in a to-one join, so ordering "through" match_participants
+    // silently no-ops and returns rows in insertion order instead.
+    supabase
+      .from("matches")
+      .select("id, riot_match_id, game_creation, game_duration_seconds, match_participants!inner(player_id)")
+      .eq("match_participants.player_id", id)
+      .order("game_creation", { ascending: false })
+      .limit(RECENT_FORM_LIMIT)
+      .returns<MatchListRow[]>(),
+    supabase
+      .from("player_ai_summaries")
+      .select("summary_text, generated_at, stale")
+      .eq("player_id", id)
+      .maybeSingle(),
+    getChampionMap(version),
+  ]);
 
   const matchList = matchListFull ?? [];
 
@@ -80,15 +93,6 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
     list.push(p);
     participantsByMatch.set(p.match_id, list);
   }
-
-  const version = await getLatestVersion();
-  const championMap = await getChampionMap(version);
-
-  const { data: aiSummary } = await supabase
-    .from("player_ai_summaries")
-    .select("summary_text, generated_at, stale")
-    .eq("player_id", id)
-    .maybeSingle();
 
   const totalGames = (player.wins ?? 0) + (player.losses ?? 0);
   const winRatePct = totalGames === 0 ? 0 : Math.round(((player.wins ?? 0) / totalGames) * 100);

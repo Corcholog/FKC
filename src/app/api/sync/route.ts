@@ -3,6 +3,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { runSync, RiotKeyInvalidError } from "@/lib/sync";
 
+// Sequential, rate-limited Riot calls across every tracked player can take a
+// while (75ms throttle x every match-id page, match fetch, and rank lookup).
+// Without this, non-Fluid-Compute Vercel deployments default to a 10-15s
+// budget (60s hard cap on Hobby) — set explicitly so a slow day doesn't
+// silently truncate the sync mid-run.
+export const maxDuration = 60;
+
 // A run stuck at 'running' past this is assumed crashed, not actually in progress.
 const STALE_RUN_MS = 10 * 60 * 1000;
 

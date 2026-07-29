@@ -22,4 +22,4 @@ Run the schema SQL against a fresh Supabase project's SQL Editor before first us
 
 ## Status
 
-Built phase by phase; currently past Phase 0 (project scaffold + Supabase wiring). See commit history for progress.
+MVP complete (Phases 0–9 of `docs/06_ROADMAP.md`) plus Phase 10 (per-player champion tierlist). Phase 11 (private per-player AI chat) is the only roadmap item not yet started. See commit history for progress.

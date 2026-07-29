@@ -44,11 +44,14 @@ export default async function MatchesPage({
   const { player: playerFilter } = await searchParams;
   const supabase = await createClient();
 
-  const { data: players } = await supabase
-    .from("players")
-    .select("id, slug, display_name, avatar_url")
-    .order("display_name")
-    .returns<PlayerRow[]>();
+  const [{ data: players }, version] = await Promise.all([
+    supabase
+      .from("players")
+      .select("id, slug, display_name, avatar_url")
+      .order("display_name")
+      .returns<PlayerRow[]>(),
+    getLatestVersion(),
+  ]);
   const playersById = new Map((players ?? []).map((p) => [p.id, p]));
   const selectedPlayer = playerFilter ? players?.find((p) => p.slug === playerFilter) ?? null : null;
 
@@ -68,16 +71,18 @@ export default async function MatchesPage({
   const matchList = matchListFull ?? [];
 
   const matchIds = matchList.map((m) => m.id);
-  const { data: allParticipants } =
+  const [{ data: allParticipants }, championMap] = await Promise.all([
     matchIds.length > 0
-      ? await supabase
+      ? supabase
           .from("match_participants")
           .select(
             "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs",
           )
           .in("match_id", matchIds)
           .returns<ParticipantRow[]>()
-      : { data: [] as ParticipantRow[] };
+      : Promise.resolve({ data: [] as ParticipantRow[] }),
+    getChampionMap(version),
+  ]);
 
   const participantsByMatch = new Map<string, ParticipantRow[]>();
   for (const p of allParticipants ?? []) {
@@ -85,9 +90,6 @@ export default async function MatchesPage({
     list.push(p);
     participantsByMatch.set(p.match_id, list);
   }
-
-  const version = await getLatestVersion();
-  const championMap = await getChampionMap(version);
 
   const entries = matchList.flatMap((m) => {
     const participants = participantsByMatch.get(m.id) ?? [];

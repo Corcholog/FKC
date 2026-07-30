@@ -214,25 +214,24 @@ export default async function DashboardPage() {
     result: ReturnType<typeof award>;
     format: (value: number) => string;
     sub: (games: number) => string;
+    /** Reads a migration-005 column, so it only has an answer once that data exists. */
+    detail?: boolean;
   };
 
-  const awards: AwardSpec[] = [
+  // Whether the roster has any migration-005 data at all. Until the settings
+  // backfill has run, the tiles built on it would all be em dashes, so they're
+  // dropped from their section rather than padding it out — see `visible` below.
+  const hasDetailedStats = [...awardStats.values()].some((agg) => agg.detailGames > 0);
+  const visible = (specs: AwardSpec[]) => specs.filter((spec) => hasDetailedStats || !spec.detail);
+
+  const hallOfFame: AwardSpec[] = visible([
     { label: "Best KDA", tone: "good", result: award(kdaRatio, "max"), format: formatKdaRatio, sub: gamesSub },
-    { label: "Worst KDA", tone: "bad", result: award(kdaRatio, "min"), format: formatKdaRatio, sub: gamesSub },
     { label: "Best CS/min", tone: "good", result: award(csPerMinute, "max", csGames), format: oneDecimal, sub: csSub },
-    { label: "Worst CS/min", tone: "bad", result: award(csPerMinute, "min", csGames), format: oneDecimal, sub: csSub },
     {
       label: "Highest winrate",
       tone: "good",
       result: award(playerWinRate, "max"),
       format: (v) => `${v}%`,
-      sub: gamesSub,
-    },
-    {
-      label: "Most games",
-      tone: "neutral",
-      result: award((a) => a.games, "max"),
-      format: (v) => String(v),
       sub: gamesSub,
     },
     {
@@ -244,21 +243,57 @@ export default async function DashboardPage() {
       sub: gamesSub,
     },
     {
+      label: "Ward god",
+      tone: "good",
+      result: award(visionScorePerGame, "max", detailGames),
+      format: (v) => String(Math.round(v)),
+      sub: detailSub,
+      detail: true,
+    },
+    {
+      label: "Objective thief",
+      tone: "good",
+      result: award((a) => a.objectivesStolen, "max", detailGames),
+      format: (v) => String(v),
+      sub: detailSub,
+      detail: true,
+    },
+    {
+      label: "Pentakills",
+      tone: "good",
+      result: award((a) => a.pentaKills, "max", detailGames),
+      format: (v) => String(v),
+      sub: detailSub,
+      detail: true,
+    },
+    {
+      // Not a good or a bad stat, just a lot of one — neutral tone keeps it from
+      // reading as an achievement it isn't.
+      label: "Most games",
+      tone: "neutral",
+      result: award((a) => a.games, "max"),
+      format: (v) => String(v),
+      sub: gamesSub,
+    },
+  ]);
+
+  const hallOfShame: AwardSpec[] = visible([
+    { label: "Worst KDA", tone: "bad", result: award(kdaRatio, "min"), format: formatKdaRatio, sub: gamesSub },
+    { label: "Worst CS/min", tone: "bad", result: award(csPerMinute, "min", csGames), format: oneDecimal, sub: csSub },
+    {
       label: "Most deaths/game",
       tone: "bad",
       result: award(deathsPerGame, "max"),
       format: oneDecimal,
       sub: gamesSub,
     },
-  ];
-
-  const hallOfShame: AwardSpec[] = [
     {
       label: "Time spent dead",
       tone: "bad",
       result: award(minutesSpentDead, "max", detailGames),
       format: (v) => `${Math.round(v)}m`,
       sub: detailSub,
+      detail: true,
     },
     {
       // The fair version of the tile beside it — playing the most games would
@@ -268,6 +303,7 @@ export default async function DashboardPage() {
       result: award(deadTimeShare, "max", detailGames),
       format: (v) => `${v.toFixed(1)}%`,
       sub: detailSub,
+      detail: true,
     },
     {
       label: "Most ? pings",
@@ -275,33 +311,9 @@ export default async function DashboardPage() {
       result: award(missingPingsPerGame, "max", detailGames),
       format: oneDecimal,
       sub: (games) => `per game · ${detailSub(games)}`,
+      detail: true,
     },
-    {
-      label: "Ward god",
-      tone: "good",
-      result: award(visionScorePerGame, "max", detailGames),
-      format: (v) => String(Math.round(v)),
-      sub: detailSub,
-    },
-    {
-      label: "Objective thief",
-      tone: "good",
-      result: award((a) => a.objectivesStolen, "max", detailGames),
-      format: (v) => String(v),
-      sub: detailSub,
-    },
-    {
-      label: "Pentakills",
-      tone: "good",
-      result: award((a) => a.pentaKills, "max", detailGames),
-      format: (v) => String(v),
-      sub: detailSub,
-    },
-  ];
-
-  // Every one of these needs migration 005 data. Until the settings backfill has
-  // run, the whole section would be six em dashes — better to not render it.
-  const hasDetailedStats = [...awardStats.values()].some((agg) => agg.detailGames > 0);
+  ]);
 
   const matchList = matchListFull ?? [];
   const matchIds = matchList.map((m) => m.id);
@@ -389,29 +401,16 @@ export default async function DashboardPage() {
             </Card>
           </div>
 
-          <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Awards</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {awards.map(({ label, tone, result, format, sub }) => (
-                <AwardTile
-                  key={label}
-                  label={label}
-                  tone={tone}
-                  player={result?.player ?? null}
-                  value={result ? format(result.value) : ""}
-                  sub={result ? sub(result.games) : undefined}
-                />
-              ))}
-            </div>
-          </section>
-
-          {hasDetailedStats && (
-            <section className="flex flex-col gap-2">
-              <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">
-                Hall of shame
-              </h2>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {hallOfShame.map(({ label, tone, result, format, sub }) => (
+          {/* Both halls share a column count so the tiles line up as one block
+              across the two headings, even when they hold different counts. */}
+          {[
+            { heading: "Hall of fame", specs: hallOfFame },
+            { heading: "Hall of shame", specs: hallOfShame },
+          ].map(({ heading, specs }) => (
+            <section key={heading} className="flex flex-col gap-2">
+              <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">{heading}</h2>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {specs.map(({ label, tone, result, format, sub }) => (
                   <AwardTile
                     key={label}
                     label={label}
@@ -423,7 +422,7 @@ export default async function DashboardPage() {
                 ))}
               </div>
             </section>
-          )}
+          ))}
 
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Recent activity</h2>

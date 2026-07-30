@@ -3,7 +3,17 @@
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Users, Swords, Trophy, Settings, Menu, Loader2, UserRound } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  Swords,
+  Trophy,
+  LineChart,
+  Settings,
+  Menu,
+  Loader2,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -15,6 +25,7 @@ const NAV_ITEMS = [
   { href: "/team", label: "Team", icon: Users },
   { href: "/matches", label: "Matches", icon: Swords },
   { href: "/champions", label: "Champions", icon: Trophy },
+  { href: "/insights", label: "Insights", icon: LineChart },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -87,7 +98,15 @@ export function Navbar({
       if (!res.ok) {
         toast.error(data.error ?? "Sync failed.");
       } else {
-        toast.success(`Synced: ${data.newMatches} new match(es), ${data.playersProcessed} player(s).`);
+        const result = `Synced: ${data.newMatches} new match(es), ${data.playersProcessed} player(s).`;
+        // A partial run isn't a failure — Riot's rate limit ran the sync out of
+        // time, and the next one resumes from the same point. Say so, though,
+        // or a backfill looks stuck.
+        if (data.partial) {
+          toast.warning(`${result} Hit the rate limit — sync again to continue.`);
+        } else {
+          toast.success(result);
+        }
       }
       router.refresh();
     } catch {

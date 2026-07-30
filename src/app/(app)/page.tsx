@@ -1,20 +1,26 @@
 import Link from "next/link";
-import { Users, Swords, BarChart3, ChevronRight } from "lucide-react";
+import { Users, Swords, BarChart3, LineChart, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { formatRelativeTime, formatKdaRatio, isoDaysAgo } from "@/lib/format";
-import { sortByRole } from "@/lib/roles";
+import { findLaneOpponent, sortByRole } from "@/lib/roles";
 import { rankSortKey, formatWinRate } from "@/lib/rank";
 import {
   aggregatePlayerStats,
   csPerMinute,
   damagePerMinute,
+  deadTimeShare,
   deathsPerGame,
   kdaRatio,
+  minutesSpentDead,
+  missingPingsPerGame,
   pickAward,
   playerWinRate,
+  visionScorePerGame,
+  type PlayerAgg,
   type PlayerStatInput,
 } from "@/lib/player-stats";
+import { streaksByPlayer, formatStreak, NOTABLE_STREAK } from "@/lib/streaks";
 import { MatchRow, type TeamComposChampion } from "@/components/match-row";
 import { AwardTile } from "@/components/award-tile";
 import { RankBadge } from "@/components/rank-badge";
@@ -60,10 +66,11 @@ type ParticipantRow = {
   total_cs: number;
 };
 
-// game_duration_seconds lives on matches, so it arrives nested and gets
-// flattened onto the row before aggregation — same as /team and /champions.
+// game_duration_seconds and game_creation live on matches, so they arrive
+// nested and get flattened onto the row before aggregation — same as /team and
+// /champions.
 type AwardStatRow = Omit<PlayerStatInput, "game_duration_seconds"> & {
-  matches: { game_duration_seconds: number } | null;
+  matches: { game_duration_seconds: number; game_creation: string } | null;
 };
 
 function QuickLinkRow({ href, icon: Icon, label }: { href: string; icon: typeof Users; label: string }) {
@@ -117,12 +124,17 @@ export default async function DashboardPage() {
         .order("game_creation", { ascending: false })
         .limit(ACTIVITY_MATCH_LIMIT)
         .returns<MatchListRow[]>(),
-      // Every tracked player's full history, for the award tiles below. Same
-      // unbounded-select shape as /team and /champions.
+      // Every tracked player's full history, for the award tiles and streaks
+      // below. Same unbounded-select shape as /team and /champions.
+      //
+      // The columns after damage_dealt_to_champions arrive with migration 005
+      // and are null on anything synced before it — see aggregatePlayerStats,
+      // which counts them separately so a half-backfilled history isn't
+      // averaged over zeroes.
       supabase
         .from("match_participants")
         .select(
-          "player_id, team_position, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, matches!inner(game_duration_seconds)",
+          "player_id, team_position, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, vision_score, total_time_spent_dead, penta_kills, objectives_stolen, total_damage_taken, pings, matches!inner(game_duration_seconds, game_creation)",
         )
         .not("player_id", "is", null)
         .returns<AwardStatRow[]>(),
@@ -151,42 +163,57 @@ export default async function DashboardPage() {
     }
   }
 
-  const awardStats = aggregatePlayerStats(
-    (awardRows ?? []).map((r) => ({ ...r, game_duration_seconds: r.matches?.game_duration_seconds ?? 0 })),
+  const flatAwardRows = (awardRows ?? []).map((r) => ({
+    ...r,
+    game_duration_seconds: r.matches?.game_duration_seconds ?? 0,
+  }));
+  const awardStats = aggregatePlayerStats(flatAwardRows);
+  const streaks = streaksByPlayer(
+    (awardRows ?? []).map((r) => ({
+      player_id: r.player_id,
+      win: r.win,
+      game_creation: r.matches?.game_creation ?? "",
+    })),
   );
+
   const roster = players ?? [];
+
+  // `qualifier` picks which game counter gates the award, so a metric that only
+  // exists on fully-synced rows isn't handed to a player whose history predates
+  // migration 005 — see PlayerAgg.detailGames.
   const award = (
-    score: (agg: Parameters<typeof kdaRatio>[0]) => number,
+    score: (agg: PlayerAgg) => number,
     direction: "max" | "min",
-    csOnly = false,
-  ) =>
-    pickAward(
-      roster,
-      awardStats,
-      (p) => p.id,
-      score,
-      (agg) => (csOnly ? agg.csGames : agg.games),
-      direction,
-    );
+    qualifier: (agg: PlayerAgg) => number = (agg) => agg.games,
+  ) => pickAward(roster, awardStats, (p) => p.id, score, qualifier, direction);
+
+  const csGames = (agg: PlayerAgg) => agg.csGames;
+  const detailGames = (agg: PlayerAgg) => agg.detailGames;
 
   // Sub-text doubles as the honesty check on each tile: with no minimum-games
   // gate, a leader off two games should be visibly a leader off two games.
   const gamesSub = (games: number) => `${games} game${games === 1 ? "" : "s"}`;
   const csSub = (games: number) => `${gamesSub(games)} · excl. support`;
+  // Migration 005 columns only exist on games synced since it ran, so these
+  // tiles say how many games they're actually built on rather than implying the
+  // full history.
+  const detailSub = (games: number) => `${gamesSub(games)} with full detail`;
 
   const oneDecimal = (v: number) => v.toFixed(1);
 
-  const awards: {
+  type AwardSpec = {
     label: string;
     tone: "good" | "bad" | "neutral";
     result: ReturnType<typeof award>;
     format: (value: number) => string;
     sub: (games: number) => string;
-  }[] = [
+  };
+
+  const awards: AwardSpec[] = [
     { label: "Best KDA", tone: "good", result: award(kdaRatio, "max"), format: formatKdaRatio, sub: gamesSub },
     { label: "Worst KDA", tone: "bad", result: award(kdaRatio, "min"), format: formatKdaRatio, sub: gamesSub },
-    { label: "Best CS/min", tone: "good", result: award(csPerMinute, "max", true), format: oneDecimal, sub: csSub },
-    { label: "Worst CS/min", tone: "bad", result: award(csPerMinute, "min", true), format: oneDecimal, sub: csSub },
+    { label: "Best CS/min", tone: "good", result: award(csPerMinute, "max", csGames), format: oneDecimal, sub: csSub },
+    { label: "Worst CS/min", tone: "bad", result: award(csPerMinute, "min", csGames), format: oneDecimal, sub: csSub },
     {
       label: "Highest winrate",
       tone: "good",
@@ -217,6 +244,57 @@ export default async function DashboardPage() {
       sub: gamesSub,
     },
   ];
+
+  const hallOfShame: AwardSpec[] = [
+    {
+      label: "Time spent dead",
+      tone: "bad",
+      result: award(minutesSpentDead, "max", detailGames),
+      format: (v) => `${Math.round(v)}m`,
+      sub: detailSub,
+    },
+    {
+      // The fair version of the tile beside it — playing the most games would
+      // otherwise win the raw total by default.
+      label: "% of game dead",
+      tone: "bad",
+      result: award(deadTimeShare, "max", detailGames),
+      format: (v) => `${v.toFixed(1)}%`,
+      sub: detailSub,
+    },
+    {
+      label: "Most ? pings",
+      tone: "neutral",
+      result: award(missingPingsPerGame, "max", detailGames),
+      format: oneDecimal,
+      sub: (games) => `per game · ${detailSub(games)}`,
+    },
+    {
+      label: "Ward god",
+      tone: "good",
+      result: award(visionScorePerGame, "max", detailGames),
+      format: (v) => String(Math.round(v)),
+      sub: detailSub,
+    },
+    {
+      label: "Objective thief",
+      tone: "good",
+      result: award((a) => a.objectivesStolen, "max", detailGames),
+      format: (v) => String(v),
+      sub: detailSub,
+    },
+    {
+      label: "Pentakills",
+      tone: "good",
+      result: award((a) => a.pentaKills, "max", detailGames),
+      format: (v) => String(v),
+      sub: detailSub,
+    },
+  ];
+
+  // Every one of these needs migration 005 data. Until the settings backfill has
+  // run, the whole section would be six em dashes — better to not render it.
+  const hasDetailedStats = [...awardStats.values()].some((agg) => agg.detailGames > 0);
 
   const matchList = matchListFull ?? [];
   const matchIds = matchList.map((m) => m.id);
@@ -252,11 +330,8 @@ export default async function DashboardPage() {
         isSelf: p.id === viewer.id,
       });
       const allies = sortByRole(participants.filter((p) => p.team_id === viewer.team_id)).map(toChampion);
-      const enemyParticipants = sortByRole(participants.filter((p) => p.team_id !== viewer.team_id));
-      const enemies = enemyParticipants.map(toChampion);
-      const opponentParticipant = viewer.team_position
-        ? enemyParticipants.find((p) => p.team_position === viewer.team_position)
-        : undefined;
+      const enemies = sortByRole(participants.filter((p) => p.team_id !== viewer.team_id)).map(toChampion);
+      const opponentParticipant = findLaneOpponent(participants, viewer);
       const opponent = opponentParticipant ? toChampion(opponentParticipant) : null;
 
       return {
@@ -323,6 +398,26 @@ export default async function DashboardPage() {
             </div>
           </section>
 
+          {hasDetailedStats && (
+            <section className="flex flex-col gap-2">
+              <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">
+                Hall of shame
+              </h2>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {hallOfShame.map(({ label, tone, result, format, sub }) => (
+                  <AwardTile
+                    key={label}
+                    label={label}
+                    tone={tone}
+                    player={result?.player ?? null}
+                    value={result ? format(result.value) : ""}
+                    sub={result ? sub(result.games) : undefined}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Recent activity</h2>
             {recentActivity.length === 0 ? (
@@ -366,6 +461,7 @@ export default async function DashboardPage() {
               <QuickLinkRow href="/team" icon={Users} label="Team" />
               <QuickLinkRow href="/matches" icon={Swords} label="Matches" />
               <QuickLinkRow href="/champions" icon={BarChart3} label="Champions" />
+              <QuickLinkRow href="/insights" icon={LineChart} label="Insights" />
             </CardContent>
           </Card>
 
@@ -409,25 +505,41 @@ export default async function DashboardPage() {
               {rosterSorted.length === 0 ? (
                 <p className="text-sm text-grey-mid">No players tracked yet.</p>
               ) : (
-                rosterSorted.map((p) => (
-                  <Link
-                    key={p.id}
-                    href={`/player/${p.slug}`}
-                    className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-bg-tertiary"
-                  >
-                    <Avatar size="sm">
-                      {p.avatar_url && <AvatarImage src={p.avatar_url} alt="" />}
-                      <AvatarFallback className="text-[10px]">
-                        {p.display_name.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <p className="min-w-0 flex-1 truncate text-sm text-white">{p.display_name}</p>
-                    <RankBadge tier={p.tier} division={p.division} size="sm" />
-                    <span className="shrink-0 text-xs tabular-nums text-grey-light">
-                      {formatWinRate(p.wins, p.losses)}
-                    </span>
-                  </Link>
-                ))
+                rosterSorted.map((p) => {
+                  const streak = streaks.get(p.id);
+                  const streakLabel = streak ? formatStreak(streak) : null;
+                  const onFire = (streak?.current ?? 0) >= NOTABLE_STREAK;
+
+                  return (
+                    <Link
+                      key={p.id}
+                      href={`/player/${p.slug}`}
+                      className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-bg-tertiary"
+                    >
+                      <Avatar size="sm">
+                        {p.avatar_url && <AvatarImage src={p.avatar_url} alt="" />}
+                        <AvatarFallback className="text-[10px]">
+                          {p.display_name.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <p className="min-w-0 flex-1 truncate text-sm text-white">{p.display_name}</p>
+                      {/* Only rendered once a streak is long enough to be worth
+                          mentioning — see NOTABLE_STREAK. */}
+                      {streakLabel && (
+                        <span
+                          title={streakLabel}
+                          className={`shrink-0 text-xs ${onFire ? "text-win" : "text-loss"}`}
+                        >
+                          {onFire ? "🔥" : "💀"}
+                        </span>
+                      )}
+                      <RankBadge tier={p.tier} division={p.division} size="sm" />
+                      <span className="shrink-0 text-xs tabular-nums text-grey-light">
+                        {formatWinRate(p.wins, p.losses)}
+                      </span>
+                    </Link>
+                  );
+                })
               )}
             </CardContent>
           </Card>

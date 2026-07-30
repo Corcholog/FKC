@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { AddPlayerForm } from "@/components/settings/add-player-form";
 import { PlayerRow } from "@/components/settings/player-row";
+import { RefetchDetailsForm } from "@/components/settings/refetch-details-form";
 import { SyncStatusSection } from "@/components/settings/sync-status-section";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -35,6 +36,17 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-base tracking-wide text-grey-light uppercase">
+            Backfill match detail
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RefetchDetailsForm />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

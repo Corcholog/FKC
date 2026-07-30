@@ -1,15 +1,24 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
-import { formatWinLoss, formatWinRate } from "@/lib/rank";
+import { getLatestVersion, getChampionMap, championDisplayName } from "@/lib/ddragon";
+import { formatWinLoss, formatWinRate, ladderPoints } from "@/lib/rank";
+import { aggregateByRole } from "@/lib/player-stats";
+import { computeStreak, formatStreak, NOTABLE_STREAK } from "@/lib/streaks";
+import { matchupsForPlayer, nemesis, type MatchupInput } from "@/lib/matchups";
+import { aggregateByTime } from "@/lib/time-stats";
 import { MatchRow, type TeamComposChampion } from "@/components/match-row";
 import { AiSummaryCard } from "@/components/ai-summary-card";
 import { RankBadge } from "@/components/rank-badge";
 import { WinrateRing } from "@/components/winrate-ring";
+import { LpChart, type LpPoint } from "@/components/charts/lp-chart";
+import { HourHeatmap } from "@/components/charts/hour-heatmap";
+import { RoleSplit } from "@/components/player/role-split";
+import { MatchupList } from "@/components/player/matchup-list";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent } from "@/components/ui/card";
-import { sortByRole } from "@/lib/roles";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { findLaneOpponent, sortByRole } from "@/lib/roles";
 
 const RECENT_FORM_LIMIT = 5;
 
@@ -36,6 +45,21 @@ type ParticipantRow = {
   total_cs: number;
 };
 
+// Every participant of every match this player appears in — allies and enemies
+// alike. Matchup stats need the enemy rows, which nothing else reads.
+type FullHistoryRow = MatchupInput & {
+  total_cs: number;
+  damage_dealt_to_champions: number;
+  matches: { game_creation: string; game_duration_seconds: number } | null;
+};
+
+type RankHistoryRow = {
+  tier: string | null;
+  division: string | null;
+  league_points: number | null;
+  recorded_at: string;
+};
+
 export default async function PlayerDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const supabase = await createClient();
@@ -47,9 +71,15 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
   if (!player) notFound();
   const id = player.id;
 
-  // These three only depend on `id`/`version`, not on each other — run them
-  // concurrently instead of three sequential round trips.
-  const [{ data: matchListFull }, { data: aiSummary }, championMap] = await Promise.all([
+  // These all only depend on `id`/`version`, not on each other — run them
+  // concurrently instead of sequential round trips.
+  const [
+    { data: matchListFull },
+    { data: aiSummary },
+    { data: ownRows },
+    { data: rankHistory },
+    championMap,
+  ] = await Promise.all([
     // Query from matches (not match_participants) so game_creation is a true
     // top-level column — PostgREST's foreignTable order only reorders embedded
     // to-many collections within each parent, it can't reorder the parent rows
@@ -67,10 +97,62 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
       .select("summary_text, generated_at, stale")
       .eq("player_id", id)
       .maybeSingle(),
+    // This player's own row from every tracked match — role split, streaks and
+    // the time heatmap all read from it. Unbounded, like /team and /champions.
+    supabase
+      .from("match_participants")
+      .select(
+        "match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, matches!inner(game_creation, game_duration_seconds)",
+      )
+      .eq("player_id", id)
+      .returns<FullHistoryRow[]>(),
+    supabase
+      .from("player_rank_history")
+      .select("tier, division, league_points, recorded_at")
+      .eq("player_id", id)
+      .order("recorded_at", { ascending: true })
+      .returns<RankHistoryRow[]>(),
     getChampionMap(version),
   ]);
 
   const matchList = matchListFull ?? [];
+
+  const historyRows = (ownRows ?? []).map((r) => ({
+    ...r,
+    game_duration_seconds: r.matches?.game_duration_seconds ?? 0,
+    game_creation: r.matches?.game_creation ?? "",
+  }));
+
+  const roleSplit = aggregateByRole(historyRows);
+  const streak = computeStreak(historyRows);
+  const streakLabel = formatStreak(streak);
+  const timeStats = aggregateByTime(historyRows);
+
+  const lpPoints: LpPoint[] = [];
+  for (const point of rankHistory ?? []) {
+    const lp = ladderPoints(point);
+    if (lp !== null) lpPoints.push({ t: new Date(point.recorded_at).getTime(), lp });
+  }
+
+  // Matchups need the *enemy* rows too, so they can't come from the query above.
+  // Second round trip, once the match ids are known.
+  const historyMatchIds = [...new Set(historyRows.map((r) => r.match_id))];
+  const { data: allHistoryParticipants } =
+    historyMatchIds.length > 0
+      ? await supabase
+          .from("match_participants")
+          .select(
+            "match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists",
+          )
+          .in("match_id", historyMatchIds)
+          .returns<MatchupInput[]>()
+      : { data: [] as MatchupInput[] };
+
+  const matchups = matchupsForPlayer(allHistoryParticipants ?? [], id);
+  const worstMatchup = nemesis(matchups);
+  const nemesisName = worstMatchup
+    ? championDisplayName(worstMatchup.championId, championMap, worstMatchup.championName)
+    : null;
 
   // Separate bulk fetch for every participant (both teams) of those matches —
   // the filtered embed above only returns the one row matching player_id, not
@@ -111,8 +193,20 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
             <p className="truncate text-xs text-grey-light">
               {player.riot_game_name}#{player.riot_tag_line}
             </p>
-            <div className="mt-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <RankBadge tier={player.tier} division={player.division} leaguePoints={player.league_points} />
+              {streakLabel && (
+                <Badge
+                  variant="outline"
+                  className={
+                    streak.current >= NOTABLE_STREAK
+                      ? "border-win/40 text-win"
+                      : "border-loss/40 text-loss"
+                  }
+                >
+                  {streak.current >= NOTABLE_STREAK ? "🔥" : "💀"} {streakLabel}
+                </Badge>
+              )}
             </div>
           </div>
 
@@ -137,6 +231,60 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
         isStale={!aiSummary || aiSummary.stale}
       />
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
+            Rank over time
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <LpChart series={[{ id, name: player.display_name, points: lpPoints }]} />
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
+              Roles
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RoleSplit byRole={roleSplit} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
+              Lane matchups
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {nemesisName && worstMatchup && (
+              <p className="text-sm text-grey-light">
+                Nemesis: <span className="font-medium text-white">{nemesisName}</span>{" "}
+                <span className="tabular-nums text-loss">
+                  {worstMatchup.wins}W {worstMatchup.games - worstMatchup.wins}L
+                </span>
+              </p>
+            )}
+            <MatchupList matchups={matchups} version={version} championMap={championMap} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
+            When they play
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <HourHeatmap stats={timeStats} />
+        </CardContent>
+      </Card>
+
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Recent form</h2>
@@ -160,11 +308,8 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
             });
 
             const allies = sortByRole(participants.filter((p) => p.team_id === viewer.team_id)).map(toChampion);
-            const enemyParticipants = sortByRole(participants.filter((p) => p.team_id !== viewer.team_id));
-            const enemies = enemyParticipants.map(toChampion);
-            const opponentParticipant = viewer.team_position
-              ? enemyParticipants.find((p) => p.team_position === viewer.team_position)
-              : undefined;
+            const enemies = sortByRole(participants.filter((p) => p.team_id !== viewer.team_id)).map(toChampion);
+            const opponentParticipant = findLaneOpponent(participants, viewer);
             const opponent = opponentParticipant ? toChampion(opponentParticipant) : null;
 
             return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import {
   CartesianGrid,
   Line,
@@ -29,6 +29,8 @@ export type LpSeries = {
   id: string;
   name: string;
   points: LpPoint[];
+  /** Only used when the chart is drawing end caps; null falls back to initials. */
+  avatarUrl?: string | null;
 };
 
 const DATE_LABEL = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
@@ -79,6 +81,87 @@ function tierBoundaries([min, max]: [number, number]): number[] {
   return lines;
 }
 
+// Radius of the player's face at the head of their line, and the gap the ring
+// around it needs. The chart's right margin is widened by this much so a cap
+// sitting on the newest timestamp isn't sliced off by the SVG edge.
+const CAP_RADIUS = 10;
+const CAP_MARGIN = CAP_RADIUS + 4;
+
+// The bits of Recharts' dot-renderer props this chart reads. Declared
+// structurally rather than off DotItemDotProps, which redefines SVG's `points`
+// and so isn't assignable to a DotProps-based alias. `payload` is the merged
+// row, so it carries the timestamp each series' head is matched on.
+type LpDotProps = {
+  cx?: number;
+  cy?: number;
+  payload?: { t?: number };
+};
+
+// The marker that replaces the last dot of a line: the player's avatar, clipped
+// to a circle and ringed in their series colour so the line it terminates is
+// still identifiable at a glance. A missing avatar falls back to initials, the
+// same two letters the Avatar component shows.
+function AvatarEndCap({
+  cx,
+  cy,
+  color,
+  name,
+  avatarUrl,
+  clipId,
+}: {
+  cx: number;
+  cy: number;
+  color: string;
+  name: string;
+  avatarUrl: string | null;
+  clipId: string;
+}) {
+  const inner = CAP_RADIUS - 1.5;
+
+  return (
+    <g>
+      {avatarUrl ? (
+        <>
+          <clipPath id={clipId}>
+            <circle cx={cx} cy={cy} r={inner} />
+          </clipPath>
+          {/* Avatars aren't guaranteed square — `slice` crops to fill rather
+              than squashing the face into the circle. */}
+          <image
+            href={avatarUrl}
+            x={cx - inner}
+            y={cy - inner}
+            width={inner * 2}
+            height={inner * 2}
+            clipPath={`url(#${clipId})`}
+            preserveAspectRatio="xMidYMid slice"
+          />
+        </>
+      ) : (
+        <>
+          <circle cx={cx} cy={cy} r={inner} fill={CHART_INK.surface} />
+          <text
+            x={cx}
+            y={cy}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={9}
+            fontWeight={600}
+            fill={color}
+          >
+            {name.slice(0, 2).toUpperCase()}
+          </text>
+        </>
+      )}
+
+      <circle cx={cx} cy={cy} r={inner} fill="none" stroke={color} strokeWidth={2.5} />
+      {/* Outer ring in the surface colour, so two players finishing on nearly
+          the same LP read as two faces rather than one blob. */}
+      <circle cx={cx} cy={cy} r={CAP_RADIUS + 0.75} fill="none" stroke={CHART_INK.surface} strokeWidth={1.5} />
+    </g>
+  );
+}
+
 function LpTooltip({ active, payload, label, names }: ChartTooltipProps & { names: Map<string, string> }) {
   if (!active || !payload || payload.length === 0) return null;
 
@@ -96,11 +179,39 @@ function LpTooltip({ active, payload, label, names }: ChartTooltipProps & { name
   );
 }
 
-export function LpChart({ series, height = 260 }: { series: LpSeries[]; height?: number }) {
+export function LpChart({
+  series,
+  height = 260,
+  // Off by default: on a single-player chart the face would just label the one
+  // line already named above it. /insights turns it on, where the whole point is
+  // telling six lines apart.
+  endCapAvatars = false,
+}: {
+  series: LpSeries[];
+  height?: number;
+  endCapAvatars?: boolean;
+}) {
   const data = useMemo(() => mergeSeries(series), [series]);
   const domain = useMemo(() => ladderDomain(series), [series]);
   const boundaries = useMemo(() => tierBoundaries(domain), [domain]);
   const names = useMemo(() => new Map(series.map((s) => [s.id, s.name])), [series]);
+
+  // Two LpCharts on one page would otherwise mint the same clipPath ids, and
+  // the second chart's avatars would clip against the first one's circles.
+  const uid = useId();
+
+  // The head of each line, keyed by timestamp rather than by row index: a
+  // series' last reading is whichever of *its* points is newest, which is not
+  // the last row of the merged data unless it also synced most recently.
+  const lastPointBySeries = useMemo(() => {
+    const last = new Map<string, number>();
+    for (const s of series) {
+      if (s.points.length > 0) {
+        last.set(s.id, Math.max(...s.points.map((p) => p.t)));
+      }
+    }
+    return last;
+  }, [series]);
 
   // Two points is the minimum that draws a line rather than a lone dot. Rank
   // history only accumulates one point per sync, so a brand-new tracker sits
@@ -117,7 +228,10 @@ export function LpChart({ series, height = 260 }: { series: LpSeries[]; height?:
   return (
     <div style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 12, bottom: 4, left: 4 }}>
+        <LineChart
+          data={data}
+          margin={{ top: 8, right: endCapAvatars ? CAP_MARGIN : 12, bottom: 4, left: 4 }}
+        >
           <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
 
           {/* Tier boundaries land on multiples of LP_PER_TIER by construction —
@@ -152,22 +266,57 @@ export function LpChart({ series, height = 260 }: { series: LpSeries[]; height?:
             wrapperStyle={{ outline: "none" }}
           />
 
-          {series.map((s, i) => (
-            <Line
-              key={s.id}
-              dataKey={s.id}
-              name={s.name}
-              type="monotone"
-              stroke={series.length === 1 ? CHART_INK.primary : seriesColor(i)}
-              strokeWidth={2}
-              // Ring the dots in the surface colour so overlapping players stay
-              // readable where two lines cross.
-              dot={{ r: 3, strokeWidth: 2, stroke: CHART_INK.surface }}
-              activeDot={{ r: 5, strokeWidth: 2, stroke: CHART_INK.surface }}
-              connectNulls
-              isAnimationActive={false}
-            />
-          ))}
+          {series.map((s, i) => {
+            const color = series.length === 1 ? CHART_INK.primary : seriesColor(i);
+            const lastT = endCapAvatars ? lastPointBySeries.get(s.id) : undefined;
+
+            // Recharts hands these renderers every row of the merged data,
+            // including the ones this series has no value for. Those arrive
+            // with null coordinates and have to draw nothing — an unguarded
+            // <circle> would take the missing cx/cy as 0 and stamp a dot in the
+            // chart's top-left corner.
+            const marker = (props: LpDotProps, radius: number) => {
+              const { cx, cy } = props;
+              if (typeof cx !== "number" || typeof cy !== "number") return null;
+
+              if (props.payload?.t === lastT) {
+                return (
+                  <AvatarEndCap
+                    cx={cx}
+                    cy={cy}
+                    color={color}
+                    name={s.name}
+                    avatarUrl={s.avatarUrl ?? null}
+                    clipId={`lp-cap-${uid}-${s.id}`}
+                  />
+                );
+              }
+
+              return (
+                <circle cx={cx} cy={cy} r={radius} fill={color} stroke={CHART_INK.surface} strokeWidth={2} />
+              );
+            };
+
+            return (
+              <Line
+                key={s.id}
+                dataKey={s.id}
+                name={s.name}
+                type="monotone"
+                stroke={color}
+                strokeWidth={2}
+                // Ring the dots in the surface colour so overlapping players
+                // stay readable where two lines cross — except at the head of
+                // the line, which becomes the player's face instead. The face
+                // is drawn at both sizes so hovering it doesn't swap it back
+                // out for a plain dot.
+                dot={(props) => marker(props, 3)}
+                activeDot={(props) => marker(props, 5)}
+                connectNulls
+                isAnimationActive={false}
+              />
+            );
+          })}
         </LineChart>
       </ResponsiveContainer>
     </div>

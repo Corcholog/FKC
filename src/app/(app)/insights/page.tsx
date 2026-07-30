@@ -109,7 +109,12 @@ export default async function InsightsPage() {
   const chartedPlayers = rosterByRank.slice(0, MAX_SERIES);
   const historyByPlayer = new Map<string, LpSeries>();
   for (const player of chartedPlayers) {
-    historyByPlayer.set(player.id, { id: player.id, name: player.display_name, points: [] });
+    historyByPlayer.set(player.id, {
+      id: player.id,
+      name: player.display_name,
+      avatarUrl: player.avatar_url,
+      points: [],
+    });
   }
   for (const point of rankHistory ?? []) {
     const series = historyByPlayer.get(point.player_id);
@@ -188,7 +193,7 @@ export default async function InsightsPage() {
         }
       >
         <ChartLegend items={lpSeries.map((s) => ({ id: s.id, name: s.name }))} />
-        <LpChart series={lpSeries} height={280} />
+        <LpChart series={lpSeries} height={280} endCapAvatars />
       </SectionCard>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireSession } from "@/lib/auth";
 import { getPuuidByRiotId, describeRiotError } from "@/lib/riot";
 import { backfillPlayerHistory, refetchMatchDetails, RiotKeyInvalidError } from "@/lib/sync";
+import { MAX_CLAN_CONTEXT_CHARS, MAX_PLAYER_CONTEXT_CHARS } from "@/lib/ai-context";
 import { playerSlug } from "@/lib/slug";
 
 import type { PlayerFormState } from "./form-state";
@@ -285,6 +286,90 @@ export async function refetchMatchDetailsAction(): Promise<PlayerFormState> {
     return { error: e instanceof Error ? e.message : "Something went wrong." };
   }
 }
+
+// ------------------------------------------------------------
+// AI prompt context
+//
+// Free text that gets dropped into every Gemini prompt — see src/lib/ai-context.ts
+// for the split between the shared clan blurb and the per-player one, and why
+// both live in the database rather than in the repo.
+// ------------------------------------------------------------
+
+export async function updateClanContext(
+  _prevState: PlayerFormState,
+  formData: FormData,
+): Promise<PlayerFormState> {
+  try {
+    const { supabase } = await requireSession();
+
+    const context = ((formData.get("context") as string) ?? "").trim();
+    if (context.length > MAX_CLAN_CONTEXT_CHARS) {
+      return { error: `Keep it under ${MAX_CLAN_CONTEXT_CHARS} characters.` };
+    }
+
+    const { error } = await supabase
+      .from("clan_profile")
+      .upsert(
+        { id: 1, context: context || null, updated_at: new Date().toISOString() },
+        { onConflict: "id" },
+      );
+    if (error) return { error: error.message };
+
+    // Everything the AI writes is now based on different context, so the next
+    // scheduled run should redo all of it.
+    await markEverythingStale();
+
+    revalidatePath("/settings");
+    return { success: true, message: "Saved. It'll be used on the next summary run." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+export async function updatePlayerAiContext(
+  _prevState: PlayerFormState,
+  formData: FormData,
+): Promise<PlayerFormState> {
+  try {
+    const { supabase } = await requireSession();
+
+    const playerId = formData.get("playerId") as string;
+    const context = ((formData.get("aiContext") as string) ?? "").trim();
+    if (!playerId) return { error: "Player is required." };
+    if (context.length > MAX_PLAYER_CONTEXT_CHARS) {
+      return { error: `Keep it under ${MAX_PLAYER_CONTEXT_CHARS} characters.` };
+    }
+
+    const { error } = await supabase
+      .from("players")
+      .update({ ai_context: context || null })
+      .eq("id", playerId);
+    if (error) return { error: error.message };
+
+    // This player's own summary and the team one both quote it.
+    await supabase
+      .from("player_ai_summaries")
+      .upsert({ player_id: playerId, stale: true }, { onConflict: "player_id" });
+    await supabase.from("team_ai_summary").update({ stale: true }).eq("id", 1);
+
+    revalidatePath("/settings");
+    return { success: true, message: "Saved. It'll be used on the next summary run." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+async function markEverythingStale() {
+  const admin = createAdminClient();
+  await admin.from("player_ai_summaries").update({ stale: true }).not("player_id", "is", null);
+  await admin.from("team_ai_summary").update({ stale: true }).eq("id", 1);
+}
+
+// Note: there is deliberately no "regenerate summaries" server action here.
+// The batch needs a time budget and a maxDuration — a roster's worth of Gemini
+// calls does not fit in the default server-action timeout — and that already
+// exists in /api/summaries. The Settings button POSTs to that route instead, so
+// the cron and the button run exactly the same code under the same limits.
 
 export async function deletePlayer(id: string): Promise<void> {
   const { supabase } = await requireSession();

@@ -225,9 +225,8 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
       </Card>
 
       <AiSummaryCard
-        playerId={id}
-        initialSummary={aiSummary?.summary_text ?? null}
-        initialGeneratedAt={aiSummary?.generated_at ?? null}
+        summary={aiSummary?.summary_text ?? null}
+        generatedAt={aiSummary?.generated_at ?? null}
         isStale={!aiSummary || aiSummary.stale}
       />
 

@@ -8,11 +8,14 @@ import type { NoteFormState } from "./notes-form-state";
 const NOT_YOUR_GAME = "You can only write notes on your own games.";
 const NOT_YOUR_NOTE = "You can only edit your own notes.";
 
-// Notes feed the AI summary (Phase 8) — any add/edit/delete invalidates it.
+// Notes feed the AI summaries — any add/edit/delete invalidates them. Only
+// flags; generation happens in the daily /api/summaries batch, since Gemini's
+// free tier is capped per day and note editing is bursty.
 async function markSummaryStale(supabase: SupabaseClient, playerId: string) {
   await supabase
     .from("player_ai_summaries")
     .upsert({ player_id: playerId, stale: true }, { onConflict: "player_id" });
+  await supabase.from("team_ai_summary").update({ stale: true }).eq("id", 1);
 }
 
 export async function addNote(

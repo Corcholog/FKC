@@ -111,6 +111,26 @@ export function formatLadderPoints(value: number): string {
   return formatRank(tier, DIVISIONS_BEST_FIRST[worseness] ?? null);
 }
 
+// The same position, keeping the LP that the axis ticks drop. Nothing extra is
+// stored for this: a ladder value *is* tier + division + LP, so the LP is just
+// the remainder within the division.
+//
+// Ticks and tooltips want different things here — a tick sits on a division
+// boundary and naming it is the whole point, whereas a tooltip is pointing at
+// one real snapshot, where "Gold II" alone hides the 99 LP of movement inside
+// it. Hence two functions rather than a flag: Recharts passes the tick index as
+// a second argument to tickFormatter, so an optional boolean param would
+// silently switch itself on from the second tick onward.
+export function formatLadderPointsDetailed(value: number): string {
+  if (!Number.isFinite(value)) return "Unranked";
+  // Above Master there are no divisions, so formatLadderPoints already prints
+  // the raw LP and appending the remainder would be nonsense.
+  if (value >= APEX_BASE) return formatLadderPoints(value);
+
+  const lp = Math.round(value) % LP_PER_DIVISION;
+  return `${formatLadderPoints(value)} · ${lp} LP`;
+}
+
 export function formatRank(tier: string | null, division: string | null): string {
   if (!tier) return "Unranked";
   const label = tier.charAt(0) + tier.slice(1).toLowerCase();

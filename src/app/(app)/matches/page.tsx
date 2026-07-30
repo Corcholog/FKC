@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
-import { sortByRole } from "@/lib/roles";
+import { findLaneOpponent, sortByRole } from "@/lib/roles";
 import { MatchRow, type TeamComposChampion } from "@/components/match-row";
 import { MatchesFilter } from "@/components/matches-filter";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -106,11 +106,8 @@ export default async function MatchesPage({
         isSelf: p.id === viewer.id,
       });
       const allies = sortByRole(participants.filter((p) => p.team_id === viewer.team_id)).map(toChampion);
-      const enemyParticipants = sortByRole(participants.filter((p) => p.team_id !== viewer.team_id));
-      const enemies = enemyParticipants.map(toChampion);
-      const opponentParticipant = viewer.team_position
-        ? enemyParticipants.find((p) => p.team_position === viewer.team_position)
-        : undefined;
+      const enemies = sortByRole(participants.filter((p) => p.team_id !== viewer.team_id)).map(toChampion);
+      const opponentParticipant = findLaneOpponent(participants, viewer);
       const opponent = opponentParticipant ? toChampion(opponentParticipant) : null;
 
       return {

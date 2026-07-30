@@ -10,6 +10,17 @@ export type PlayerStatInput = {
   total_cs: number;
   damage_dealt_to_champions: number;
   game_duration_seconds: number;
+
+  // Added by migration 005. Null on every row synced before it, and on any
+  // field Riot stopped returning — see src/lib/participant-row.ts. Each has its
+  // own game counter below so an average is taken over the games that actually
+  // reported it, rather than being diluted by the ones that didn't.
+  vision_score?: number | null;
+  total_time_spent_dead?: number | null;
+  penta_kills?: number | null;
+  objectives_stolen?: number | null;
+  total_damage_taken?: number | null;
+  pings?: Record<string, number> | null;
 };
 
 export type PlayerAgg = {
@@ -26,6 +37,18 @@ export type PlayerAgg = {
   csGames: number;
   totalCs: number;
   csDurationSeconds: number;
+
+  // Migration-005 metrics. detailGames counts rows that carried the new columns
+  // at all, so a half-backfilled database reports "best vision score, 4 games"
+  // rather than quietly averaging over nulls.
+  detailGames: number;
+  totalVisionScore: number;
+  totalTimeSpentDead: number;
+  pentaKills: number;
+  objectivesStolen: number;
+  totalDamageTaken: number;
+  missingPings: number;
+  totalPings: number;
 };
 
 function emptyAgg(): PlayerAgg {
@@ -40,7 +63,49 @@ function emptyAgg(): PlayerAgg {
     csGames: 0,
     totalCs: 0,
     csDurationSeconds: 0,
+    detailGames: 0,
+    totalVisionScore: 0,
+    totalTimeSpentDead: 0,
+    pentaKills: 0,
+    objectivesStolen: 0,
+    totalDamageTaken: 0,
+    missingPings: 0,
+    totalPings: 0,
   };
+}
+
+// Folds one participant row into a running aggregate. Shared by the per-player
+// and per-role groupings so the two can't drift.
+function accumulate(agg: PlayerAgg, row: PlayerStatInput) {
+  agg.games += 1;
+  if (row.win) agg.wins += 1;
+  agg.kills += row.kills;
+  agg.deaths += row.deaths;
+  agg.assists += row.assists;
+  agg.totalDamage += row.damage_dealt_to_champions;
+  agg.totalDurationSeconds += row.game_duration_seconds;
+
+  if (!isSupport(row.team_position)) {
+    agg.csGames += 1;
+    agg.totalCs += row.total_cs;
+    agg.csDurationSeconds += row.game_duration_seconds;
+  }
+
+  // vision_score is the marker for "this row was synced with full detail" — it
+  // is present on every real game once migration 005 has been backfilled.
+  if (typeof row.vision_score === "number") {
+    agg.detailGames += 1;
+    agg.totalVisionScore += row.vision_score;
+    agg.totalTimeSpentDead += row.total_time_spent_dead ?? 0;
+    agg.pentaKills += row.penta_kills ?? 0;
+    agg.objectivesStolen += row.objectives_stolen ?? 0;
+    agg.totalDamageTaken += row.total_damage_taken ?? 0;
+
+    if (row.pings) {
+      agg.missingPings += row.pings.enemyMissingPings ?? 0;
+      agg.totalPings += Object.values(row.pings).reduce((sum, n) => sum + n, 0);
+    }
+  }
 }
 
 // Rolls every tracked player's participant rows into one lifetime aggregate —
@@ -51,25 +116,56 @@ export function aggregatePlayerStats(rows: PlayerStatInput[]): Map<string, Playe
   for (const row of rows) {
     if (!row.player_id) continue;
     const agg = byPlayer.get(row.player_id) ?? emptyAgg();
-
-    agg.games += 1;
-    if (row.win) agg.wins += 1;
-    agg.kills += row.kills;
-    agg.deaths += row.deaths;
-    agg.assists += row.assists;
-    agg.totalDamage += row.damage_dealt_to_champions;
-    agg.totalDurationSeconds += row.game_duration_seconds;
-
-    if (!isSupport(row.team_position)) {
-      agg.csGames += 1;
-      agg.totalCs += row.total_cs;
-      agg.csDurationSeconds += row.game_duration_seconds;
-    }
-
+    accumulate(agg, row);
     byPlayer.set(row.player_id, agg);
   }
 
   return byPlayer;
+}
+
+// The same aggregate, split by the role played — keyed by Riot's raw
+// team_position (see src/lib/roles.ts), with null folded under "" for games
+// where Riot couldn't determine a role.
+export function aggregateByRole(rows: PlayerStatInput[]): Map<string, PlayerAgg> {
+  const byRole = new Map<string, PlayerAgg>();
+
+  for (const row of rows) {
+    const key = row.team_position ?? "";
+    const agg = byRole.get(key) ?? emptyAgg();
+    accumulate(agg, row);
+    byRole.set(key, agg);
+  }
+
+  return byRole;
+}
+
+export type Trend = {
+  recent: PlayerAgg;
+  lifetime: PlayerAgg;
+  /** Null until there are enough recent games for the comparison to mean anything. */
+  delta: ((metric: (agg: PlayerAgg) => number) => number) | null;
+};
+
+export const TREND_WINDOW = 10;
+
+// Recent form against the lifetime baseline. Rows must be newest-first — the
+// callers all read them straight off a `game_creation desc` query.
+export function computeTrend(rowsNewestFirst: PlayerStatInput[], window = TREND_WINDOW): Trend {
+  const lifetime = emptyAgg();
+  for (const row of rowsNewestFirst) accumulate(lifetime, row);
+
+  const recent = emptyAgg();
+  for (const row of rowsNewestFirst.slice(0, window)) accumulate(recent, row);
+
+  // Comparing the last 10 against a lifetime that *is* those same 10 games
+  // would always show a delta of zero, so it needs a genuinely longer history.
+  const comparable = recent.games >= window && lifetime.games > window;
+
+  return {
+    recent,
+    lifetime,
+    delta: comparable ? (metric) => metric(recent) - metric(lifetime) : null,
+  };
 }
 
 // A deathless aggregate is only reachable at very low game counts, but it would
@@ -93,6 +189,39 @@ export function csPerMinute(agg: PlayerAgg): number {
 
 export function damagePerMinute(agg: PlayerAgg): number {
   return agg.totalDurationSeconds <= 0 ? 0 : agg.totalDamage / (agg.totalDurationSeconds / 60);
+}
+
+// ------------------------------------------------------------
+// Metrics from migration 005. Each averages over detailGames rather than games,
+// so a partially backfilled history reports an honest average of what it has.
+// ------------------------------------------------------------
+
+export function visionScorePerGame(agg: PlayerAgg): number {
+  return agg.detailGames === 0 ? 0 : agg.totalVisionScore / agg.detailGames;
+}
+
+export function damageTakenPerMinute(agg: PlayerAgg): number {
+  return agg.totalDurationSeconds <= 0 ? 0 : agg.totalDamageTaken / (agg.totalDurationSeconds / 60);
+}
+
+// Total minutes spent staring at the grey screen. A raw total, not an average —
+// the number only lands as a number.
+export function minutesSpentDead(agg: PlayerAgg): number {
+  return agg.totalTimeSpentDead / 60;
+}
+
+// Share of the game spent dead. The fair version of the stat above, since
+// someone who simply plays more will always top the raw total.
+export function deadTimeShare(agg: PlayerAgg): number {
+  return agg.totalDurationSeconds <= 0 ? 0 : (agg.totalTimeSpentDead / agg.totalDurationSeconds) * 100;
+}
+
+export function missingPingsPerGame(agg: PlayerAgg): number {
+  return agg.detailGames === 0 ? 0 : agg.missingPings / agg.detailGames;
+}
+
+export function pingsPerGame(agg: PlayerAgg): number {
+  return agg.detailGames === 0 ? 0 : agg.totalPings / agg.detailGames;
 }
 
 export type Award<P> = { player: P; value: number; games: number } | null;

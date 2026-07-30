@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatLadderPoints, LP_PER_TIER } from "@/lib/rank";
+import { formatLadderPoints, formatLadderPointsDetailed, LP_PER_TIER } from "@/lib/rank";
 import { AXIS_TICK, CHART_INK, GRID_STROKE, seriesColor } from "@/components/charts/chart-theme";
 import {
   ChartTooltipRow,
@@ -82,14 +82,25 @@ function tierBoundaries([min, max]: [number, number]): number[] {
 function LpTooltip({ active, payload, label, names }: ChartTooltipProps & { names: Map<string, string> }) {
   if (!active || !payload || payload.length === 0) return null;
 
+  // Rows are merged on exact timestamps, and two players are only ever recorded
+  // in the same instant by accident — so most rows hold a value for one series
+  // and undefined for the rest. Those have to be dropped rather than formatted:
+  // Number(undefined) is NaN, which the formatter reads as "Unranked", which is
+  // both wrong and alarming. Highest LP first, since this is a race.
+  const rows = payload
+    .filter((entry) => Number.isFinite(Number(entry.value)))
+    .sort((a, b) => Number(b.value) - Number(a.value));
+
+  if (rows.length === 0) return null;
+
   return (
     <ChartTooltipShell title={DATE_TIME_LABEL.format(new Date(Number(label)))}>
-      {payload.map((entry) => (
+      {rows.map((entry) => (
         <ChartTooltipRow
           key={String(entry.dataKey)}
           color={entry.color}
           name={names.get(String(entry.dataKey)) ?? String(entry.dataKey)}
-          value={formatLadderPoints(Number(entry.value))}
+          value={formatLadderPointsDetailed(Number(entry.value))}
         />
       ))}
     </ChartTooltipShell>

@@ -2,12 +2,20 @@
 
 import { useActionState, useRef, useState } from "react";
 import { KeyRound } from "lucide-react";
-import { updatePlayer, deletePlayer, createPlayerLogin, removePlayerLogin } from "@/app/(app)/settings/actions";
+import {
+  updatePlayer,
+  deletePlayer,
+  createPlayerLogin,
+  removePlayerLogin,
+  updatePlayerAiContext,
+} from "@/app/(app)/settings/actions";
 import { emptyPlayerFormState, type PlayerFormState } from "@/app/(app)/settings/form-state";
+import { MAX_PLAYER_CONTEXT_CHARS } from "@/lib/ai-context";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogClose,
@@ -26,7 +34,65 @@ type Player = {
   display_name: string;
   avatar_url: string | null;
   user_id: string | null;
+  ai_context: string | null;
 };
+
+/**
+ * Who this player is, for the AI prompts — their reputation, their habits, the
+ * thing everyone gives them grief about. Saved separately from the Riot ID form
+ * beside it, since editing it doesn't need a Riot lookup and shouldn't risk one.
+ *
+ * Distinct from match notes: notes are "what happened in this game", this is
+ * context that holds across every game. See src/lib/ai-context.ts.
+ */
+function AiContextEditor({ player }: { player: Player }) {
+  const [open, setOpen] = useState(false);
+  const [state, formAction, pending] = useActionState(
+    updatePlayerAiContext,
+    emptyPlayerFormState,
+  );
+
+  if (!open) {
+    return (
+      <div className="flex items-start gap-2">
+        <Button type="button" variant="ghost" size="xs" onClick={() => setOpen(true)}>
+          {player.ai_context ? "Edit AI context" : "Add AI context"}
+        </Button>
+        {player.ai_context && (
+          <p className="min-w-0 flex-1 truncate pt-1 text-xs text-grey-mid" title={player.ai_context}>
+            {player.ai_context}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <form action={formAction} className="flex flex-col gap-2">
+      <input type="hidden" name="playerId" value={player.id} />
+      <Label className="text-xs text-grey-light">
+        What the group should tell the AI about {player.display_name}
+      </Label>
+      <Textarea
+        name="aiContext"
+        rows={3}
+        maxLength={MAX_PLAYER_CONTEXT_CHARS}
+        defaultValue={player.ai_context ?? ""}
+        placeholder="e.g. Plays support but thinks he's the carry. Blames the jungler every game. Has never once bought a control ward."
+      />
+      <div className="flex items-center gap-2">
+        <Button type="submit" size="xs" disabled={pending}>
+          {pending ? "Saving…" : "Save"}
+        </Button>
+        <Button type="button" variant="outline" size="xs" onClick={() => setOpen(false)}>
+          Close
+        </Button>
+        {state?.error && <p className="text-xs text-loss">{state.error}</p>}
+        {state?.success && <p className="text-xs text-win">{state.message}</p>}
+      </div>
+    </form>
+  );
+}
 
 /**
  * Creates the player's own login so they can write notes on their games. There's
@@ -269,6 +335,8 @@ export function PlayerRow({ player }: { player: Player }) {
       <div className="sm:hidden">
         <LoginControls player={player} />
       </div>
+
+      <AiContextEditor player={player} />
 
       {resultMessage && <p className="text-xs text-grey-light">{resultMessage}</p>}
     </li>

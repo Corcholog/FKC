@@ -129,11 +129,7 @@ export async function runSync(admin: SupabaseClient): Promise<SyncSummary> {
     summary.playersProcessed += 1;
   }
 
-  for (const playerId of playersWithNewMatches) {
-    await admin
-      .from("player_ai_summaries")
-      .upsert({ player_id: playerId, stale: true }, { onConflict: "player_id" });
-  }
+  await markSummariesStale(admin, playersWithNewMatches);
 
   return summary;
 }
@@ -183,13 +179,25 @@ export async function backfillPlayerHistory(
 
   await refreshPlayerRank(admin, player, apiKey);
 
-  for (const touchedId of playersWithNewMatches) {
-    await admin
-      .from("player_ai_summaries")
-      .upsert({ player_id: touchedId, stale: true }, { onConflict: "player_id" });
-  }
+  await markSummariesStale(admin, playersWithNewMatches);
 
   return summary;
+}
+
+// Flags whose summaries have something new to say. Nothing is generated here —
+// Gemini's free tier is metered per day, so all generation happens in one
+// scheduled batch (/api/summaries) that reads these flags.
+async function markSummariesStale(admin: SupabaseClient, playerIds: Set<string>) {
+  if (playerIds.size === 0) return;
+
+  for (const playerId of playerIds) {
+    await admin
+      .from("player_ai_summaries")
+      .upsert({ player_id: playerId, stale: true }, { onConflict: "player_id" });
+  }
+
+  // Any new game changes the group picture too — duos, streaks, head-to-heads.
+  await admin.from("team_ai_summary").update({ stale: true }).eq("id", 1);
 }
 
 export type RefetchSummary = {

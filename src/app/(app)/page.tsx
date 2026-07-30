@@ -23,6 +23,7 @@ import {
 import { streaksByPlayer, formatStreak, NOTABLE_STREAK } from "@/lib/streaks";
 import { MatchRow, type TeamComposChampion } from "@/components/match-row";
 import { AwardTile } from "@/components/award-tile";
+import { TeamSummaryCard } from "@/components/team-summary-card";
 import { RankBadge } from "@/components/rank-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -90,11 +91,12 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const weekAgoIso = isoDaysAgo(7);
 
-  // These five are independent of each other — run them concurrently instead
-  // of paying for five sequential round trips.
+  // These are independent of each other — run them concurrently instead of
+  // paying for a sequential round trip each.
   const [
     { data: players },
     { data: syncState },
+    { data: teamSummary },
     { data: weekRows },
     { data: matchListFull },
     { data: awardRows },
@@ -109,6 +111,11 @@ export default async function DashboardPage() {
         .select("riot_key_valid, last_sync_status, last_sync_finished_at")
         .eq("id", 1)
         .single(),
+      supabase
+        .from("team_ai_summary")
+        .select("summary_text, generated_at")
+        .eq("id", 1)
+        .maybeSingle(),
       supabase
         .from("match_participants")
         .select("player_id, matches!inner(game_creation)")
@@ -543,6 +550,11 @@ export default async function DashboardPage() {
               )}
             </CardContent>
           </Card>
+
+          <TeamSummaryCard
+            summary={(teamSummary?.summary_text as string | null) ?? null}
+            generatedAt={(teamSummary?.generated_at as string | null) ?? null}
+          />
         </div>
       </div>
     </main>

@@ -20,6 +20,22 @@ export async function getLatestVersion(): Promise<string> {
   return versions[0];
 }
 
+// DDragon's champion list isn't only Summoner's Rift champions: as of 16.15 it
+// also carries 60 game-mode variants (ids prefixed "Jade_", keys 60001-60117)
+// that share their base champion's display name. They'd show up as duplicates
+// in a picker and have no Lolalytics page, so anything listing champions for a
+// person to choose from filters on the key range — real champions are 1-950.
+const MAX_REAL_CHAMPION_KEY = 10_000;
+
+/** Every real champion on the current patch, alphabetical by display name. */
+export async function getChampionList(version: string): Promise<ChampionInfo[]> {
+  const map = await getChampionMap(version);
+  return [...map.entries()]
+    .filter(([key]) => key < MAX_REAL_CHAMPION_KEY)
+    .map(([, info]) => info)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function getChampionMap(version: string): Promise<Map<number, ChampionInfo>> {
   const res = await fetch(
     `https://ddragon.leagueoflegends.com/cdn/${version}/data/en_US/champion.json`,
@@ -34,6 +50,10 @@ export async function getChampionMap(version: string): Promise<Map<number, Champ
   return map;
 }
 
+export function championIconUrlById(ddragonId: string, version: string): string {
+  return `https://ddragon.leagueoflegends.com/cdn/${version}/img/champion/${ddragonId}.png`;
+}
+
 export function championIconUrl(
   championId: number,
   version: string,
@@ -41,7 +61,7 @@ export function championIconUrl(
 ): string | null {
   const info = championMap.get(championId);
   if (!info) return null;
-  return `https://ddragon.leagueoflegends.com/cdn/${version}/img/champion/${info.ddragonId}.png`;
+  return championIconUrlById(info.ddragonId, version);
 }
 
 // Falls back to the raw stored name (Riot's internal codename) only if the

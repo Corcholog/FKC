@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -16,6 +16,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { MatchupSearch } from "@/components/matchup-search";
+import type { ChampionInfo } from "@/lib/ddragon";
+import type { LolalyticsLane } from "@/lib/lolalytics";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -73,15 +76,24 @@ function NavLink({
 export function Navbar({
   initialSyncing = false,
   accountLabel,
+  champions,
+  ddragonVersion,
+  mainLane,
 }: {
   initialSyncing?: boolean;
   /** Who's signed in — the linked player's display name, or their email. */
   accountLabel?: string | null;
+  /** Current-patch champion list for the Lolalytics matchup lookup. */
+  champions: ChampionInfo[];
+  ddragonVersion: string;
+  /** Prefills the matchup lookup's lane with the signed-in player's main role. */
+  mainLane: LolalyticsLane;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [syncing, setSyncing] = useState(initialSyncing);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -127,7 +139,9 @@ export function Navbar({
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-1 md:flex">
+          {/* The matchup fields need room, so the links collapse into the sheet
+              one breakpoint later than they used to. */}
+          <nav className="hidden items-center gap-1 lg:flex">
             {NAV_ITEMS.map((item) => (
               <NavLink
                 key={item.href}
@@ -141,6 +155,13 @@ export function Navbar({
         </div>
 
         <div className="flex items-center gap-2">
+          <MatchupSearch
+            champions={champions}
+            version={ddragonVersion}
+            defaultLane={mainLane}
+            className="hidden lg:flex"
+          />
+
           <Button
             type="button"
             onClick={handleSync}
@@ -183,17 +204,33 @@ export function Navbar({
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger
               render={<Button variant="ghost" size="icon-sm" aria-label="Open menu" />}
-              className="md:hidden"
+              className="lg:hidden"
             >
               <Menu className="h-5 w-5" />
             </SheetTrigger>
-            <SheetContent side="left" className="bg-bg-secondary">
+            {/* Focus the panel itself, not its first field: the matchup search
+                sits at the top, and autofocusing it pops the champion list open
+                the moment the menu does. */}
+            <SheetContent
+              ref={sheetRef}
+              initialFocus={sheetRef}
+              side="left"
+              className="bg-bg-secondary"
+            >
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
                   <Crest />
                   Fake Clan
                 </SheetTitle>
               </SheetHeader>
+              <MatchupSearch
+                champions={champions}
+                version={ddragonVersion}
+                defaultLane={mainLane}
+                stacked
+                className="px-4"
+                onOpened={() => setSheetOpen(false)}
+              />
               <nav className="flex flex-col gap-1 px-2">
                 {NAV_ITEMS.map((item) => (
                   <NavLink

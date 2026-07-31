@@ -13,6 +13,17 @@ import {
 // America/Argentina/Buenos Aires (UTC-3, no DST since 2009) = 2026-07-29T15:00:00Z.
 const TRACKING_START_DATE = new Date("2026-07-29T15:00:00Z");
 
+// Games shorter than this are excluded from statistics. Riot's own flag
+// (gameEndedInEarlySurrender) only marks remakes, so a genuine 12-minute stomp
+// arrives as an ordinary game whose per-minute rates and KDA are distorted by
+// how little of it was played. Such a game still moves rank and LP — those come
+// from Riot's league endpoint, not from anything stored here — but it is not
+// counted as a win or a loss in the app's own tracked record.
+//
+// Strictly under 15:00, so an FF15 surrender (which lands at ~900-960s) still
+// counts as the real loss it is.
+const MIN_COUNTED_DURATION_SECONDS = 15 * 60;
+
 const MAX_MATCH_IDS_PER_PLAYER = 200; // pagination safety cap, see docs/04_RIOT_API_INTEGRATION.md §3
 const MATCH_ID_PAGE_SIZE = 20;
 
@@ -360,11 +371,16 @@ async function syncPlayerMatches(
       const gameCreation = new Date(match.info.gameCreation);
       if (gameCreation < TRACKING_START_DATE) return await completeSync(admin, player);
 
-      // Off-queue games shouldn't reach us (the id query filters to 420), but
-      // if one does it still gets a row — an unrecorded match id is one the
-      // walk would re-fetch on every future sync forever.
+      // Excluded games still get a `matches` row and simply no participant
+      // rows: an unrecorded match id is one the walk would re-fetch on every
+      // future sync forever, and every read path joins through
+      // match_participants!inner, so a match with none is invisible to stats.
+      //
+      // Off-queue games shouldn't reach us at all (the id query filters to
+      // 420), but the check is cheap insurance against a Riot response quirk.
       const excluded =
         match.info.queueId !== 420 ||
+        match.info.gameDuration < MIN_COUNTED_DURATION_SECONDS ||
         match.info.participants.some((p) => p.gameEndedInEarlySurrender);
 
       const { data: insertedMatch, error: insertMatchError } = await admin

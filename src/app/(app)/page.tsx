@@ -16,7 +16,7 @@ import {
   missingPingsPerGame,
   playerWinRate,
   rankPlayers,
-  visionScorePerGame,
+  visionScorePerMinute,
   type PlayerAgg,
   type PlayerStatInput,
   type Ranked,
@@ -66,6 +66,8 @@ type ParticipantRow = {
   assists: number;
   damage_dealt_to_champions: number;
   total_cs: number;
+  /** Null on games synced before migration 005. */
+  vision_score: number | null;
 };
 
 // game_duration_seconds and game_creation live on matches, so they arrive
@@ -272,10 +274,13 @@ export default async function DashboardPage() {
     {
       label: "Ward god",
       tone: "good",
-      ranking: award(visionScorePerGame, "max", detailGames),
-      format: (v) => String(Math.round(v)),
+      ranking: award(visionScorePerMinute, "max", detailGames),
+      // Two decimals, not one: the whole roster lands between roughly 0.5 and
+      // 3.0, so a single decimal would tie half of it together.
+      format: (v) => v.toFixed(2),
       sub: detailSub,
-      metric: "Vision score per game — wards placed, wards killed, time held. Highest first.",
+      metric:
+        "Vision score per minute — wards placed, wards killed, time held. A rate, so a long game doesn't win it on its own. Highest first.",
       detail: true,
     },
     {
@@ -371,7 +376,7 @@ export default async function DashboardPage() {
       ? supabase
           .from("match_participants")
           .select(
-            "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs",
+            "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs, vision_score",
           )
           .in("match_id", matchIds)
           .returns<ParticipantRow[]>()
@@ -504,6 +509,8 @@ export default async function DashboardPage() {
                     assists: viewer.assists,
                     damageDealtToChampions: viewer.damage_dealt_to_champions,
                     totalCs: viewer.total_cs,
+                    teamPosition: viewer.team_position,
+                    visionScore: viewer.vision_score,
                     gameCreation: match.game_creation,
                     gameDurationSeconds: match.game_duration_seconds,
                     opponent,

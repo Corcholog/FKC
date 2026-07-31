@@ -35,6 +35,8 @@ type ParticipantRow = {
   assists: number;
   damage_dealt_to_champions: number;
   total_cs: number;
+  /** Null on games synced before migration 005. */
+  vision_score: number | null;
 };
 
 export default async function MatchesPage({
@@ -77,7 +79,7 @@ export default async function MatchesPage({
       ? supabase
           .from("match_participants")
           .select(
-            "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs",
+            "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs, vision_score",
           )
           .in("match_id", matchIds)
           .returns<ParticipantRow[]>()
@@ -158,6 +160,8 @@ export default async function MatchesPage({
                 assists: viewer.assists,
                 damageDealtToChampions: viewer.damage_dealt_to_champions,
                 totalCs: viewer.total_cs,
+                teamPosition: viewer.team_position,
+                visionScore: viewer.vision_score,
                 gameCreation: match.game_creation,
                 gameDurationSeconds: match.game_duration_seconds,
                 opponent,

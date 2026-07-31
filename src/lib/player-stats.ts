@@ -40,8 +40,11 @@ export type PlayerAgg = {
 
   // Migration-005 metrics. detailGames counts rows that carried the new columns
   // at all, so a half-backfilled database reports "best vision score, 4 games"
-  // rather than quietly averaging over nulls.
+  // rather than quietly averaging over nulls. detailDurationSeconds is the
+  // matching clock: a per-minute rate over these metrics has to divide by the
+  // duration of the games that reported them, not of every game ever played.
   detailGames: number;
+  detailDurationSeconds: number;
   totalVisionScore: number;
   totalTimeSpentDead: number;
   pentaKills: number;
@@ -64,6 +67,7 @@ function emptyAgg(): PlayerAgg {
     totalCs: 0,
     csDurationSeconds: 0,
     detailGames: 0,
+    detailDurationSeconds: 0,
     totalVisionScore: 0,
     totalTimeSpentDead: 0,
     pentaKills: 0,
@@ -95,6 +99,7 @@ function accumulate(agg: PlayerAgg, row: PlayerStatInput) {
   // is present on every real game once migration 005 has been backfilled.
   if (typeof row.vision_score === "number") {
     agg.detailGames += 1;
+    agg.detailDurationSeconds += row.game_duration_seconds;
     agg.totalVisionScore += row.vision_score;
     agg.totalTimeSpentDead += row.total_time_spent_dead ?? 0;
     agg.pentaKills += row.penta_kills ?? 0;
@@ -196,8 +201,14 @@ export function damagePerMinute(agg: PlayerAgg): number {
 // so a partially backfilled history reports an honest average of what it has.
 // ------------------------------------------------------------
 
-export function visionScorePerGame(agg: PlayerAgg): number {
-  return agg.detailGames === 0 ? 0 : agg.totalVisionScore / agg.detailGames;
+// Vision score is accrued over time — wards placed, wards killed, and how long
+// each one lived — so a per-game total mostly measures how long the games ran.
+// Rate per minute is what actually separates someone who wards well from
+// someone who plays 40-minute games.
+export function visionScorePerMinute(agg: PlayerAgg): number {
+  return agg.detailDurationSeconds <= 0
+    ? 0
+    : agg.totalVisionScore / (agg.detailDurationSeconds / 60);
 }
 
 export function damageTakenPerMinute(agg: PlayerAgg): number {

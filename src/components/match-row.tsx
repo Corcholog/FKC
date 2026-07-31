@@ -10,6 +10,7 @@ import {
   kdaRatioForGame,
 } from "@/lib/format";
 import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/ddragon";
+import { isSupport } from "@/lib/roles";
 
 export type TeamComposChampion = {
   championId: number;
@@ -28,6 +29,10 @@ type MatchRowData = {
   assists: number;
   damageDealtToChampions: number;
   totalCs: number;
+  /** Riot's raw team_position — decides whether the row leads with CS or vision. */
+  teamPosition: string | null;
+  /** Null on games synced before migration 005, which have no vision score at all. */
+  visionScore: number | null;
   gameCreation: string;
   gameDurationSeconds: number;
   opponent: TeamComposChampion | null;
@@ -88,6 +93,7 @@ export function MatchRow({
     ? championDisplayName(match.opponent.championId, championMap, match.opponent.championName)
     : null;
   const teamKills = match.allies.reduce((sum, c) => sum + c.kills, 0);
+  const supportRow = isSupport(match.teamPosition);
 
   return (
     <Link
@@ -140,7 +146,23 @@ export function MatchRow({
       </div>
 
       <div className="hidden w-28 shrink-0 text-right text-xs text-grey-light @[420px]:block">
-        <p className="tabular-nums">{formatPerMinute(match.totalCs, match.gameDurationSeconds)} CS/min</p>
+        {/* Supports don't farm, so CS/min on their rows is a number nobody can
+            do anything with — the same reason support games are kept out of the
+            CS awards entirely. Vision is the stat that lane is actually judged
+            on. A support game synced before migration 005 has no vision score
+            to show, and says so rather than falling back to the CS it replaced. */}
+        <p className="tabular-nums">
+          {supportRow ? (
+            <>
+              {match.visionScore === null
+                ? "—"
+                : formatPerMinute(match.visionScore, match.gameDurationSeconds)}{" "}
+              vision/min
+            </>
+          ) : (
+            <>{formatPerMinute(match.totalCs, match.gameDurationSeconds)} CS/min</>
+          )}
+        </p>
         <p className="tabular-nums">
           {formatPerMinute(match.damageDealtToChampions, match.gameDurationSeconds)} dmg/min
         </p>

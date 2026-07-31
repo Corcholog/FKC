@@ -3,9 +3,22 @@ import { createClient } from "@/lib/supabase/server";
 import { ladderPoints, rankSortKey, formatWinRate } from "@/lib/rank";
 import { aggregateDuoStats, duoSynergy, duoWinRate, MIN_DUO_GAMES } from "@/lib/duo-stats";
 import { streaksByPlayer, NOTABLE_STREAK } from "@/lib/streaks";
-import { groupIntoSessions, longestSession, winRateByGameIndex } from "@/lib/sessions";
-import { aggregateByTime, busiestHour, formatHour, lateNightRecord } from "@/lib/time-stats";
+import {
+  gameIndexByOwner,
+  groupIntoSessions,
+  longestSession,
+  winRateByGameIndex,
+  type Session,
+} from "@/lib/sessions";
+import {
+  aggregateByTime,
+  busiestHour,
+  formatHour,
+  lateNightRecord,
+  playersByTimeSlot,
+} from "@/lib/time-stats";
 import { LpChart, type LpSeries } from "@/components/charts/lp-chart";
+import type { RankRow } from "@/components/stat-ranking";
 import { ChartLegend } from "@/components/charts/chart-legend";
 import { MAX_SERIES } from "@/components/charts/chart-theme";
 import { TiltCurve } from "@/components/charts/tilt-curve";
@@ -113,6 +126,7 @@ export default async function InsightsPage() {
       id: player.id,
       name: player.display_name,
       avatarUrl: player.avatar_url,
+      slug: player.slug,
       points: [],
     });
   }
@@ -153,9 +167,11 @@ export default async function InsightsPage() {
     list.push(row);
     rowsByPlayer.set(row.player_id, list);
   }
-  const allSessions = [...rowsByPlayer.values()].flatMap((playerRows) =>
-    groupIntoSessions(playerRows),
-  );
+  const sessionsByPlayer = new Map<string, Session[]>();
+  for (const [playerId, playerRows] of rowsByPlayer) {
+    sessionsByPlayer.set(playerId, groupIntoSessions(playerRows));
+  }
+  const allSessions = [...sessionsByPlayer.values()].flat();
   const tiltPoints = winRateByGameIndex(allSessions);
   const marathon = longestSession(allSessions);
   const marathonPlayer = marathon
@@ -174,6 +190,44 @@ export default async function InsightsPage() {
   };
 
   const nameOf = (id: string) => playersById.get(id)?.display_name ?? "Unknown";
+
+  // --- What each chart cell is hiding -----------------------------------
+  // A shaded square and an averaged point are both roster-wide totals, which is
+  // exactly the shape of number someone reads and thinks "that isn't me". These
+  // hand the charts the players behind each one, for StatRankingDialog.
+  const playerRow = (playerId: string, value: string, sub: string): RankRow => {
+    const player = playersById.get(playerId);
+    return {
+      id: playerId,
+      name: player?.display_name ?? "Unknown",
+      avatarUrl: player?.avatar_url ?? null,
+      href: player ? `/player/${player.slug}` : undefined,
+      value,
+      sub,
+    };
+  };
+
+  const heatmapBreakdown: Record<string, RankRow[]> = {};
+  for (const [slot, records] of playersByTimeSlot(rows)) {
+    heatmapBreakdown[slot] = records.map((r) =>
+      playerRow(r.ownerId, `${r.games}g`, `${r.wins}W / ${r.games - r.wins}L`),
+    );
+  }
+
+  // Ordered by the metric the curve actually plots — winrate — rather than by
+  // volume, with the record alongside, since a 100% at game nine is one game.
+  const tiltBreakdown: Record<number, RankRow[]> = {};
+  for (const [index, records] of gameIndexByOwner(sessionsByPlayer)) {
+    tiltBreakdown[index] = [...records]
+      .sort((a, b) => b.wins / b.games - a.wins / a.games || b.games - a.games)
+      .map((r) =>
+        playerRow(
+          r.ownerId,
+          `${Math.round((r.wins / r.games) * 100)}%`,
+          `${r.wins}W / ${r.games - r.wins}L`,
+        ),
+      );
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -268,7 +322,7 @@ export default async function InsightsPage() {
           title="Tilt curve"
           caption="Winrate by how deep into a queue session the game was. A session ends after a two-hour break. Later games rest on far fewer sessions than early ones."
         >
-          <TiltCurve points={tiltPoints} />
+          <TiltCurve points={tiltPoints} breakdown={tiltBreakdown} />
           {marathon && marathon.games.length >= 3 && (
             <p className="text-sm text-grey-light">
               Longest session:{" "}
@@ -329,7 +383,7 @@ export default async function InsightsPage() {
       </div>
 
       <SectionCard title="When the clan plays">
-        <HourHeatmap stats={timeStats} />
+        <HourHeatmap stats={timeStats} breakdown={heatmapBreakdown} />
 
         <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-3 text-sm text-grey-light">
           {peakHour !== null && (

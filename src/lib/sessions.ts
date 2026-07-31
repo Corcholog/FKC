@@ -60,10 +60,17 @@ export type GameIndexPoint = {
   winRate: number;
 };
 
+// Everything past this index is folded into the last bucket — sessions that
+// long are rare enough that each further point would rest on a handful of games.
+export const MAX_SESSION_INDEX = 10;
+
 // Winrate by how deep into a session the game was. Sessions get shorter as the
 // index rises, so each point carries its own sample size — the tail is always
 // built on fewer games than the head and the chart has to say so.
-export function winRateByGameIndex(sessions: Session[], maxIndex = 10): GameIndexPoint[] {
+export function winRateByGameIndex(
+  sessions: Session[],
+  maxIndex = MAX_SESSION_INDEX,
+): GameIndexPoint[] {
   const buckets = new Map<number, { games: number; wins: number }>();
 
   for (const session of sessions) {
@@ -84,6 +91,42 @@ export function winRateByGameIndex(sessions: Session[], maxIndex = 10): GameInde
       wins: bucket.wins,
       winRate: Math.round((bucket.wins / bucket.games) * 100),
     }));
+}
+
+export type IndexRecord = { ownerId: string; games: number; wins: number };
+
+// The same buckets as winRateByGameIndex, but kept split by whose sessions they
+// came from — so a dip at game 7 can be traced to the people actually playing
+// seven-game nights instead of being read as a clan-wide law of tilt.
+//
+// Sessions have to arrive already grouped per player: one roster-wide timeline
+// would splice five people's evenings into a single fictional marathon.
+export function gameIndexByOwner(
+  sessionsByOwner: Map<string, Session[]>,
+  maxIndex = MAX_SESSION_INDEX,
+): Map<number, IndexRecord[]> {
+  const byIndex = new Map<number, Map<string, IndexRecord>>();
+
+  for (const [ownerId, sessions] of sessionsByOwner) {
+    for (const session of sessions) {
+      session.games.forEach((game, i) => {
+        const index = Math.min(i + 1, maxIndex);
+        const owners = byIndex.get(index) ?? new Map<string, IndexRecord>();
+        const record = owners.get(ownerId) ?? { ownerId, games: 0, wins: 0 };
+        record.games += 1;
+        if (game.win) record.wins += 1;
+        owners.set(ownerId, record);
+        byIndex.set(index, owners);
+      });
+    }
+  }
+
+  return new Map(
+    [...byIndex.entries()].map(([index, owners]) => [
+      index,
+      [...owners.values()].sort((a, b) => b.games - a.games),
+    ]),
+  );
 }
 
 export function longestSession(sessions: Session[]): Session | null {

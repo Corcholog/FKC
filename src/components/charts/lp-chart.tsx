@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -18,6 +18,7 @@ import {
   ChartTooltipShell,
   type ChartTooltipProps,
 } from "@/components/charts/chart-tooltip";
+import { StatRankingDialog, type RankRow } from "@/components/stat-ranking";
 
 export type LpPoint = {
   /** Epoch ms — a real time axis, so an idle week reads as a gap, not a step. */
@@ -31,6 +32,8 @@ export type LpSeries = {
   points: LpPoint[];
   /** Only used when the chart is drawing end caps; null falls back to initials. */
   avatarUrl?: string | null;
+  /** Makes the player's row in the standings dialog a link through to their page. */
+  slug?: string;
 };
 
 const DATE_LABEL = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
@@ -162,6 +165,34 @@ function AvatarEndCap({
   );
 }
 
+// The table the race is a picture of: everyone's LP at one instant, highest
+// first. LP between syncs is simply the last value recorded, so each player is
+// carried forward from their own most recent reading at or before the clicked
+// moment — and anyone not yet synced by then is left out rather than plotted at
+// zero. The row says which reading it used whenever that isn't the clicked one.
+function standingsAt(series: LpSeries[], t: number): RankRow[] {
+  const standings: { series: LpSeries; point: LpPoint }[] = [];
+
+  for (const s of series) {
+    let latest: LpPoint | null = null;
+    for (const point of s.points) {
+      if (point.t <= t && (latest === null || point.t > latest.t)) latest = point;
+    }
+    if (latest) standings.push({ series: s, point: latest });
+  }
+
+  return standings
+    .sort((a, b) => b.point.lp - a.point.lp)
+    .map(({ series: s, point }) => ({
+      id: s.id,
+      name: s.name,
+      avatarUrl: s.avatarUrl ?? null,
+      href: s.slug ? `/player/${s.slug}` : undefined,
+      value: formatLadderPointsDetailed(point.lp),
+      sub: point.t === t ? undefined : `as of ${DATE_TIME_LABEL.format(new Date(point.t))}`,
+    }));
+}
+
 function LpTooltip({ active, payload, label, names }: ChartTooltipProps & { names: Map<string, string> }) {
   if (!active || !payload || payload.length === 0) return null;
 
@@ -207,6 +238,12 @@ export function LpChart({
   const boundaries = useMemo(() => tierBoundaries(domain), [domain]);
   const names = useMemo(() => new Map(series.map((s) => [s.id, s.name])), [series]);
 
+  // Epoch ms of the clicked point. Only meaningful with more than one line —
+  // a "standings" of one player is just the tooltip again, so the single-player
+  // chart on a player page stays a plain chart.
+  const [openAt, setOpenAt] = useState<number | null>(null);
+  const rankable = series.length > 1;
+
   // Two LpCharts on one page would otherwise mint the same clipPath ids, and
   // the second chart's avatars would clip against the first one's circles.
   const uid = useId();
@@ -237,99 +274,125 @@ export function LpChart({
   }
 
   return (
-    <div style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart
-          data={data}
-          margin={{ top: 8, right: endCapAvatars ? CAP_MARGIN : 12, bottom: 4, left: 4 }}
-        >
-          <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+    <div className="flex flex-col gap-2">
+      <div style={{ height }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={data}
+            margin={{ top: 8, right: endCapAvatars ? CAP_MARGIN : 12, bottom: 4, left: 4 }}
+            // Recharts snaps activeLabel to the nearest x tick, so anywhere in the
+            // plot area resolves to a real recorded instant.
+            onClick={
+              rankable
+                ? (state) => {
+                    const t = Number(state.activeLabel);
+                    if (Number.isFinite(t)) setOpenAt(t);
+                  }
+                : undefined
+            }
+            style={rankable ? { cursor: "pointer" } : undefined}
+          >
+            <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
 
-          {/* Tier boundaries land on multiples of LP_PER_TIER by construction —
-              see ladderPoints in src/lib/rank.ts. */}
-          {boundaries.map((value) => (
-            <ReferenceLine key={value} y={value} stroke={GRID_STROKE} strokeWidth={1.5} />
-          ))}
+            {/* Tier boundaries land on multiples of LP_PER_TIER by construction —
+                see ladderPoints in src/lib/rank.ts. */}
+            {boundaries.map((value) => (
+              <ReferenceLine key={value} y={value} stroke={GRID_STROKE} strokeWidth={1.5} />
+            ))}
 
-          <XAxis
-            dataKey="t"
-            type="number"
-            scale="time"
-            domain={["dataMin", "dataMax"]}
-            tickFormatter={(t) => DATE_LABEL.format(new Date(t))}
-            tick={AXIS_TICK}
-            tickLine={false}
-            axisLine={{ stroke: GRID_STROKE }}
-            minTickGap={32}
-          />
-          <YAxis
-            domain={domain}
-            tickFormatter={formatLadderPoints}
-            tick={AXIS_TICK}
-            tickLine={false}
-            axisLine={false}
-            width={78}
-          />
+            <XAxis
+              dataKey="t"
+              type="number"
+              scale="time"
+              domain={["dataMin", "dataMax"]}
+              tickFormatter={(t) => DATE_LABEL.format(new Date(t))}
+              tick={AXIS_TICK}
+              tickLine={false}
+              axisLine={{ stroke: GRID_STROKE }}
+              minTickGap={32}
+            />
+            <YAxis
+              domain={domain}
+              tickFormatter={formatLadderPoints}
+              tick={AXIS_TICK}
+              tickLine={false}
+              axisLine={false}
+              width={78}
+            />
 
-          <Tooltip
-            content={<LpTooltip names={names} />}
-            cursor={{ stroke: CHART_INK.axis, strokeDasharray: "3 3" }}
-            wrapperStyle={{ outline: "none" }}
-          />
+            <Tooltip
+              content={<LpTooltip names={names} />}
+              cursor={{ stroke: CHART_INK.axis, strokeDasharray: "3 3" }}
+              wrapperStyle={{ outline: "none" }}
+            />
 
-          {series.map((s, i) => {
-            const color = series.length === 1 ? CHART_INK.primary : seriesColor(i);
-            const lastT = endCapAvatars ? lastPointBySeries.get(s.id) : undefined;
+            {series.map((s, i) => {
+              const color = series.length === 1 ? CHART_INK.primary : seriesColor(i);
+              const lastT = endCapAvatars ? lastPointBySeries.get(s.id) : undefined;
 
-            // Recharts hands these renderers every row of the merged data,
-            // including the ones this series has no value for. Those arrive
-            // with null coordinates and have to draw nothing — an unguarded
-            // <circle> would take the missing cx/cy as 0 and stamp a dot in the
-            // chart's top-left corner.
-            const marker = (props: LpDotProps, radius: number) => {
-              const { cx, cy } = props;
-              if (typeof cx !== "number" || typeof cy !== "number") return null;
+              // Recharts hands these renderers every row of the merged data,
+              // including the ones this series has no value for. Those arrive
+              // with null coordinates and have to draw nothing — an unguarded
+              // <circle> would take the missing cx/cy as 0 and stamp a dot in the
+              // chart's top-left corner.
+              const marker = (props: LpDotProps, radius: number) => {
+                const { cx, cy } = props;
+                if (typeof cx !== "number" || typeof cy !== "number") return null;
 
-              if (props.payload?.t === lastT) {
+                if (props.payload?.t === lastT) {
+                  return (
+                    <AvatarEndCap
+                      cx={cx}
+                      cy={cy}
+                      color={color}
+                      name={s.name}
+                      avatarUrl={s.avatarUrl ?? null}
+                      clipId={`lp-cap-${uid}-${s.id}`}
+                    />
+                  );
+                }
+
                 return (
-                  <AvatarEndCap
-                    cx={cx}
-                    cy={cy}
-                    color={color}
-                    name={s.name}
-                    avatarUrl={s.avatarUrl ?? null}
-                    clipId={`lp-cap-${uid}-${s.id}`}
-                  />
+                  <circle cx={cx} cy={cy} r={radius} fill={color} stroke={CHART_INK.surface} strokeWidth={2} />
                 );
-              }
+              };
 
               return (
-                <circle cx={cx} cy={cy} r={radius} fill={color} stroke={CHART_INK.surface} strokeWidth={2} />
+                <Line
+                  key={s.id}
+                  dataKey={s.id}
+                  name={s.name}
+                  type="monotone"
+                  stroke={color}
+                  strokeWidth={2}
+                  // Ring the dots in the surface colour so overlapping players
+                  // stay readable where two lines cross — except at the head of
+                  // the line, which becomes the player's face instead. The face
+                  // is drawn at both sizes so hovering it doesn't swap it back
+                  // out for a plain dot.
+                  dot={(props) => marker(props, 3)}
+                  activeDot={(props) => marker(props, 5)}
+                  connectNulls
+                  isAnimationActive={false}
+                />
               );
-            };
+            })}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
 
-            return (
-              <Line
-                key={s.id}
-                dataKey={s.id}
-                name={s.name}
-                type="monotone"
-                stroke={color}
-                strokeWidth={2}
-                // Ring the dots in the surface colour so overlapping players
-                // stay readable where two lines cross — except at the head of
-                // the line, which becomes the player's face instead. The face
-                // is drawn at both sizes so hovering it doesn't swap it back
-                // out for a plain dot.
-                dot={(props) => marker(props, 3)}
-                activeDot={(props) => marker(props, 5)}
-                connectNulls
-                isAnimationActive={false}
-              />
-            );
-          })}
-        </LineChart>
-      </ResponsiveContainer>
+      {rankable && (
+        <p className="text-xs text-grey-mid">Click anywhere on the race for the standings at that moment.</p>
+      )}
+
+      <StatRankingDialog
+        open={openAt !== null}
+        onOpenChange={(open) => !open && setOpenAt(null)}
+        title={openAt === null ? "" : DATE_TIME_LABEL.format(new Date(openAt))}
+        description="Standings at this point in the race, highest LP first."
+        rows={openAt === null ? [] : standingsAt(series, openAt)}
+        empty="Nobody had been synced yet at this point."
+      />
     </div>
   );
 }

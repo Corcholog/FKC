@@ -83,6 +83,50 @@ export function bucketWinRate(bucket: TimeBucket): number | null {
   return bucket.games === 0 ? null : Math.round((bucket.wins / bucket.games) * 100);
 }
 
+// ------------------------------------------------------------
+// Who is behind a cell.
+//
+// The heatmap's shade is a total, and a total hides which two people are
+// actually the ones queueing at 3am. These let a cell be clicked open into the
+// players that built it — see StatRankingDialog.
+// ------------------------------------------------------------
+
+export type SlotOwnerInput = TimeStatInput & { player_id: string | null };
+
+export type SlotRecord = { ownerId: string; games: number; wins: number };
+
+// Stable string key for a grid cell, so the breakdown can travel to a client
+// component as a plain object rather than a nested array.
+export function timeSlotKey(weekday: number, hour: number): string {
+  return `${weekday}-${hour}`;
+}
+
+/** Cell key → the players who played in it, most games first. Empty cells are absent. */
+export function playersByTimeSlot(rows: SlotOwnerInput[]): Map<string, SlotRecord[]> {
+  const bySlot = new Map<string, Map<string, SlotRecord>>();
+
+  for (const row of rows) {
+    if (!row.player_id) continue;
+    const parts = localParts(row.game_creation);
+    if (!parts) continue;
+
+    const key = timeSlotKey(parts.weekday, parts.hour);
+    const owners = bySlot.get(key) ?? new Map<string, SlotRecord>();
+    const record = owners.get(row.player_id) ?? { ownerId: row.player_id, games: 0, wins: 0 };
+    record.games += 1;
+    if (row.win) record.wins += 1;
+    owners.set(row.player_id, record);
+    bySlot.set(key, owners);
+  }
+
+  return new Map(
+    [...bySlot.entries()].map(([key, owners]) => [
+      key,
+      [...owners.values()].sort((a, b) => b.games - a.games),
+    ]),
+  );
+}
+
 // Games started between these hours (local). Not a scientific cutoff — it's the
 // window where "one more game" stops being a good idea.
 const LATE_NIGHT_FROM = 0;

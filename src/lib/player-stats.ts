@@ -224,22 +224,25 @@ export function pingsPerGame(agg: PlayerAgg): number {
   return agg.detailGames === 0 ? 0 : agg.totalPings / agg.detailGames;
 }
 
-export type Award<P> = { player: P; value: number; games: number } | null;
+export type Ranked<P> = { player: P; value: number; games: number };
 
-// Picks the roster's leader (or trailer) on one metric. Players with no
-// qualifying games are skipped rather than scoring 0 — otherwise a support main
-// with no farming games would win every "worst CS/min" award by default, and a
-// freshly added player with no games at all would win every "worst" award.
-// Returns null when nobody qualifies, which renders as an em dash.
-export function pickAward<P>(
+// The whole roster on one metric, best-first — the award winner is just entry
+// zero. Players with no qualifying games are dropped rather than scoring 0:
+// otherwise a support main with no farming games would win every "worst CS/min"
+// award by default, and a freshly added player with no games at all would win
+// every "worst" award. An empty result renders as an em dash.
+//
+// The full order matters as much as the winner, because "why didn't I get that
+// award?" is only answerable next to everyone else's number — see StatRankingDialog.
+export function rankPlayers<P>(
   players: P[],
   aggregates: Map<string, PlayerAgg>,
   playerId: (player: P) => string,
   score: (agg: PlayerAgg) => number,
   gamesFor: (agg: PlayerAgg) => number,
   direction: "max" | "min",
-): Award<P> {
-  let best: Award<P> = null;
+): Ranked<P>[] {
+  const ranked: Ranked<P>[] = [];
 
   for (const player of players) {
     const agg = aggregates.get(playerId(player));
@@ -248,11 +251,10 @@ export function pickAward<P>(
     const games = gamesFor(agg);
     if (games === 0) continue;
 
-    const value = score(agg);
-    if (best === null || (direction === "max" ? value > best.value : value < best.value)) {
-      best = { player, value, games };
-    }
+    ranked.push({ player, value: score(agg), games });
   }
 
-  return best;
+  // Sort is stable, so players tied on the metric stay in roster order and the
+  // winner doesn't shuffle between renders.
+  return ranked.sort((a, b) => (direction === "max" ? b.value - a.value : a.value - b.value));
 }

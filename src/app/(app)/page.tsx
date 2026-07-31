@@ -14,11 +14,12 @@ import {
   kdaRatio,
   minutesSpentDead,
   missingPingsPerGame,
-  pickAward,
   playerWinRate,
+  rankPlayers,
   visionScorePerGame,
   type PlayerAgg,
   type PlayerStatInput,
+  type Ranked,
 } from "@/lib/player-stats";
 import { streaksByPlayer, formatStreak, NOTABLE_STREAK } from "@/lib/streaks";
 import { MatchRow, type TeamComposChampion } from "@/components/match-row";
@@ -188,11 +189,14 @@ export default async function DashboardPage() {
   // `qualifier` picks which game counter gates the award, so a metric that only
   // exists on fully-synced rows isn't handed to a player whose history predates
   // migration 005 — see PlayerAgg.detailGames.
+  //
+  // Returns the whole standings rather than just the winner: the tile shows
+  // entry zero and hands the rest to the dialog behind it.
   const award = (
     score: (agg: PlayerAgg) => number,
     direction: "max" | "min",
     qualifier: (agg: PlayerAgg) => number = (agg) => agg.games,
-  ) => pickAward(roster, awardStats, (p) => p.id, score, qualifier, direction);
+  ) => rankPlayers(roster, awardStats, (p) => p.id, score, qualifier, direction);
 
   const csGames = (agg: PlayerAgg) => agg.csGames;
   const detailGames = (agg: PlayerAgg) => agg.detailGames;
@@ -211,9 +215,16 @@ export default async function DashboardPage() {
   type AwardSpec = {
     label: string;
     tone: "good" | "bad" | "neutral";
-    result: ReturnType<typeof award>;
+    /** Everyone who qualifies, best-first. The tile shows [0]; the dialog shows all of it. */
+    ranking: Ranked<PlayerRow>[];
     format: (value: number) => string;
     sub: (games: number) => string;
+    /**
+     * What the number actually measures, in one line. A tile label like "Ward
+     * god" is a joke, not a definition — the standings dialog is where the
+     * metric gets stated plainly enough to argue with.
+     */
+    metric: string;
     /** Reads a migration-005 column, so it only has an answer once that data exists. */
     detail?: boolean;
   };
@@ -225,45 +236,64 @@ export default async function DashboardPage() {
   const visible = (specs: AwardSpec[]) => specs.filter((spec) => hasDetailedStats || !spec.detail);
 
   const hallOfFame: AwardSpec[] = visible([
-    { label: "Best KDA", tone: "good", result: award(kdaRatio, "max"), format: formatKdaRatio, sub: gamesSub },
-    { label: "Best CS/min", tone: "good", result: award(csPerMinute, "max", csGames), format: oneDecimal, sub: csSub },
+    {
+      label: "Best KDA",
+      tone: "good",
+      ranking: award(kdaRatio, "max"),
+      format: formatKdaRatio,
+      sub: gamesSub,
+      metric: "(Kills + assists) ÷ deaths, over every tracked game. Highest first.",
+    },
+    {
+      label: "Best CS/min",
+      tone: "good",
+      ranking: award(csPerMinute, "max", csGames),
+      format: oneDecimal,
+      sub: csSub,
+      metric: "Creep score per minute. Support games are excluded on both sides. Highest first.",
+    },
     {
       label: "Highest winrate",
       tone: "good",
-      result: award(playerWinRate, "max"),
+      ranking: award(playerWinRate, "max"),
       format: (v) => `${v}%`,
       sub: gamesSub,
+      metric: "Games won ÷ games played. No minimum — read the game count beside it. Highest first.",
     },
     {
       label: "Best damage/min",
       tone: "good",
-      result: award(damagePerMinute, "max"),
+      ranking: award(damagePerMinute, "max"),
       // Four-digit figure in a headline font — a tenth of a damage point is noise.
       format: (v) => Math.round(v).toLocaleString("en-US"),
       sub: gamesSub,
+      metric: "Damage to champions per minute played. Highest first.",
     },
     {
       label: "Ward god",
       tone: "good",
-      result: award(visionScorePerGame, "max", detailGames),
+      ranking: award(visionScorePerGame, "max", detailGames),
       format: (v) => String(Math.round(v)),
       sub: detailSub,
+      metric: "Vision score per game — wards placed, wards killed, time held. Highest first.",
       detail: true,
     },
     {
       label: "Objective thief",
       tone: "good",
-      result: award((a) => a.objectivesStolen, "max", detailGames),
+      ranking: award((a) => a.objectivesStolen, "max", detailGames),
       format: (v) => String(v),
       sub: detailSub,
+      metric: "Dragons, barons and heralds stolen, all-time total. Most first.",
       detail: true,
     },
     {
       label: "Pentakills",
       tone: "good",
-      result: award((a) => a.pentaKills, "max", detailGames),
+      ranking: award((a) => a.pentaKills, "max", detailGames),
       format: (v) => String(v),
       sub: detailSub,
+      metric: "Pentakills, all-time total. Most first.",
       detail: true,
     },
     {
@@ -271,28 +301,45 @@ export default async function DashboardPage() {
       // reading as an achievement it isn't.
       label: "Most games",
       tone: "neutral",
-      result: award((a) => a.games, "max"),
+      ranking: award((a) => a.games, "max"),
       format: (v) => String(v),
       sub: gamesSub,
+      metric: "Tracked games played. Most first.",
     },
   ]);
 
   const hallOfShame: AwardSpec[] = visible([
-    { label: "Worst KDA", tone: "bad", result: award(kdaRatio, "min"), format: formatKdaRatio, sub: gamesSub },
-    { label: "Worst CS/min", tone: "bad", result: award(csPerMinute, "min", csGames), format: oneDecimal, sub: csSub },
+    {
+      label: "Worst KDA",
+      tone: "bad",
+      ranking: award(kdaRatio, "min"),
+      format: formatKdaRatio,
+      sub: gamesSub,
+      metric: "(Kills + assists) ÷ deaths, over every tracked game. Lowest first.",
+    },
+    {
+      label: "Worst CS/min",
+      tone: "bad",
+      ranking: award(csPerMinute, "min", csGames),
+      format: oneDecimal,
+      sub: csSub,
+      metric: "Creep score per minute. Support games are excluded on both sides. Lowest first.",
+    },
     {
       label: "Most deaths/game",
       tone: "bad",
-      result: award(deathsPerGame, "max"),
+      ranking: award(deathsPerGame, "max"),
       format: oneDecimal,
       sub: gamesSub,
+      metric: "Deaths per game. Most first.",
     },
     {
       label: "Time spent dead",
       tone: "bad",
-      result: award(minutesSpentDead, "max", detailGames),
+      ranking: award(minutesSpentDead, "max", detailGames),
       format: (v) => `${Math.round(v)}m`,
       sub: detailSub,
+      metric: "Total minutes on the grey screen, all-time. Most first — playing more will win this.",
       detail: true,
     },
     {
@@ -300,17 +347,19 @@ export default async function DashboardPage() {
       // otherwise win the raw total by default.
       label: "% of game dead",
       tone: "bad",
-      result: award(deadTimeShare, "max", detailGames),
+      ranking: award(deadTimeShare, "max", detailGames),
       format: (v) => `${v.toFixed(1)}%`,
       sub: detailSub,
+      metric: "Share of total game time spent dead. The version of the tile beside it that game count can't win. Most first.",
       detail: true,
     },
     {
       label: "Most ? pings",
       tone: "neutral",
-      result: award(missingPingsPerGame, "max", detailGames),
+      ranking: award(missingPingsPerGame, "max", detailGames),
       format: oneDecimal,
       sub: (games) => `per game · ${detailSub(games)}`,
+      metric: "Enemy-missing pings per game. Most first.",
       detail: true,
     },
   ]);
@@ -410,16 +459,29 @@ export default async function DashboardPage() {
             <section key={heading} className="flex flex-col gap-2">
               <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">{heading}</h2>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {specs.map(({ label, tone, result, format, sub }) => (
-                  <AwardTile
-                    key={label}
-                    label={label}
-                    tone={tone}
-                    player={result?.player ?? null}
-                    value={result ? format(result.value) : ""}
-                    sub={result ? sub(result.games) : undefined}
-                  />
-                ))}
+                {specs.map(({ label, tone, ranking, format, sub, metric }) => {
+                  const leader = ranking[0] ?? null;
+
+                  return (
+                    <AwardTile
+                      key={label}
+                      label={label}
+                      tone={tone}
+                      player={leader?.player ?? null}
+                      value={leader ? format(leader.value) : ""}
+                      sub={leader ? sub(leader.games) : undefined}
+                      metric={metric}
+                      ranking={ranking.map(({ player, value, games }) => ({
+                        id: player.id,
+                        name: player.display_name,
+                        avatarUrl: player.avatar_url,
+                        href: `/player/${player.slug}`,
+                        value: format(value),
+                        sub: sub(games),
+                      }))}
+                    />
+                  );
+                })}
               </div>
             </section>
           ))}

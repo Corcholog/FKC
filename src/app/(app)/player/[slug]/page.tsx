@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getLatestVersion, getChampionMap, championDisplayName } from "@/lib/ddragon";
 import { formatWinLoss, formatWinRate, ladderPoints } from "@/lib/rank";
 import { aggregateByRole } from "@/lib/player-stats";
+import { topChampionsByPlayer } from "@/lib/champion-stats";
 import { computeStreak, formatStreak, NOTABLE_STREAK } from "@/lib/streaks";
 import { matchupsForPlayer, nemesis, type MatchupInput } from "@/lib/matchups";
 import { aggregateByTime } from "@/lib/time-stats";
@@ -15,12 +16,14 @@ import { LpChart, type LpPoint } from "@/components/charts/lp-chart";
 import { HourHeatmap } from "@/components/charts/hour-heatmap";
 import { RoleSplit } from "@/components/player/role-split";
 import { MatchupList } from "@/components/player/matchup-list";
+import { TopChampions } from "@/components/player/top-champions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { findLaneOpponent, sortByRole } from "@/lib/roles";
 
 const RECENT_FORM_LIMIT = 5;
+const TOP_CHAMPION_COUNT = 5;
 
 type MatchListRow = {
   id: string;
@@ -126,6 +129,9 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
   }));
 
   const roleSplit = aggregateByRole(historyRows);
+  // Same rows as the role split — historyRows already carries every column
+  // ChampionStatInput needs, so the champion strip costs no extra query.
+  const topChampions = topChampionsByPlayer(historyRows, TOP_CHAMPION_COUNT).get(id) ?? [];
   const streak = computeStreak(historyRows);
   const streakLabel = formatStreak(streak);
   const timeStats = aggregateByTime(historyRows);
@@ -240,6 +246,27 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
         </CardHeader>
         <CardContent>
           <LpChart series={[{ id, name: player.display_name, points: lpPoints }]} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
+            Top champions
+          </CardTitle>
+          {topChampions.length > 0 && (
+            <CardAction>
+              <Link
+                href={`/champions?player=${player.slug}`}
+                className="text-xs text-gold-bright hover:underline"
+              >
+                View all →
+              </Link>
+            </CardAction>
+          )}
+        </CardHeader>
+        <CardContent>
+          <TopChampions champions={topChampions} version={version} championMap={championMap} />
         </CardContent>
       </Card>
 

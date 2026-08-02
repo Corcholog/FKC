@@ -40,8 +40,10 @@ yarn-error.log*
 # claude code — local-only permission settings
 .claude/settings.local.json
 
-# planning docs — kept locally for reference, not published
-/docs
+# planning docs (the pre-build spec) + local SQL — kept for reference, not published
+/docs/*
+# ...except the as-built engineering documentation, which is.
+!/docs/engineering/
 
 # typescript
 *.tsbuildinfo

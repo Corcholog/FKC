@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { formatKdaRatio, formatPerMinute } from "@/lib/format";
 import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/ddragon";
-import { championKdaRatio, championWinRate, type ChampionAgg } from "@/lib/champion-stats";
+import {
+  byGamesThenRecord,
+  byWinRateThenGames,
+  championKdaRatio,
+  championWinRate,
+  type ChampionAgg,
+} from "@/lib/champion-stats";
 import { Button } from "@/components/ui/button";
 
 type SortKey = "games" | "winrate";
@@ -19,9 +25,10 @@ export function ChampionTierList({
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("games");
 
-  const sorted = [...champions].sort((a, b) =>
-    sortKey === "games" ? b.games - a.games : championWinRate(b) - championWinRate(a),
-  );
+  // Both orderings tie-break rather than leaving equal entries in arrival
+  // order — otherwise the numbered ranks beside each card are arbitrary among
+  // ties, and toggling back and forth could reshuffle them.
+  const sorted = [...champions].sort(sortKey === "games" ? byGamesThenRecord : byWinRateThenGames);
 
   return (
     <div className="flex flex-col gap-3">

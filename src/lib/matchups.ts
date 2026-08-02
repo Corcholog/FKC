@@ -1,4 +1,7 @@
 import { findLaneOpponent } from "@/lib/roles";
+// Matchups are per-champion aggregates for one player, same as the tierlist —
+// so they order the same way. See the comment on those comparators.
+import { byGamesThenRecord } from "@/lib/champion-stats";
 
 // Lane matchups, built entirely out of rows the sync already stores.
 //
@@ -66,7 +69,7 @@ export function matchupsForPlayer(rows: MatchupInput[], playerId: string): Match
     byChampion.set(opponent.champion_id, agg);
   }
 
-  return [...byChampion.values()].sort((a, b) => b.games - a.games);
+  return [...byChampion.values()].sort(byGamesThenRecord);
 }
 
 export function matchupWinRate(agg: MatchupAgg): number {

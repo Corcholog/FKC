@@ -1,0 +1,206 @@
+# 08 — Operations
+
+## 1. Local setup
+
+```bash
+npm install
+cp .env.local.example .env.local     # fill in the values below
+npm run dev
+```
+
+| Variable | Where it comes from | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API | Public |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | same page | "Publishable" in new naming, "anon" in legacy. Either works. |
+| `SUPABASE_SECRET_KEY` | same page | "Secret" / legacy "service_role". **Bypasses RLS — server only.** |
+| `GEMINI_API_KEY` | ai.google.dev → Get API Key | |
+| `CRON_SECRET` | generate yourself | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+
+**The Riot API key is not an env var.** It lives in `sync_state.riot_api_key` and is set
+from `/settings`. See [01 §4](01-system-overview.md).
+
+`next.config.ts` derives the allowed Supabase image hostname from
+`NEXT_PUBLIC_SUPABASE_URL`, so avatars break if that variable is missing at build time —
+worth knowing, because the symptom (broken avatar images in production only) doesn't point
+at the cause.
+
+## 2. Database setup
+
+- **Fresh project:** run `docs/schema.sql` in the Supabase SQL editor. It creates every
+  table, index, RLS policy, grant, and helper function in one shot.
+- **Existing project:** run the numbered files in `docs/migrations/` in order. They're
+  written to be idempotent and safe to re-run.
+- Create a Storage bucket named `avatars`, public read.
+- Create the shared viewer login by hand: Authentication → Users → Add User. Per-player
+  logins are created afterwards from `/settings`.
+
+Migrations to date:
+
+| # | What it did |
+|---|---|
+| 001 | Per-player accounts (`players.user_id`, note ownership) |
+| 002 | Display-name login (`resolve_login_email`, case-insensitive unique index) |
+| 003 | Fixed the tracking-start boundary |
+| 004 | `player_rank_history` + `players.synced_through` |
+| 005 | ~30 participant detail columns + `pings`/`challenges` jsonb |
+| 006 | `clan_profile`, `players.ai_context`, `team_ai_summary` |
+| 007 | Excluded games under 15 minutes |
+
+Migration 007 is the one to read as a template — it opens with a query to check what
+you're about to lose (cascade-deleted notes) *before* it deletes anything, and states the
+expected side effect (W/L totals tick down) up front.
+
+## 3. Deployment
+
+Vercel, connected to `main`. `vercel.json` registers two crons:
+
+```json
+{ "crons": [
+  { "path": "/api/sync",      "schedule": "0 10 * * *" },
+  { "path": "/api/summaries", "schedule": "0 11 * * *" }
+]}
+```
+
+Buenos Aires is UTC−3 year-round (no DST since 2009), so 10:00 UTC = 07:00 local.
+
+Three Hobby-tier facts that shaped this:
+- Cron **frequency** is capped at once per day; the number of jobs is not (limit is 100 on
+  every plan).
+- Vercel only guarantees the run happens *within the UTC hour*, not at the minute. Worst
+  case (sync at 10:59, summaries at 11:00) the recap describes the previous day's games.
+  Annoying occasionally, never wrong, and not worth coupling the jobs to avoid.
+- Function `maxDuration` is capped at 60s. Both routes declare `export const maxDuration =
+  60` explicitly — without it, non-Fluid-Compute deployments default to 10–15s and the
+  sync gets killed mid-run.
+
+Vercel Cron sends `Authorization: Bearer ${CRON_SECRET}`, which both routes accept as an
+alternative to a session.
+
+## 4. Observability
+
+There is no logging service, no error tracker, no metrics. **`sync_state` is the entire
+observability story**, and it's surfaced in three places:
+
+| Signal | Where it shows |
+|---|---|
+| `riot_key_valid = false` | Site-wide banner on every page (`KeyExpiredBanner`) |
+| `last_sync_status`, `last_sync_finished_at` | Dashboard sidebar card, Settings |
+| `last_error` | Settings |
+| Per-run result | Toast from the navbar Sync button |
+
+For five users that's proportionate. It's also the first thing to add if the app ever
+mattered more — see [10](10-known-gaps.md).
+
+## 5. Runbook
+
+### The Riot key expired
+
+**Symptom:** amber banner on every page; `sync_state.last_error` mentions 401/403.
+
+Expected roughly daily — personal keys have a 24-hour lifetime.
+
+1. Regenerate at <https://developer.riotgames.com/>.
+2. `/settings` → Riot API key → paste → save. This optimistically sets `riot_key_valid =
+   true`; the next sync flips it back if the key is still bad.
+3. Press Sync.
+
+### A sync says "partial"
+
+**Not an error.** The run hit its 50-second budget before walking every player's history.
+Press Sync again — `players.synced_through` means it resumes rather than restarting.
+
+Repeated partials with no progress means either a genuine backfill in flight (normal after
+adding a player) or a stuck cursor (see below).
+
+### `409 Sync already running`
+
+Either a sync is genuinely in flight, or a previous run was killed before it could write
+its status. The route auto-clears a `'running'` claim older than 10 minutes
+(`STALE_RUN_MS`), so **wait 10 minutes and retry** before touching anything.
+
+Manual override if needed:
+
+```sql
+update sync_state set last_sync_status = 'error' where id = 1;
+```
+
+### A player's history looks incomplete
+
+1. Check `players.synced_through` — NULL means nothing is confirmed contiguous yet.
+2. Confirm the games are after `TRACKING_START_DATE` (2026-07-29T15:00:00Z).
+3. Confirm they aren't excluded: remakes, sub-15-minute games, and non-420 queues are
+   invisible by design.
+
+```sql
+-- games seen but deliberately not counted
+select riot_match_id, game_creation, game_duration_seconds
+from matches where excluded = true order by game_creation desc;
+```
+
+4. Press Sync repeatedly. Each run walks further back.
+
+### Detail stats show em dashes or low game counts
+
+Migration-005 columns are NULL on rows synced before it ran. `/settings` → **Re-fetch
+match details**. It's time-boxed and resumable — the button reports how many are left, and
+you press it again. Excluded matches are skipped.
+
+### Summaries aren't updating
+
+1. `select player_id, stale, generated_at from player_ai_summaries;` — nothing stale means
+   nothing changed, which is correct behaviour.
+2. Hit `/api/summaries` (the Settings button) and read the error. `describeGeminiError`
+   distinguishes per-minute from per-day quota, and both from an overloaded model (503) or
+   a bad key.
+3. Per-day quota resets at **midnight Pacific**.
+
+### After adding a player
+
+Their history is not backfilled automatically on add — the next sync discovers it, walking
+back up to 200 matches per run. Press Sync a few times. (A Riot *ID change* on an existing
+player does trigger an immediate backfill; a brand-new player doesn't.)
+
+## 6. Cost and capacity
+
+Everything runs on free tiers. The ceilings that actually bind, roughly in the order
+they'd be hit:
+
+| Limit | Value | Headroom |
+|---|---|---|
+| Riot personal key | 100 req/2min, ~40–50 calls per 60s function | **Binding today** on busy days |
+| Gemini free tier | requests/day | Fixed at roster + 1/day by design |
+| Vercel Hobby cron | 1/day per job, 60s max duration | Binding — drives the whole partial-run design |
+| Supabase free | 500 MB database | Comfortable; ~30 KB/match avoided by the `challenges` whitelist |
+| Supabase free | Pauses after 7 days of inactivity | The daily cron keeps it awake |
+| Supabase Storage | 1 GB | A handful of avatars |
+
+The Supabase pause behaviour is worth noting: the daily cron is what keeps the project
+from being paused for inactivity. Disabling it would eventually take the app offline.
+
+## 7. Things that need changing together
+
+Constants deliberately duplicated across code and SQL, because SQL can't import from
+TypeScript:
+
+| Concept | TypeScript | SQL |
+|---|---|---|
+| 15-minute floor | `MIN_COUNTED_DURATION_SECONDS`, `sync.ts` | migration 007 |
+| Tracking start | `TRACKING_START_DATE`, `sync.ts` | migration 003 |
+| Chart palette | `SERIES_COLORS`, `chart-theme.ts` | mirrors `globals.css` |
+| Challenge whitelist | `CHALLENGE_KEYS`, `riot.ts` | (jsonb — no schema change needed) |
+
+Adding a writable column to `players` also means adding it to the `grant update (…)` list
+in `schema.sql`, or it's silently read-only for signed-in users. See
+[04 §5](04-auth-and-security.md).
+
+## 8. Commands
+
+```bash
+npm run dev      # next dev
+npm run build    # next build — the only real check in CI-less repo: types + lint
+npm run start    # next start
+npm run lint     # eslint
+```
+
+There is no test suite. `npm run build` is the closest thing to a gate, and TypeScript
+`strict` mode is doing most of the work.

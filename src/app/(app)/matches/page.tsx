@@ -1,11 +1,29 @@
+import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { findLaneOpponent, sortByRole } from "@/lib/roles";
 import { MatchRow, type TeamComposChampion } from "@/components/match-row";
 import { MatchesFilter } from "@/components/matches-filter";
+import { MatchesPagination } from "@/components/matches-pagination";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const MATCH_LIMIT = 50;
+// Matches per page. This counts *matches*, not rendered rows: with no player
+// filter, one game that several tracked players were in renders a row each, so
+// a page can show more rows than this.
+const MATCHES_PER_PAGE = 50;
+
+// Page-number pagination rather than a cursor. The tradeoff: an offset can
+// drift if rows are inserted at the head between page views, which here means
+// only during a sync (daily, or when someone presses the button) — a match
+// could then repeat across a page boundary. In exchange the page gets a real
+// "page 2 of 7" and a total count, which a cursor can't give without a second
+// query. At this history's size the deep-offset cost is nil.
+function parsePage(raw: string | undefined): number {
+  const parsed = Number(raw);
+  // Rejects "abc", "0", "-3", "1.5" and Infinity — anything not a whole page.
+  if (!Number.isInteger(parsed) || parsed < 1) return 1;
+  return parsed;
+}
 
 type PlayerRow = {
   id: string;
@@ -42,9 +60,10 @@ type ParticipantRow = {
 export default async function MatchesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ player?: string }>;
+  searchParams: Promise<{ player?: string; page?: string }>;
 }) {
-  const { player: playerFilter } = await searchParams;
+  const { player: playerFilter, page: pageParam } = await searchParams;
+  const page = parsePage(pageParam);
   const supabase = await createClient();
 
   const [{ data: players }, version] = await Promise.all([
@@ -60,18 +79,34 @@ export default async function MatchesPage({
 
   // Query from matches (true top-level order — see player/[slug]/page.tsx for
   // why ordering "through" an embedded match_participants collection no-ops).
+  //
+  // count: "exact" is returned alongside the page and counts parent rows, so
+  // it's the number of matching *matches* — an embed doesn't multiply the
+  // parent the way a SQL join would.
+  const from = (page - 1) * MATCHES_PER_PAGE;
   let matchQuery = supabase
     .from("matches")
-    .select("id, riot_match_id, game_creation, game_duration_seconds, match_participants!inner(player_id)")
+    .select(
+      "id, riot_match_id, game_creation, game_duration_seconds, match_participants!inner(player_id)",
+      { count: "exact" },
+    )
     .order("game_creation", { ascending: false })
-    .limit(MATCH_LIMIT);
+    .range(from, from + MATCHES_PER_PAGE - 1);
 
   matchQuery = selectedPlayer
     ? matchQuery.eq("match_participants.player_id", selectedPlayer.id)
     : matchQuery.not("match_participants.player_id", "is", null);
 
-  const { data: matchListFull } = await matchQuery.returns<MatchListRow[]>();
+  const { data: matchListFull, count } = await matchQuery.returns<MatchListRow[]>();
   const matchList = matchListFull ?? [];
+
+  const totalMatches = count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalMatches / MATCHES_PER_PAGE));
+
+  // Page 1 always renders — an empty roster or an unplayed filter is a valid
+  // empty state, not a 404. Anything past the end is a genuine 404, the same
+  // way /champions treats an unknown ?player=.
+  if (page > 1 && matchList.length === 0) notFound();
 
   const matchIds = matchList.map((m) => m.id);
   const [{ data: allParticipants }, championMap] = await Promise.all([
@@ -176,6 +211,13 @@ export default async function MatchesPage({
           ))
         )}
       </div>
+
+      <MatchesPagination
+        page={page}
+        totalPages={totalPages}
+        totalMatches={totalMatches}
+        playerSlug={selectedPlayer?.slug ?? null}
+      />
     </main>
   );
 }

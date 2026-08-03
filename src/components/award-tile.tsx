@@ -39,29 +39,33 @@ export function AwardTile({
   const [open, setOpen] = useState(false);
 
   const body = (
-    <>
-      <p className="text-[11px] tracking-wide text-grey-light uppercase">{label}</p>
+    <div className="flex w-full items-center justify-between gap-2">
+      <div className="flex min-w-0 flex-col items-start gap-1">
+        <p className="text-[11px] tracking-wide text-grey-light uppercase">{label}</p>
 
-      <p className={`font-heading tabular-nums text-2xl font-semibold ${TONE_CLASS[tone]}`}>
-        {player ? value : "—"}
-      </p>
+        <p className={`font-heading tabular-nums text-2xl font-semibold ${TONE_CLASS[tone]}`}>
+          {player ? value : "—"}
+        </p>
 
-      {player ? (
-        <div className="flex min-w-0 items-center gap-2">
-          <Avatar size="sm">
+        {player && sub ? (
+          <p className="tabular-nums text-xs text-grey-mid">{sub}</p>
+        ) : (
+          !player && <p className="text-sm text-grey-mid">No games yet</p>
+        )}
+      </div>
+
+      {player && (
+        <div className="flex shrink-0 flex-col items-center gap-1">
+          <Avatar className="size-12">
             {player.avatar_url && <AvatarImage src={player.avatar_url} alt="" />}
-            <AvatarFallback className="text-[10px]">
+            <AvatarFallback className="text-sm">
               {player.display_name.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <p className="min-w-0 truncate text-sm text-white">{player.display_name}</p>
+          <p className="max-w-16 min-w-0 truncate text-center text-xs text-white">{player.display_name}</p>
         </div>
-      ) : (
-        <p className="text-sm text-grey-mid">No games yet</p>
       )}
-
-      {player && sub && <p className="tabular-nums text-xs text-grey-mid">{sub}</p>}
-    </>
+    </div>
   );
 
   const className = "panel-hex panel-hex-clip flex flex-col items-start gap-1 p-3";

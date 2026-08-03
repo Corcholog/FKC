@@ -1,6 +1,7 @@
 # 06 — The AI Layer
 
 Files: `src/lib/gemini.ts` (transport), `src/lib/summary.ts` (prompt construction),
+`src/lib/player-signals.ts` (the computed splits the player prompt is built on),
 `src/lib/ai-context.ts` (human-written context), `src/app/api/summaries/route.ts` (the
 batch).
 
@@ -23,8 +24,8 @@ A stale flag doesn't save you. Five people opening five player pages after a ses
 25 potential generations for data that changed once.
 
 So generation was moved entirely into one scheduled batch. `/api/summaries` runs an hour
-after the sync and costs a **fixed roster-size + 1 calls per day**, no matter how much
-anyone browses. The `/api/summary` single-player on-demand route was deleted.
+after the sync, no matter how much anyone browses. The `/api/summary` single-player
+on-demand route was deleted.
 
 Everything else follows from that inversion:
 
@@ -48,17 +49,79 @@ Everything else follows from that inversion:
   One code path for the scheduled and the manual case is worth more than the convenience
   of an action.
 
+## 1b. The second inversion: spend the quota on depth, not frequency
+
+Batching fixed *where* generations happen. It left the cost at roster-size + 1 requests on
+any day anyone played a single ranked game — and since the free tier caps requests, not
+prompt size, that budget was being spent entirely on **frequency**. The prompt had to stay
+thin to fit: fifteen games carrying nothing but KDA and CS.
+
+That is the wrong trade for what this feature is:
+
+> **A summary five games out of date is still true. A thin one is vague every day.**
+
+So `MIN_NEW_GAMES = 5` (`lib/summary.ts`, enforced in `/api/summaries`): a summary is only
+rewritten once five games have been recorded since `generated_at`. Counting them costs a
+Supabase `count` with `head: true`, which is free, to decide whether to spend a Gemini
+request, which is not. On a quiet day the batch now costs **zero** requests.
+
+The freed budget went into the prompt — see §6.
+
+**`stale` alone couldn't express this**, which is why migration 008 adds
+`force_regenerate`. Two different things make a summary out of date:
+
+- **New games** — exactly what the floor is meant to throttle.
+- **A human edit** — a note written on a match, or an edit to the clan or player AI
+  context. Rare, deliberate, and specifically the input the summary is supposed to weave
+  in. Making someone play five more games before their note showed up would make the notes
+  feature feel broken.
+
+So `stale` keeps its meaning ("the inputs changed", which is what the player page reads),
+and `force_regenerate` is set only by the human-edit paths, where it bypasses the floor.
+
+The threshold lives in `lib/summary.ts` rather than in the route because the player page
+shows it too — *"3 new games since — refreshes at 5"*. The old copy said "refreshes on the
+next daily run", which the floor made false; a UI that promises a different threshold from
+the one the batch enforces is worse than one that says nothing.
+
+## 1c. Summaries are opt-in per player
+
+`players.ai_summary_enabled`, default false (migration 009). **Being tracked and wanting a
+written analysis are different things.** Everyone on the roster is synced, ranked and
+charted; only the handful of accounts anyone actually reads get two paragraphs generated
+against a metered daily quota.
+
+The default is the interesting part. Opt-*out* would have been less setup, but its failure
+mode is quota silently spent on somebody nobody meant to include — invisible until the day
+the cap is hit and real summaries start failing. Opt-in fails the other way, visibly, on
+the page of someone who wanted one.
+
+Checked in three places, all of which matter:
+
+| Where | Why it can't be the only check |
+|---|---|
+| `markSummariesStale` (`sync.ts`) | An upsert here would recreate the row migration 009 deleted |
+| `/api/summaries` | The only place that spends a request; a stale row from an older config must cost nothing |
+| `player/[slug]/page.tsx` | The card's empty state reads "not written yet", which would be a promise that never lands |
+
+There is deliberately no Settings toggle. The list changes about once a season, and the
+`update` in migration 009 is shorter than the UI would be.
+
 ## 2. Who gets flagged, and where
 
 | Trigger | Flags | Code |
 |---|---|---|
 | Sync found a new match | each tracked participant + team | `markSummariesStale`, `sync.ts:201` |
-| Note added/edited/deleted | that player + team | `markSummaryStale`, `match/[riotMatchId]/actions.ts` |
-| Player AI context edited | that player + team | `updatePlayerAiContext` |
-| Clan context edited | **every** player + team | `markEverythingStale` |
+| Note added/edited/deleted | that player + team, **+ force** | `markSummaryStale`, `match/[riotMatchId]/actions.ts` |
+| Player AI context edited | that player + team, **+ force** | `updatePlayerAiContext` |
+| Clan context edited | **every** player + team, **+ force** | `markEverythingStale` |
+
+The sync is the only writer that sets `stale` *without* `force_regenerate` — new games are
+the thing being throttled.
 
 The team summary is flagged by all of them — any new game changes the group picture
-(duos, streaks, head-to-heads) even if it only changed one person's record.
+(duos, streaks, head-to-heads) even if it only changed one person's record. It's gated on
+the same threshold, counted roster-wide.
 
 Note the sync flags **every tracked participant of a new match**, not just whoever's loop
 discovered it. A shared game belongs to all of them regardless of which player's fetch
@@ -182,23 +245,91 @@ per-minute burst is how you conclude the feature is broken for a day.
 
 ## 6. Prompt construction
 
-Two prompts, sharing one voice instruction so they can't drift:
+Two prompts. They share a **language** constant and nothing else:
 
 ```ts
-const VOICE_INSTRUCTION = `Casual tone, like a friend recapping the week — not a formal
-report. Do not use markdown formatting. You can roast people a bit. All output must be in
-natural Rioplatense Spanish (Argentina)… Do not use English except for League of Legends
-terms, champion names, or player names.`;
+const SHARED_LANGUAGE = `Do not use markdown formatting… All output must be in natural
+Rioplatense Spanish (Argentina). Do not use English except for League of Legends terms,
+champion names, or player names.`;
+
+const RECAP_VOICE   = `Casual tone, like a friend recapping the week… You can roast
+people a bit. ${SHARED_LANGUAGE}`;
+
+const ANALYST_VOICE = `Neutral, factual and analytical — you are reading data, not judging
+a person… Never state a number that does not appear in the data above; when you describe a
+pattern, name the numbers it rests on. ${SHARED_LANGUAGE}`;
 ```
 
-**Player summary** — rank, overall record, champion performance (top 8 by games), the last
-15 games, and up to 30 notes, over a 50-game window.
+This used to be one `VOICE_INSTRUCTION` shared by both, specifically so the two couldn't
+drift. That was right while both were written in the group's voice. It stopped being right
+when the player summary became an objective read of the data: **one constant can't be both
+"you can roast people a bit" and "do not editorialise."** Language is still shared —
+Spanish and no-markdown are properties of where the text is *rendered*, not of what it's
+saying — so the thing the original decision was protecting is still protected.
+
+### The player summary: computed splits, then a bounded window of raw games
+
+The prompt has two halves, and the split is the whole design:
+
+1. **COMPUTED SPLITS**, from `lib/player-signals.ts`, over the player's *entire* history —
+   by role, by champion, by lane matchup, by position in a queue session, last-10 against
+   the full baseline, streaks, win/loss game length, first-blood involvement, kill
+   participation.
+2. **The last 30 games individually**, each with role, lane opponent, duration, KDA, KP,
+   CS and CS/min, damage, gold, vision, time spent dead, any clanmates in the game, and the
+   player's own notes inline under the game they were written about.
+
+The reason not to simply send every game is not cost. At `gemini-3.6-flash` rates a
+full-history prompt is a few cents, and this runs on the free tier regardless. It's that
+
+> **a model counting across hundreds of raw rows invents winrates, with total confidence.**
+
+So nothing the summary might want to claim about the long history is left for the model to
+derive. It reads `Katarina: 86% (7 games)` and narrates against it. The prompt says so
+explicitly — *"do not try to derive totals by counting the games listed further down"* —
+and the closing instruction is *"if the data does not support a pattern, say there isn't
+one rather than inventing one."* If a claim in a generated summary can't be traced to a
+field on `PlayerSignals` or a line in the 30-game window, the model made it up.
+
+Two smaller rules that fall out of the same principle:
+
+- **Missing means missing.** Every migration-005 column is nullable, so any field a row
+  didn't record is *omitted from the line entirely*. Printing `0 vision` hands the model a
+  fact that isn't true, and it will write a sentence about it. Same at the aggregate level:
+  splits report over `detailGames`, the sample that actually carried the column.
+- **One number, one definition.** The overall record is counted from the same rows every
+  split is derived from, rather than read off `players.wins/losses` — which is recounted at
+  sync time and can disagree by a game or two. A prompt that forbids unsupported numbers
+  must not open by offering two different ones.
+
+`MIN_SPLIT_GAMES = 3` gates every split. The session-position buckets need it most: long
+sessions are rare, so the tail bucket routinely lands on a single game, and a lone win
+printed as `100%` is exactly what a model builds a tilt narrative out of.
 
 **Team summary** — deliberately fed the *group-level* facts nobody sees on their own page:
 the roster sorted by rank, the week's aggregate record, duo winrates, civil wars, and
 notable streaks. The reasoning is explicit: a recap that just lists five individual records
 adds nothing over the award tiles above it. The prompt even says *"Do not just list
 everyone's record one by one — say something about the group."*
+
+### Reading a prompt without spending a request
+
+`buildPlayerSummaryPrompt()` is split out from `generatePlayerSummary()` so the prompt can
+be inspected on its own. Sending is the only part metered by a per-day quota; building
+isn't, and a prompt you can't read is one you can't debug.
+
+### generationConfig
+
+`generateText` sent a bare `contents` array for a long time — no `generationConfig` at all,
+so tone and length were steered purely by prose. The player summary now passes
+`temperature: 0.4`, while the recap keeps the default. The creativity that makes the recap
+fun is the same thing that invents a matchup winrate.
+
+Field names are camelCase on the `models/*:generateContent` endpoint this client uses.
+Google's newer docs show a `/v1beta/interactions` shape with snake_case — that's a
+different endpoint, not a rename. If a config field is ever wrong the API returns 400,
+which `describeGeminiError` reports as *"the clan context grew past what the model will
+accept"*: check the request body before believing that message.
 
 ### A real bug worth remembering
 
@@ -218,9 +349,18 @@ that produce *plausible* output are the expensive kind.
 `ai-context.ts` holds two levels of free text, answering different questions:
 
 - **`clan_profile.context`** — who the *group* is. Inside jokes, slang, nicknames, running
-  bits. Capped at 4000 chars into the prompt.
+  bits. Capped at 4000 chars into the prompt. **Team recap only.**
 - **`players.ai_context`** — who *one person* is. Their reputation, habits, the thing
-  everyone gives them grief about. Capped at 600 chars.
+  everyone gives them grief about. Capped at 600 chars. Goes to both.
+
+The clan blurb used to open the player summary too, back when that summary was also written
+in the group's voice. It doesn't any more, and dropping it did two things at once: it
+stopped spending roughly a fifth of the prompt on material that isn't about the player, and
+it stopped handing an objective analysis a page of running jokes and then asking it not to
+joke. `playerContextLine` takes a tone instead — the analyst framing says the note is *the
+group's opinion, not data, and never evidence for a claim about their performance*, because
+without that caveat the model reads "a veces trolea mucho" as an established finding and
+writes it up as one.
 
 Both are free text on purpose: *the useful version of "he's been perma-banning Yasuo since
 the incident" is a sentence, not a schema*, and any structure imposed would be re-flattened

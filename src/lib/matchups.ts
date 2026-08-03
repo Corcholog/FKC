@@ -76,6 +76,14 @@ export function matchupWinRate(agg: MatchupAgg): number {
   return agg.games === 0 ? 0 : Math.round((agg.wins / agg.games) * 100);
 }
 
+// The tracked player's own KDA in this matchup — the k/d/a accumulated above is
+// theirs, not the opponent's. Winrate alone can't separate "this champion beats
+// me" from "I go even and lose the game anyway", and that's the whole reason to
+// look at a matchup. Same deathless convention as championKdaRatio.
+export function matchupKdaRatio(agg: MatchupAgg): number {
+  return (agg.kills + agg.assists) / Math.max(agg.deaths, 1);
+}
+
 // Enough games that a losing record means something rather than being two
 // coinflips in a row.
 export const MIN_MATCHUP_GAMES = 3;

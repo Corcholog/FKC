@@ -136,6 +136,15 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
   const streakLabel = formatStreak(streak);
   const timeStats = aggregateByTime(historyRows);
 
+  // Games played since the summary was written. /api/summaries only rewrites a
+  // summary once this reaches MIN_NEW_GAMES, so the card needs the number to
+  // say when it will actually refresh rather than promising tomorrow. Counted
+  // off historyRows, which is already loaded — no extra query.
+  const summaryGeneratedAt = aiSummary?.generated_at ?? null;
+  const newGamesSinceSummary = summaryGeneratedAt
+    ? historyRows.filter((r) => r.game_creation > summaryGeneratedAt).length
+    : historyRows.length;
+
   const lpPoints: LpPoint[] = [];
   for (const point of rankHistory ?? []) {
     const lp = ladderPoints(point);
@@ -232,11 +241,17 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
         </CardContent>
       </Card>
 
-      <AiSummaryCard
-        summary={aiSummary?.summary_text ?? null}
-        generatedAt={aiSummary?.generated_at ?? null}
-        isStale={!aiSummary || aiSummary.stale}
-      />
+      {/* Opt-in per player (migration 009). Nothing is generated for anyone
+          without the flag, so rendering the card would promise a summary that
+          is never coming — the empty state reads as "not written yet". */}
+      {player.ai_summary_enabled && (
+        <AiSummaryCard
+          summary={aiSummary?.summary_text ?? null}
+          generatedAt={summaryGeneratedAt}
+          isStale={!aiSummary || aiSummary.stale}
+          newGames={newGamesSinceSummary}
+        />
+      )}
 
       <Card>
         <CardHeader>

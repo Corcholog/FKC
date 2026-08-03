@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { runSync, RiotKeyInvalidError } from "@/lib/sync";
+import { notifyDiscord } from "@/lib/discord";
+import { championDisplayName, getChampionMap, getLatestVersion } from "@/lib/ddragon";
 
 // Riot's 100 req/2min ceiling puts a hard floor of ~1.2s on every call once the
 // burst allowance is spent, so a sync across every tracked player is genuinely
@@ -67,6 +69,50 @@ async function handleSync(request: NextRequest) {
       })
       .eq("id", 1);
 
+    // After the status write, not before: the database record of the run is
+    // what the app reads, and it must not wait on an external service.
+    // notifyDiscord never throws, so this can't turn a good sync into a 500.
+    //
+    // Multikills first — a penta is the single most postworthy thing that
+    // happens in this game, and burying it under a list of LP movements gets it
+    // read second.
+    if (summary.multikills.length > 0) {
+      // Riot stores the codename ("MonkeyKing"); only DDragon knows "Wukong".
+      // Both calls are day-cached and both degrade to a null map rather than
+      // throwing, in which case championDisplayName falls back to the codename
+      // — an uglier message, never a missing one.
+      const version = await getLatestVersion();
+      const championMap = await getChampionMap(version);
+
+      // Pentas before quadras regardless of sync order, so the better news
+      // isn't pushed down the channel by a quadra found first.
+      const ordered = [...summary.multikills].sort((a, b) =>
+        a.kind === b.kind ? 0 : a.kind === "penta" ? -1 : 1,
+      );
+
+      for (const mk of ordered) {
+        const champion = championDisplayName(mk.championId, championMap, mk.championName);
+        const isPenta = mk.kind === "penta";
+        const noun = isPenta ? "pentakill" : "quadrakill";
+
+        await notifyDiscord(
+          isPenta ? "⭐ PENTAKILL" : "⚔️ Quadrakill",
+          mk.count > 1
+            ? `**${mk.displayName}** got **${mk.count} ${noun}s** in one game on ${champion}.`
+            : `**${mk.displayName}** got a ${noun} on ${champion}.`,
+          isPenta ? "gold" : "win",
+        );
+      }
+    }
+
+    for (const change of summary.rankChanges) {
+      await notifyDiscord(
+        change.promoted ? `⬆️ ${change.displayName} promoted` : `⬇️ ${change.displayName} demoted`,
+        `${change.from} → **${change.to}**`,
+        change.promoted ? "win" : "loss",
+      );
+    }
+
     return NextResponse.json({ status: "success", ...summary });
   } catch (e) {
     const isKeyInvalid = e instanceof RiotKeyInvalidError;
@@ -81,6 +127,19 @@ async function handleSync(request: NextRequest) {
         last_error: message,
       })
       .eq("id", 1);
+
+    // The reason this webhook exists. A cron failing at 07:00 previously wrote
+    // last_error and stopped there — the only way to find out was to open
+    // Settings and look, which nobody does on a morning when nothing seems
+    // wrong. An expired Riot key gets its own message because it's the one
+    // failure with a known, routine fix (docs/engineering/08-operations.md §5).
+    await notifyDiscord(
+      isKeyInvalid ? "🔑 Riot API key expired" : "❌ Sync failed",
+      isKeyInvalid
+        ? "The daily key has expired. Regenerate it at developer.riotgames.com, paste it into Settings, then press Sync."
+        : `\`\`\`\n${message}\n\`\`\``,
+      isKeyInvalid ? "warning" : "danger",
+    );
 
     return NextResponse.json({ status: "error", error: message }, { status: 500 });
   }

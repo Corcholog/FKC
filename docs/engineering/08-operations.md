@@ -15,6 +15,7 @@ npm run dev
 | `SUPABASE_SECRET_KEY` | same page | "Secret" / legacy "service_role". **Bypasses RLS — server only.** |
 | `GEMINI_API_KEY` | ai.google.dev → Get API Key | |
 | `CRON_SECRET` | generate yourself | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `DISCORD_WEBHOOK_URL` | Discord → Edit Channel → Integrations → Webhooks | **Optional.** Unset = every notification no-ops. See §4. |
 
 **The Riot API key is not an env var.** It lives in `sync_state.riot_api_key` and is set
 from `/settings`. See [01 §4](01-system-overview.md).
@@ -45,6 +46,10 @@ Migrations to date:
 | 005 | ~30 participant detail columns + `pings`/`challenges` jsonb |
 | 006 | `clan_profile`, `players.ai_context`, `team_ai_summary` |
 | 007 | Excluded games under 15 minutes |
+| 008 | Summary regeneration gate |
+| 009 | AI summaries opt-in |
+| 010 | Champion tier lists |
+| 011 | Revoked `authenticated` access to `sync_state` (the Riot key) |
 
 Migration 007 is the one to read as a template — it opens with a query to check what
 you're about to lose (cascade-deleted notes) *before* it deletes anything, and states the
@@ -57,9 +62,14 @@ Vercel, connected to `main`. `vercel.json` registers two crons:
 ```json
 { "crons": [
   { "path": "/api/sync",      "schedule": "0 10 * * *" },
-  { "path": "/api/summaries", "schedule": "0 11 * * *" }
+  { "path": "/api/summaries", "schedule": "0 11 * * *" },
+  { "path": "/api/weekly",    "schedule": "0 23 * * 0" }
 ]}
 ```
+
+The weekly wrap runs Sunday 23:00 UTC = 20:00 local, i.e. Sunday evening rather than
+Monday morning, so it lands while the week it describes is still the one people remember.
+Weekly is *less* frequent than daily, so it sits inside the Hobby once-per-day cap.
 
 Buenos Aires is UTC−3 year-round (no DST since 2009), so 10:00 UTC = 07:00 local.
 
@@ -78,18 +88,60 @@ alternative to a session.
 
 ## 4. Observability
 
-There is no logging service, no error tracker, no metrics. **`sync_state` is the entire
-observability story**, and it's surfaced in three places:
+There is no logging service, no error tracker and no metrics. `sync_state` is still the
+only *stored* state, but it is no longer the only way to find out something broke:
 
 | Signal | Where it shows |
 |---|---|
-| `riot_key_valid = false` | Site-wide banner on every page (`KeyExpiredBanner`) |
+| `riot_key_valid = false` | Site-wide banner on every page (`KeyExpiredBanner`) **+ Discord** |
 | `last_sync_status`, `last_sync_finished_at` | Dashboard sidebar card, Settings |
-| `last_error` | Settings |
+| `last_error` | Settings **+ Discord** |
 | Per-run result | Toast from the navbar Sync button |
+| Promotions / demotions | Discord |
+| Pentakills and quadrakills | Discord |
+| The daily clan recap | Dashboard **+ Discord** |
+| Daily standings (with LP delta) | Discord |
+| The Sunday week-in-review | Discord |
 
-For five users that's proportionate. It's also the first thing to add if the app ever
-mattered more — see [10](10-known-gaps.md).
+### The webhook
+
+`src/lib/discord.ts`, one function, sent from `/api/sync` and `/api/summaries`.
+
+Every signal above was previously *pull*: a row nobody queries and a banner nobody reads
+on a morning when nothing seems wrong. A cron that failed at 07:00 could stay unnoticed
+for days. The webhook makes the failures push instead, which is most of the practical
+distance between "no observability" and "enough for five people".
+
+Three properties worth keeping if this is ever changed:
+
+- **It cannot fail a job.** `notifyDiscord` swallows everything into `console.error` and
+  has a 5s `AbortSignal.timeout`. A webhook is a notification channel, not a dependency —
+  a sync must still finish, and still report its own result honestly, with Discord down.
+- **It is optional.** No `DISCORD_WEBHOOK_URL` means every call no-ops. Local development
+  and a fresh deploy work unchanged without it.
+- **It sends on state changes, not on activity.** Failures, key expiry, tier/division
+  moves, multikills, and the scheduled digests. Deliberately *not* per-match results or LP
+  ticks — a webhook that fires forty times a day is a webhook everyone mutes, and a muted
+  webhook is worth less than no webhook, because it looks like coverage.
+
+Rank changes and multikills are collected during the sync (`SyncSummary.rankChanges`,
+`SyncSummary.multikills`) and sent by the route once the run has finished and its status is
+written, so a notification can never delay or corrupt the database record of the run.
+
+Three more properties that are load-bearing rather than cosmetic:
+
+- **Standings are cron-only.** The Settings "Regenerate summaries now" button reaches the
+  same handler, so the post is gated on `isCron`. A leaderboard that reposts whenever
+  somebody pokes Settings is the fastest route to a muted channel.
+- **Multikills can't replay.** Detection runs only on a match the current call just
+  inserted, and `riot_match_id` is unique — so a shared game is announced once no matter
+  how many tracked players were in it, and a re-sync takes the `23505` branch instead. The
+  separate 48h age guard covers a different case: adding a player backfills their whole
+  history, which would otherwise dump every penta they have ever had into the channel. A
+  penta suppresses the quadra from the same game, since a penta is reached *through* one.
+- **A section with nothing to say prints nothing,** and a week with no games posts nothing
+  at all. Padding the wrap with "no notable duos this week" every week teaches people to
+  skim the whole message.
 
 ## 5. Runbook
 

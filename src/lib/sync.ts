@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toParticipantRow } from "@/lib/participant-row";
+import { formatRank, ladderPoints } from "@/lib/rank";
 import {
   RiotApiError,
   getRankedSoloMatchIds,
@@ -12,6 +13,13 @@ import {
 // stated tracking start, not a ranked reset. Expressed in UTC: 2026-07-29 12:00
 // America/Argentina/Buenos Aires (UTC-3, no DST since 2009) = 2026-07-29T15:00:00Z.
 const TRACKING_START_DATE = new Date("2026-07-29T15:00:00Z");
+
+// How old a game can be and still be worth announcing a multikill for.
+//
+// Sized to survive one missed cron (the job is daily) while still refusing to
+// treat a backfill as news — adding a player walks their whole history, and
+// every penta in it arrives as a fresh insert.
+const MULTIKILL_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 
 // Games shorter than this are excluded from statistics. Riot's own flag
 // (gameEndedInEarlySurrender) only marks remakes, so a genuine 12-minute stomp
@@ -46,14 +54,53 @@ type Player = {
   id: string; // == riot_puuid, players.id is keyed by the Riot account's puuid
   platform: string;
   synced_through: string | null;
+  // The rank as of the *previous* sync. refreshPlayerRank overwrites these, so
+  // reading them here is the only chance to see what changed — they're what
+  // makes promotion/demotion detection possible without a second query.
+  display_name: string;
+  tier: string | null;
+  division: string | null;
 };
 
-const PLAYER_COLUMNS = "id, platform, synced_through";
+const PLAYER_COLUMNS = "id, platform, synced_through, display_name, tier, division";
+
+/**
+ * A player crossing a tier or division boundary since the last sync.
+ *
+ * Collected rather than notified in place: this module owns the sync, and
+ * pushing to an external service from inside it would put a second failure mode
+ * (and a second timeout) in the middle of a time-budgeted loop. /api/sync sends
+ * these once the run is safely finished.
+ */
+export type RankChange = {
+  displayName: string;
+  from: string;
+  to: string;
+  promoted: boolean;
+};
+
+/**
+ * A tracked player's multikill in a match this run just recorded.
+ *
+ * `championName` is Riot's internal codename ("MonkeyKing"), the same value
+ * stored on the row — resolving it to a display name needs the DDragon map, so
+ * that happens at the notification boundary rather than here.
+ */
+export type Multikill = {
+  kind: "penta" | "quadra";
+  displayName: string;
+  championName: string;
+  championId: number;
+  count: number;
+  gameCreation: string;
+};
 
 export type SyncSummary = {
   playersProcessed: number;
   newMatches: number;
   excludedMatches: number;
+  rankChanges: RankChange[];
+  multikills: Multikill[];
   // True when the time budget ran out before every player's history was walked.
   // Not an error — no cursor was advanced past what was actually covered, so
   // the next run resumes cleanly.
@@ -100,12 +147,17 @@ export async function runSync(admin: SupabaseClient): Promise<SyncSummary> {
   if (playersError) throw new Error(playersError.message);
 
   const players = (playerRows ?? []) as Player[];
-  const knownPlayerIds = new Set(players.map((p) => p.id));
+  // A map, not a set: multikill alerts need the display name, and this is
+  // already the authoritative puuid -> tracked-player lookup. Map.has() keeps
+  // every existing isTracked check working unchanged.
+  const knownPlayers = new Map(players.map((p) => [p.id, p.display_name]));
 
   const summary: SyncSummary = {
     playersProcessed: 0,
     newMatches: 0,
     excludedMatches: 0,
+    rankChanges: [],
+    multikills: [],
     partial: false,
   };
   // Tracked players touched by a genuinely new match this run — not just
@@ -117,8 +169,20 @@ export async function runSync(admin: SupabaseClient): Promise<SyncSummary> {
   // part of the sync that writes an unrecoverable time series — if the budget
   // runs out, losing a day of match backfill is recoverable, losing a day of
   // the LP graph is not.
+  //
+  // Budget-checked all the same. Priority decides who goes first; it doesn't
+  // buy exemption from the clock. At ~1.2s per call under Riot's 100/2min
+  // ceiling, a roster large enough to spend the whole budget here would have
+  // been hard-killed by Vercel mid-write — the precise failure Deadline exists
+  // to prevent — and a rank loop is not more resumable than a match loop just
+  // because it's more important.
   for (const player of players) {
-    await refreshPlayerRank(admin, player, apiKey);
+    if (!deadline.hasRoomForCall()) {
+      summary.partial = true;
+      break;
+    }
+    const change = await refreshPlayerRank(admin, player, apiKey);
+    if (change) summary.rankChanges.push(change);
   }
 
   for (const player of players) {
@@ -131,13 +195,34 @@ export async function runSync(admin: SupabaseClient): Promise<SyncSummary> {
       admin,
       player,
       apiKey,
-      knownPlayerIds,
+      knownPlayers,
       summary,
       playersWithNewMatches,
       deadline,
     );
     if (!complete) summary.partial = true;
     summary.playersProcessed += 1;
+  }
+
+  // Recount W/L for anyone whose history just grew.
+  //
+  // This exists because of the loop order above. refreshPlayerRank counts
+  // wins/losses, and it runs in the *first* loop — before the second loop
+  // inserts this run's new matches. So the totals it wrote are as of before
+  // those inserts, and they stay that way until the next sync, which repeats
+  // the mistake for whatever is new by then. The effect isn't transient
+  // staleness between runs: a player who games every day sits permanently one
+  // sync behind everywhere players.wins/losses is read (the dashboard's team
+  // winrate, the squad list, /team).
+  //
+  // Recounting here rather than reordering the loops keeps ranks first, which
+  // is deliberate and unrelated — the LP time series is the thing that can't be
+  // recovered if the budget runs out. These are Postgres counts, so they cost
+  // no Riot calls and can't be rate-limited; the deadline doesn't gate them.
+  for (const playerId of playersWithNewMatches) {
+    const { wins, losses } = await countWinLoss(admin, playerId);
+    const { error } = await admin.from("players").update({ wins, losses }).eq("id", playerId);
+    if (error) throw new Error(error.message);
   }
 
   await markSummariesStale(admin, playersWithNewMatches);
@@ -166,12 +251,22 @@ export async function backfillPlayerHistory(
   const player = players.find((p) => p.id === playerId);
   if (!player) throw new Error("Player not found.");
 
-  const knownPlayerIds = new Set(players.map((p) => p.id));
+  // A map, not a set: multikill alerts need the display name, and this is
+  // already the authoritative puuid -> tracked-player lookup. Map.has() keeps
+  // every existing isTracked check working unchanged.
+  const knownPlayers = new Map(players.map((p) => [p.id, p.display_name]));
 
   const summary: SyncSummary = {
     playersProcessed: 1,
     newMatches: 0,
     excludedMatches: 0,
+    // Always empty here: this is the account-swap backfill, which walks match
+    // history for one player and never touches ranks.
+    rankChanges: [],
+    // A backfill replays old games, so anything it finds is history rather than
+    // news. The age guard in syncPlayerMatches keeps this empty in practice;
+    // /api/sync doesn't read it on this path anyway.
+    multikills: [],
     partial: false,
   };
   const playersWithNewMatches = new Set<string>();
@@ -181,7 +276,7 @@ export async function backfillPlayerHistory(
     admin,
     { ...player, synced_through: null },
     apiKey,
-    knownPlayerIds,
+    knownPlayers,
     summary,
     playersWithNewMatches,
     deadline,
@@ -212,10 +307,17 @@ async function markSummariesStale(admin: SupabaseClient, playerIds: Set<string>)
     .eq("ai_summary_enabled", true)
     .in("id", [...playerIds]);
 
-  for (const row of enabled ?? []) {
+  // One upsert for the whole batch, not one per player: this runs at the tail of
+  // a sync that's already up against a 50s budget, and a round trip per player
+  // spends that budget on latency rather than on Riot calls.
+  const staleRows = (enabled ?? []).map((row) => ({
+    player_id: row.id as string,
+    stale: true,
+  }));
+  if (staleRows.length > 0) {
     await admin
       .from("player_ai_summaries")
-      .upsert({ player_id: row.id as string, stale: true }, { onConflict: "player_id" });
+      .upsert(staleRows, { onConflict: "player_id" });
   }
 
   // Any new game changes the group picture too — duos, streaks, head-to-heads.
@@ -318,7 +420,7 @@ async function syncPlayerMatches(
   admin: SupabaseClient,
   player: Player,
   apiKey: string,
-  knownPlayerIds: Set<string>,
+  knownPlayers: Map<string, string>,
   summary: SyncSummary,
   playersWithNewMatches: Set<string>,
   deadline: Deadline,
@@ -421,7 +523,7 @@ async function syncPlayerMatches(
       const participantRows = match.info.participants.map((p) =>
         toParticipantRow(p, {
           matchId: insertedMatch.id,
-          isTracked: knownPlayerIds.has(p.puuid),
+          isTracked: knownPlayers.has(p.puuid),
         }),
       );
 
@@ -432,6 +534,42 @@ async function syncPlayerMatches(
 
       for (const row of participantRows) {
         if (row.player_id) playersWithNewMatches.add(row.player_id);
+      }
+
+      // Multikills, collected for the Discord alert.
+      //
+      // Safe against duplicates by construction: riot_match_id is unique, and
+      // this block only runs on a match this call just inserted. A shared game
+      // is inserted once no matter how many tracked players were in it, and a
+      // re-run of the sync takes the 23505 branch above instead of reaching
+      // here — so a multikill can be announced at most once.
+      //
+      // The age guard is the real safeguard, and it's guarding a different
+      // thing: adding a player backfills their entire history, which without
+      // this would replay every penta they have ever had into the channel as
+      // if it just happened.
+      if (Date.now() - gameCreation.getTime() <= MULTIKILL_MAX_AGE_MS) {
+        for (const row of participantRows) {
+          const displayName = row.player_id ? knownPlayers.get(row.player_id) : undefined;
+          if (!displayName) continue;
+
+          // Penta wins over quadra rather than both firing. Riot's counters are
+          // independent fields, but a pentakill is reached *through* a quadra,
+          // so a game with a penta can carry both — and announcing the same
+          // moment twice, the second time as the lesser achievement, reads as a
+          // bug. Only the best one in the game is reported.
+          const kind = row.penta_kills ? "penta" : row.quadra_kills ? "quadra" : null;
+          if (!kind) continue;
+
+          summary.multikills.push({
+            kind,
+            displayName,
+            championName: row.champion_name,
+            championId: row.champion_id,
+            count: kind === "penta" ? row.penta_kills! : row.quadra_kills!,
+            gameCreation: gameCreation.toISOString(),
+          });
+        }
       }
 
       summary.newMatches += 1;
@@ -458,7 +596,45 @@ async function completeSync(admin: SupabaseClient, player: Player, through?: Dat
   return true;
 }
 
-async function refreshPlayerRank(admin: SupabaseClient, player: Player, apiKey: string) {
+/**
+ * This app's own tracked record since TRACKING_START_DATE — not Riot's live
+ * ranked-season totals. Every row counted here is already inside that window,
+ * because syncPlayerMatches refuses to insert anything older.
+ *
+ * Counted in Postgres rather than by selecting the rows and folding them in JS.
+ * The old version did the latter, and PostgREST silently truncates a select at
+ * the project's "Max rows" setting (1000 by default) instead of erroring — so
+ * past that many games it would have written *wrong* totals to players, and
+ * written them persistently, where every page reads them back as fact. A
+ * head+count query has no row limit to hit and moves no data.
+ */
+async function countWinLoss(
+  admin: SupabaseClient,
+  playerId: string,
+): Promise<{ wins: number; losses: number }> {
+  const [winsResult, totalResult] = await Promise.all([
+    admin
+      .from("match_participants")
+      .select("*", { count: "exact", head: true })
+      .eq("player_id", playerId)
+      .eq("win", true),
+    admin
+      .from("match_participants")
+      .select("*", { count: "exact", head: true })
+      .eq("player_id", playerId),
+  ]);
+  if (winsResult.error) throw new Error(winsResult.error.message);
+  if (totalResult.error) throw new Error(totalResult.error.message);
+
+  const wins = winsResult.count ?? 0;
+  return { wins, losses: (totalResult.count ?? 0) - wins };
+}
+
+async function refreshPlayerRank(
+  admin: SupabaseClient,
+  player: Player,
+  apiKey: string,
+): Promise<RankChange | null> {
   let entry;
   try {
     entry = await getRankedSoloEntry(player.id, player.platform, apiKey);
@@ -466,16 +642,10 @@ async function refreshPlayerRank(admin: SupabaseClient, player: Player, apiKey: 
     throw toSyncError(e);
   }
 
-  // wins/losses are this app's own tracked record (since TRACKING_START_DATE),
-  // not Riot's live ranked-season totals — every row here is already within
-  // that window since syncPlayerMatches refuses to insert anything older.
-  const { data: participantRows, error: participantsError } = await admin
-    .from("match_participants")
-    .select("win")
-    .eq("player_id", player.id);
-  if (participantsError) throw new Error(participantsError.message);
-  const wins = (participantRows ?? []).filter((r) => r.win).length;
-  const losses = (participantRows ?? []).length - wins;
+  // Note this is the count as of *before* this run inserts any new matches —
+  // the match walk happens in a later loop. runSync recounts afterwards for
+  // every player it found games for; see the comment there.
+  const { wins, losses } = await countWinLoss(admin, player.id);
 
   const snapshot = {
     tier: entry?.tier ?? null,
@@ -485,6 +655,35 @@ async function refreshPlayerRank(admin: SupabaseClient, player: Player, apiKey: 
     losses,
   };
 
+  // Compared before the update below overwrites the old values.
+  //
+  // Tier/division only, not LP: a promotion is news, and "gained 14 LP" three
+  // times a day is the kind of notification that gets a webhook muted. Both
+  // sides must be ranked for this to mean anything — placements finishing
+  // (null -> Silver IV) isn't a promotion, and a season reset isn't a demotion.
+  let rankChange: RankChange | null = null;
+  const rankMoved = player.tier !== snapshot.tier || player.division !== snapshot.division;
+  if (rankMoved && player.tier && snapshot.tier) {
+    const before = ladderPoints({
+      tier: player.tier,
+      division: player.division,
+      league_points: 0,
+    });
+    const after = ladderPoints({
+      tier: snapshot.tier,
+      division: snapshot.division,
+      league_points: 0,
+    });
+    if (before !== null && after !== null && before !== after) {
+      rankChange = {
+        displayName: player.display_name,
+        from: formatRank(player.tier, player.division),
+        to: formatRank(snapshot.tier, snapshot.division),
+        promoted: after > before,
+      };
+    }
+  }
+
   const { error } = await admin
     .from("players")
     .update({ ...snapshot, rank_updated_at: new Date().toISOString() })
@@ -492,6 +691,8 @@ async function refreshPlayerRank(admin: SupabaseClient, player: Player, apiKey: 
   if (error) throw new Error(error.message);
 
   await recordRankHistory(admin, player.id, snapshot);
+
+  return rankChange;
 }
 
 type RankSnapshotRow = {

@@ -5,27 +5,44 @@ import { DEFAULT_LANE, mainLane } from "@/lib/lolalytics";
 import { Navbar } from "@/components/navbar";
 import { KeyExpiredBanner } from "@/components/key-expired-banner";
 
+// How many of the signed-in player's rows the navbar's lane prefill looks at.
+//
+// This is a mode over team_position, and the mode of a 500-row sample is the
+// same lane as the mode of the full history in any realistic case — so unlike
+// the stats pages, truncation here is harmless and the read doesn't need
+// fetch-all's paging. What it does need is a bound, because this runs in the
+// layout: it was previously an unbounded select over the player's entire
+// history on every navigation to every page.
+const LANE_SAMPLE_SIZE = 500;
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
-  const [{ data: state }, session, version] = await Promise.all([
+
+  // Awaited first because the roles query below needs session.player. getSession
+  // is cache()d, so this costs nothing the rest of the render doesn't already pay.
+  const session = await getSession();
+
+  const [{ data: state }, version, { data: rolesPlayed }] = await Promise.all([
     supabase.from("sync_state").select("riot_key_valid, last_sync_status").eq("id", 1).single(),
-    getSession(),
     getLatestVersion(),
+    // Ordered by id rather than left unordered: a LIMIT without an ORDER BY
+    // gives an arbitrary subset that Postgres is free to return differently
+    // between calls, which would make the prefilled lane flicker between
+    // navigations. id is the primary key, so this is a stable sample.
+    session?.player
+      ? supabase
+          .from("match_participants")
+          .select("team_position")
+          .eq("player_id", session.player.id)
+          .order("id", { ascending: true })
+          .limit(LANE_SAMPLE_SIZE)
+          .returns<{ team_position: string | null }[]>()
+      : Promise.resolve({ data: null }),
   ]);
+
   // Both DDragon fetches are revalidated daily, so this is a cache read on
   // every render but the first of the day.
   const champions = await getChampionList(version);
-
-  // One column over the signed-in player's own rows, to prefill the matchup
-  // lookup with the role they actually queue for. Unordered on purpose: it's a
-  // count over their whole history, so it can't shuffle between navigations.
-  const { data: rolesPlayed } = session?.player
-    ? await supabase
-        .from("match_participants")
-        .select("team_position")
-        .eq("player_id", session.player.id)
-        .returns<{ team_position: string | null }[]>()
-    : { data: null };
 
   return (
     <div className="flex min-h-full flex-1 flex-col">

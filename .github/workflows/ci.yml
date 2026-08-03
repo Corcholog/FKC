@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same PR makes the first run's answer irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    env:
+      # next.config.ts derives the allowed Supabase image hostname from this, and
+      # a missing value silently drops the remotePattern — so the build needs it
+      # set to *something* parseable. It is never contacted at build time, so a
+      # placeholder is correct here; using a real project URL would put an
+      # environment detail in the repo for no benefit.
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-anon-key
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Separate from the build: `next build` does typecheck, but it runs after
+      # a lot of other work, so a type error surfaces minutes later than it needs
+      # to. This is also the only gate that catches type errors in files no route
+      # imports.
+      - run: npm run typecheck
+
+      # Deliberately `npm run lint` rather than a stricter --max-warnings=0.
+      # There are four pre-existing next/no-img-element warnings; failing on them
+      # would mean CI is red from its first run, and a permanently red CI is the
+      # same as no CI. Tighten this once those are cleared.
+      - run: npm run lint
+
+      - run: npm run build

@@ -12,12 +12,49 @@ type ChampionListResponse = {
   data: Record<string, { key: string; id: string; name: string }>;
 };
 
+// Both DDragon fetches are awaited in the (app) layout, so an unguarded failure
+// here doesn't break a card — it takes down every authenticated page at once.
+// That made this the widest-blast-radius call in the app and the only external
+// one without error handling (Riot, Gemini and Supabase all have it).
+//
+// Neither of these is load-bearing: champion *names* fall back to the stored
+// codename via championDisplayName, and championIconUrl already returns null on
+// a miss. So the right failure mode is to degrade — codenames and missing icons
+// — rather than to throw and let an error boundary blank the page.
+//
+// The version only reaches icon URLs, which are already 404-tolerant, so a
+// slightly stale pin costs nothing during an outage.
+const FALLBACK_VERSION = "16.15.1";
+
+/**
+ * A cached DDragon GET that degrades instead of throwing.
+ *
+ * The retry exists because of the cache, not the network: a non-ok response can
+ * be stored in the fetch cache for the full revalidate window, which would pin
+ * the app in degraded mode for 24 hours after a blip that lasted seconds. One
+ * uncached retry on the failure path only costs a request while DDragon is
+ * actually down, and makes recovery immediate instead of next-day.
+ */
+async function fetchDDragon<T>(url: string, what: string): Promise<T | null> {
+  for (const init of [{ next: { revalidate: 86400 } }, { cache: "no-store" as const }]) {
+    try {
+      const res = await fetch(url, init);
+      if (!res.ok) continue;
+      return (await res.json()) as T;
+    } catch {
+      // Network error or malformed JSON — same handling either way.
+    }
+  }
+  console.error(`DDragon: could not load ${what} from ${url}; falling back.`);
+  return null;
+}
+
 export async function getLatestVersion(): Promise<string> {
-  const res = await fetch("https://ddragon.leagueoflegends.com/api/versions.json", {
-    next: { revalidate: 86400 },
-  });
-  const versions = (await res.json()) as string[];
-  return versions[0];
+  const versions = await fetchDDragon<string[]>(
+    "https://ddragon.leagueoflegends.com/api/versions.json",
+    "the patch list",
+  );
+  return versions?.[0] ?? FALLBACK_VERSION;
 }
 
 // DDragon's champion list isn't only Summoner's Rift champions: as of 16.15 it
@@ -47,14 +84,16 @@ export function realChampions(
 }
 
 export async function getChampionMap(version: string): Promise<Map<number, ChampionInfo>> {
-  const res = await fetch(
+  const body = await fetchDDragon<ChampionListResponse>(
     `https://ddragon.leagueoflegends.com/cdn/${version}/data/en_US/champion.json`,
-    { next: { revalidate: 86400 } },
+    "the champion list",
   );
-  const body = (await res.json()) as ChampionListResponse;
 
+  // An empty map is the degraded state, not a bug: every consumer already
+  // handles a miss. It does mean the champion pickers (tier list, matchup
+  // search) render empty while DDragon is down.
   const map = new Map<number, ChampionInfo>();
-  for (const champ of Object.values(body.data)) {
+  for (const champ of Object.values(body?.data ?? {})) {
     map.set(Number(champ.key), { ddragonId: champ.id, name: champ.name });
   }
   return map;

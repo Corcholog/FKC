@@ -112,7 +112,7 @@ There is deliberately no Settings toggle. The list changes about once a season, 
 | Trigger | Flags | Code |
 |---|---|---|
 | Sync found a new match | each tracked participant + team | `markSummariesStale`, `sync.ts:201` |
-| Note added/edited/deleted | that player + team, **+ force** | `markSummaryStale`, `match/[riotMatchId]/actions.ts` |
+| Note added/edited/deleted | that player + team, **+ force** | `markSummaryStale`, `notes/actions.ts` |
 | Player AI context edited | that player + team, **+ force** | `updatePlayerAiContext` |
 | Clan context edited | **every** player + team, **+ force** | `markEverythingStale` |
 

@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
+import { notesByParticipant } from "@/lib/match-notes";
 import { findLaneOpponent, sortByRole } from "@/lib/roles";
 import { MatchRow, type TeamComposChampion } from "@/components/match-row";
 import { MatchesFilter } from "@/components/matches-filter";
@@ -158,6 +160,14 @@ export default async function MatchesPage({
     });
   });
 
+  // Notes for exactly the rows about to render. Eager rather than fetched on
+  // expand, so a collapsed row can show its note count — otherwise annotated
+  // games are invisible until you open every one of them.
+  const [notesByParticipantId, session] = await Promise.all([
+    notesByParticipant(supabase, entries.map((e) => e.viewer.id)),
+    getSession(),
+  ]);
+
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <div className="flex items-center justify-between gap-4">
@@ -205,7 +215,14 @@ export default async function MatchesPage({
               }}
               version={version}
               championMap={championMap}
-              playerSlug={player?.slug as string}
+              notes={{
+                participantId: viewer.id,
+                playerId: viewer.player_id as string,
+                ownerName: player?.display_name ?? "This player",
+                items: notesByParticipantId.get(viewer.id) ?? [],
+                canAdd: session?.player?.id === viewer.player_id,
+                currentUserId: session?.user.id ?? null,
+              }}
               playerName={selectedPlayer ? undefined : player?.display_name}
             />
           ))

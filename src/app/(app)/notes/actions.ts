@@ -3,10 +3,18 @@
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSessionPlayer } from "@/lib/auth";
-import type { NoteFormState } from "./notes-form-state";
+import type { NoteFormState } from "./form-state";
 
 const NOT_YOUR_GAME = "You can only write notes on your own games.";
 const NOT_YOUR_NOTE = "You can only edit your own notes.";
+
+// Notes are written from the match rows themselves, which render on three
+// surfaces — a note write has to invalidate all of them, not one detail page.
+function revalidateNoteSurfaces() {
+  revalidatePath("/", "page");
+  revalidatePath("/matches", "page");
+  revalidatePath("/player/[slug]", "page");
+}
 
 // Notes feed the AI summaries — any add/edit/delete invalidates them. Only
 // flags; generation happens in the daily /api/summaries batch, since Gemini's
@@ -66,7 +74,7 @@ export async function addNote(
     if (error) return { error: error.message };
 
     await markSummaryStale(supabase, playerId);
-    revalidatePath("/player/[slug]/match/[riotMatchId]", "page");
+    revalidateNoteSurfaces();
     return { success: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong." };
@@ -99,7 +107,7 @@ export async function updateNote(
     if (!data || data.length === 0) return { error: NOT_YOUR_NOTE };
 
     await markSummaryStale(supabase, playerId);
-    revalidatePath("/player/[slug]/match/[riotMatchId]", "page");
+    revalidateNoteSurfaces();
     return { success: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong." };
@@ -118,5 +126,5 @@ export async function deleteNote(id: string, playerId: string): Promise<void> {
   if (!data || data.length === 0) throw new Error(NOT_YOUR_NOTE);
 
   await markSummaryStale(supabase, playerId);
-  revalidatePath("/player/[slug]/match/[riotMatchId]", "page");
+  revalidateNoteSurfaces();
 }

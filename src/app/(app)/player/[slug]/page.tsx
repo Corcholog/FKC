@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap, championDisplayName } from "@/lib/ddragon";
+import { notesByParticipant } from "@/lib/match-notes";
 import { formatWinLoss, formatWinRate, ladderPoints } from "@/lib/rank";
 import { aggregateByRole } from "@/lib/player-stats";
 import { topChampionsByPlayer } from "@/lib/champion-stats";
@@ -193,6 +195,16 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
     participantsByMatch.set(p.match_id, list);
   }
 
+  // Notes for exactly the recent-form rows about to render. Eager rather than
+  // fetched on expand, so a collapsed row can show its note count.
+  const recentFormParticipantIds = matchList
+    .map((m) => (participantsByMatch.get(m.id) ?? []).find((p) => p.player_id === id)?.id)
+    .filter((pid): pid is string => Boolean(pid));
+  const [notesByParticipantId, session] = await Promise.all([
+    notesByParticipant(supabase, recentFormParticipantIds),
+    getSession(),
+  ]);
+
   const totalGames = (player.wins ?? 0) + (player.losses ?? 0);
   const winRatePct = totalGames === 0 ? 0 : Math.round(((player.wins ?? 0) / totalGames) * 100);
 
@@ -378,7 +390,14 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
                 }}
                 version={version}
                 championMap={championMap}
-                playerSlug={player.slug}
+                notes={{
+                  participantId: viewer.id,
+                  playerId: id,
+                  ownerName: player.display_name,
+                  items: notesByParticipantId.get(viewer.id) ?? [],
+                  canAdd: session?.player?.id === id,
+                  currentUserId: session?.user.id ?? null,
+                }}
               />
             );
           })

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { Users, Swords, BarChart3, LineChart, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { formatRelativeTime, formatKdaRatio, isoDaysAgo } from "@/lib/format";
+import { notesByParticipant } from "@/lib/match-notes";
 import { findLaneOpponent, sortByRole } from "@/lib/roles";
 import { rankSortKey, formatWinRate } from "@/lib/rank";
 import {
@@ -428,6 +430,14 @@ export default async function DashboardPage() {
   });
   const recentActivity = activityEntries.slice(0, ACTIVITY_FEED_LIMIT);
 
+  // Notes for exactly the rows about to render — the sliced feed, not every
+  // entry the activity query produced. Eager rather than fetched on expand, so
+  // a collapsed row can show its note count.
+  const [notesByParticipantId, session] = await Promise.all([
+    notesByParticipant(supabase, recentActivity.map((e) => e.viewer.id)),
+    getSession(),
+  ]);
+
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <div>
@@ -528,7 +538,14 @@ export default async function DashboardPage() {
                   }}
                   version={version}
                   championMap={championMap}
-                  playerSlug={player?.slug as string}
+                  notes={{
+                    participantId: viewer.id,
+                    playerId: viewer.player_id as string,
+                    ownerName: player?.display_name ?? "This player",
+                    items: notesByParticipantId.get(viewer.id) ?? [],
+                    canAdd: session?.player?.id === viewer.player_id,
+                    currentUserId: session?.user.id ?? null,
+                  }}
                   playerName={player?.display_name}
                 />
               ))

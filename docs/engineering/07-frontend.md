@@ -14,13 +14,11 @@ src/app/
     ├── matches/page.tsx      /matches       History, ?player=slug filter, ?page=N
     ├── champions/page.tsx    /champions     Per-player tierlist, ?player=slug
     ├── insights/page.tsx     /insights      Cross-player analysis
-    ├── player/[slug]/
-    │   ├── page.tsx          /player/x      Detail: LP chart, top champions, roles,
-    │   │                                    matchups, heatmap, recent form
-    │   └── match/[riotMatchId]/
-    │       ├── page.tsx      10-player breakdown
-    │       ├── actions.ts    Note CRUD server actions
-    │       └── notes-form-state.ts
+    ├── player/[slug]/page.tsx  /player/x    Detail: LP chart, top champions, roles,
+    │                                        matchups, heatmap, recent form
+    ├── notes/                No page.tsx, so no route — just the note CRUD server
+    │   ├── actions.ts        actions and their form-state type, shared by every
+    │   └── form-state.ts     surface that renders a match row.
     ├── settings/             Roster CRUD, Riot key, AI context, logins
     └── account/page.tsx      Password change
 ```
@@ -210,7 +208,7 @@ resolved by the server; the champion map arrives as a `Map` prop from the parent
 ## 7. Loading states
 
 Every route with meaningful data has a `loading.tsx` — dashboard, matches, champions,
-insights, player, match detail, settings. They're **structural skeletons** that mirror the
+insights, player, settings. They're **structural skeletons** that mirror the
 real layout (`RosterRowSkeleton`, `MatchRowSkeleton`) rather than a spinner, so the page
 doesn't reflow when data arrives.
 

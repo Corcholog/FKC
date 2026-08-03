@@ -1,4 +1,3 @@
-import Link from "next/link";
 import Image from "next/image";
 import {
   formatDuration,
@@ -10,7 +9,11 @@ import {
   kdaRatioForGame,
 } from "@/lib/format";
 import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/ddragon";
+import { leagueOfGraphsMatchUrl } from "@/lib/match-links";
+import type { MatchNote } from "@/lib/match-notes";
 import { isSupport } from "@/lib/roles";
+import { MatchRowShell } from "@/components/match-row-shell";
+import { NotesSection } from "@/components/notes-section";
 
 export type TeamComposChampion = {
   championId: number;
@@ -38,6 +41,19 @@ type MatchRowData = {
   opponent: TeamComposChampion | null;
   allies: TeamComposChampion[];
   enemies: TeamComposChampion[];
+};
+
+/** Everything the row's notes panel needs — grouped so the row doesn't take
+ * six loose props for one feature. */
+export type MatchRowNotes = {
+  /** The match_participants row the notes hang off: this player, this game. */
+  participantId: string;
+  playerId: string;
+  /** Display name of the player whose game this is — the only one who can write. */
+  ownerName: string;
+  items: MatchNote[];
+  canAdd: boolean;
+  currentUserId: string | null;
 };
 
 function TeamComposRow({
@@ -75,13 +91,13 @@ export function MatchRow({
   match,
   version,
   championMap,
-  playerSlug,
+  notes,
   playerName,
 }: {
   match: MatchRowData;
   version: string;
   championMap: Map<number, ChampionInfo>;
-  playerSlug: string;
+  notes: MatchRowNotes;
   /** Shown above the champion name when this row appears outside a single
    * player's own page (e.g. a squad-wide feed) so it's clear whose game it is. */
   playerName?: string;
@@ -96,11 +112,20 @@ export function MatchRow({
   const supportRow = isSupport(match.teamPosition);
 
   return (
-    <Link
-      href={`/player/${playerSlug}/match/${match.riotMatchId}`}
-      className={`panel-hex @container flex items-center gap-3 border-l-4 p-3 ${
-        match.win ? "border-l-win" : "border-l-loss"
-      }`}
+    <MatchRowShell
+      win={match.win}
+      noteCount={notes.items.length}
+      panel={
+        <NotesSection
+          matchParticipantId={notes.participantId}
+          playerId={notes.playerId}
+          playerName={notes.ownerName}
+          notes={notes.items}
+          canAddNote={notes.canAdd}
+          currentUserId={notes.currentUserId}
+          matchInfoUrl={leagueOfGraphsMatchUrl(match.riotMatchId)}
+        />
+      }
     >
       <div className="flex min-w-0 flex-1 items-center gap-3">
         {iconUrl ? (
@@ -175,6 +200,6 @@ export function MatchRow({
         </p>
         <p className="text-xs text-grey-mid">{formatRelativeTime(match.gameCreation)}</p>
       </div>
-    </Link>
+    </MatchRowShell>
   );
 }

@@ -133,7 +133,7 @@ Every write path chains `.select("id")` and treats an empty result as a permissi
 failure:
 
 ```ts
-// src/app/(app)/player/[slug]/match/[riotMatchId]/actions.ts
+// src/app/(app)/notes/actions.ts
 const { data, error } = await supabase
   .from("match_notes").update({ note, updated_at: … }).eq("id", id)
   .select("id");

@@ -1,10 +1,13 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import { addNote, updateNote, deleteNote } from "@/app/(app)/player/[slug]/match/[riotMatchId]/actions";
-import { emptyNoteFormState, type NoteFormState } from "@/app/(app)/player/[slug]/match/[riotMatchId]/notes-form-state";
+import { ExternalLink } from "lucide-react";
+import { addNote, updateNote, deleteNote } from "@/app/(app)/notes/actions";
+import { emptyNoteFormState, type NoteFormState } from "@/app/(app)/notes/form-state";
 import { formatRelativeTime } from "@/lib/format";
-import { Button } from "@/components/ui/button";
+import type { MatchNote } from "@/lib/match-notes";
+import { cn } from "@/lib/utils";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -17,13 +20,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-type Note = {
-  id: string;
-  note: string;
-  author_user_id: string | null;
-  author_name: string | null;
-  created_at: string;
-};
+type Note = MatchNote;
 
 function NoteItem({
   note,
@@ -126,6 +123,7 @@ export function NotesSection({
   notes,
   canAddNote,
   currentUserId,
+  matchInfoUrl,
 }: {
   matchParticipantId: string;
   playerId: string;
@@ -134,6 +132,9 @@ export function NotesSection({
   notes: Note[];
   canAddNote: boolean;
   currentUserId: string | null;
+  /** External scoreboard for this game, or null when the match id has no
+   * recognisable platform prefix — see leagueOfGraphsMatchUrl. */
+  matchInfoUrl: string | null;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [state, formAction, pending] = useActionState(async (prevState: NoteFormState, formData: FormData) => {
@@ -144,7 +145,24 @@ export function NotesSection({
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Notes</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-xs font-medium tracking-wide text-grey-light uppercase">Notes</h3>
+        {matchInfoUrl && (
+          // A plain anchor wearing the button's classes rather than
+          // <Button render={<a/>}> — nothing here wants button semantics, and
+          // it keeps button-only props off the link. New tab, because opening
+          // the full scoreboard shouldn't cost you your place in the history.
+          <a
+            href={matchInfoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          >
+            Match info
+            <ExternalLink />
+          </a>
+        )}
+      </div>
 
       {notes.length > 0 ? (
         <ul className="flex flex-col gap-2">

@@ -128,7 +128,8 @@ src/
 │   │   ├── matches/            Full match history, filterable by player
 │   │   ├── champions/          Per-player champion tierlist
 │   │   ├── insights/           Cross-player: LP race, duos, tilt, heatmap
-│   │   ├── player/[slug]/      Player detail + match/[riotMatchId] detail & notes
+│   │   ├── player/[slug]/      Player detail: LP, champions, roles, recent form
+│   │   ├── notes/              Note CRUD server actions (no page.tsx, no route)
 │   │   ├── settings/           Roster CRUD, Riot key, AI context, logins
 │   │   └── account/            Password change for the signed-in player
 │   └── api/

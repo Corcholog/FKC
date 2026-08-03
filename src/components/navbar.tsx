@@ -9,6 +9,7 @@ import {
   Swords,
   Trophy,
   LineChart,
+  ListOrdered,
   Settings,
   Menu,
   Loader2,
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { href: "/team", label: "Team", icon: Users },
   { href: "/matches", label: "Matches", icon: Swords },
   { href: "/champions", label: "Champions", icon: Trophy },
+  { href: "/tierlists", label: "Tier Lists", icon: ListOrdered },
   { href: "/insights", label: "Insights", icon: LineChart },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

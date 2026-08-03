@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { PlayerCard } from "@/components/player-card";
 import { rankSortKey } from "@/lib/rank";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
@@ -17,15 +18,22 @@ export default async function TeamPage() {
 
   // One bulk query across every tracked player rather than one per card —
   // grouping into per-player top-5 champions happens in JS afterward.
-  const { data: statRows } = await supabase
-    .from("match_participants")
-    .select(
-      "player_id, champion_id, champion_name, win, total_cs, damage_dealt_to_champions, matches!inner(game_duration_seconds)",
-    )
-    .not("player_id", "is", null)
-    .returns<(Omit<ChampionStatInput, "game_duration_seconds"> & { matches: { game_duration_seconds: number } | null })[]>();
+  type TeamStatRow = Omit<ChampionStatInput, "game_duration_seconds"> & {
+    matches: { game_duration_seconds: number } | null;
+  };
 
-  const flatRows: ChampionStatInput[] = (statRows ?? []).map((r) => ({
+  const statRows = await fetchAllRows<TeamStatRow>((from, to) =>
+    supabase
+      .from("match_participants")
+      .select(
+        "player_id, champion_id, champion_name, win, total_cs, damage_dealt_to_champions, matches!inner(game_duration_seconds)",
+      )
+      .not("player_id", "is", null)
+      .range(from, to)
+      .returns<TeamStatRow[]>(),
+  );
+
+  const flatRows: ChampionStatInput[] = statRows.map((r) => ({
     ...r,
     game_duration_seconds: r.matches?.game_duration_seconds ?? 0,
   }));

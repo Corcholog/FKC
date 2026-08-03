@@ -6,7 +6,13 @@ everything is done.
 
 ## 1. No automated tests — the biggest gap
 
-There is no test suite. `npm run build` (types + lint) is the only gate.
+There is no test suite. CI (`.github/workflows/ci.yml`) runs `npm run typecheck`,
+`npm run lint` and `npm run build` on every push and PR, which gates types and lint but
+proves nothing about behaviour.
+
+CI lints with the project's own `npm run lint` rather than `--max-warnings=0`, because
+four pre-existing `next/no-img-element` warnings would make it red from its first run, and
+a permanently red CI is indistinguishable from no CI. Clear those, then tighten it.
 
 What makes this particularly worth fixing is that **the codebase is already shaped for
 it.** Every module in `src/lib/*-stats.ts`, plus `rank.ts`, `sessions.ts`, `streaks.ts`,
@@ -32,21 +38,39 @@ logic from the I/O. That extraction is worth doing anyway.
 
 ## 2. No Postgres-side aggregation
 
-Every stats page selects all relevant `match_participants` rows unbounded and folds them
-in JavaScript. Called out in the code itself:
-
-```ts
-// Same unbounded-select-then-aggregate-in-JS shape as the dashboard, /team and
-// /champions. Fine at this roster's volume; the first page that will need
-// Postgres-side aggregation is this one.
-```
-
-At five players and a few hundred games this is a few thousand rows and it's genuinely
-fine. It breaks down when either the roster or the history grows by an order of magnitude.
+Every stats page selects all relevant `match_participants` rows and folds them in
+JavaScript. At five players and a few hundred games that's a few thousand rows and it's
+genuinely fine. It breaks down when either the roster or the history grows by an order of
+magnitude.
 
 The migration path is clear: materialized views or RPC functions for the aggregates,
 keeping the same `XAgg` shapes so the rendering layer doesn't change. `/insights` is the
 page to convert first — it aggregates over the entire participant table.
+
+**Budget for `statement_timeout` when doing it.** The `authenticator` role this project
+runs under is configured with `statement_timeout=8s` and `lock_timeout=8s`:
+
+```sql
+select rolname, rolconfig from pg_roles where rolname = 'authenticator';
+-- {session_preload_libraries=..., statement_timeout=8s, lock_timeout=8s}
+```
+
+Paged reads are unaffected — each page is its own short query, so paging is *safer* here
+than one large select. But a single aggregate RPC or a `refresh materialized view` over the
+whole participant table is exactly the shape that hits an 8s ceiling, and it fails as a
+query error at request time rather than as slowness. Anything moved server-side wants
+either an index that keeps it well under, or a scheduled refresh running as a role without
+that cap.
+
+**What was fixed, and what wasn't.** This entry used to say "unbounded", and that was a
+correctness bug hiding behind a scaling note. PostgREST truncates every response at the
+project's "Max rows" setting (1000 by default) *silently* — so a big enough history didn't
+make these pages slow, it made them wrong, with no signal. Worse, `refreshPlayerRank`
+counted wins the same way and **persisted** the wrong total to `players.wins`/`losses`.
+
+Those reads now go through `lib/supabase/fetch-all.ts` (paging plus `.in()` chunking) and
+the counts are `head: true` count queries. See ADR-024. That makes the reads honest; it
+does **not** move the aggregation, so everything above still stands.
 
 ## 3. No generated database types
 
@@ -64,21 +88,33 @@ value-per-effort improvement available. It would also have caught the stale
 ## 4. No admin role
 
 `/settings` is open to every signed-in user. That means any player can add or delete roster
-members, rotate the Riot key, remove another player's login, and edit the clan AI context.
+members, rotate the Riot key, remove another player's login (including deleting their
+`auth.users` row), set another player's password, and edit the clan AI context. Several of
+those actions take a plain string argument, so they're invocable as bare server-action
+POSTs without going near the UI.
 
 This is deliberate for a five-person friend group and is flagged in the roadmap as "not
 done, deliberately". It's also the first thing that must change if the app is ever shared
 beyond people who already trust each other completely — probably as a `players.is_admin`
 column plus RLS on the mutating paths.
 
-## 5. Observability is one database row
+This used to be entangled with a second, worse problem: `sync_state` carried a `for all`
+policy for `authenticated`, so any signed-in user could read the plaintext Riot API key
+straight out of the browser console. That was credential exposure rather than an
+over-permissive admin UI, and migration 011 closed it (ADR-023). What's left here is the
+genuine admin-role gap and nothing else.
 
-No structured logging, no error tracking, no metrics, no alerting. If the cron fails
-silently, the only signal is `sync_state.last_error` and a banner nobody may look at.
+## 5. Observability is a database row plus a webhook
 
-A minimum viable improvement would be: keep a small `sync_runs` history table instead of
-overwriting one row, and have a failed run push a notification somewhere the group
-actually reads.
+No structured logging, no error tracking, no metrics.
+
+A failed sync and an expired Riot key now push to Discord (`src/lib/discord.ts`, ADR-025),
+which covers the case this entry was really about: a cron failing silently at 07:00 with
+nobody looking at `last_error`. Promotions/demotions and the daily recap go the same way.
+
+Still missing: structured logging, an error tracker, and a `sync_runs` history table
+instead of one overwritten row — there is still no way to answer "how long has this been
+failing?" or "when did this last succeed before today?".
 
 ## 6. Small known inconsistencies
 
@@ -105,6 +141,26 @@ matter if anything ever linked in from outside.
 
 **The clan crest is a placeholder.** `Crest()` in the navbar renders a styled `FC` div, and
 `public/` is empty.
+
+**Avatar upload isn't validated.** `settings/actions.ts` takes `file.type` from the client
+verbatim as the stored `contentType`, derives the file extension from the untrusted
+filename, and enforces no size cap or MIME allowlist — into a *public* Storage bucket. An
+`image/svg+xml` or `text/html` upload is stored XSS on the Supabase storage origin. Small
+fix, not yet done.
+
+**No security headers.** `next.config.ts` sets `images.remotePatterns` and nothing else —
+no CSP, `X-Frame-Options` or `Referrer-Policy`, and `poweredByHeader` is left on.
+
+**No `Suspense` or `next/dynamic` anywhere.** Every route uses `loading.tsx`, so the whole
+page is withheld until the slowest query resolves rather than streaming in parts. recharts
+and `@dnd-kit` are statically imported into client bundles.
+
+**The match-row assembly is copy-pasted three times.** The `toChampion` +
+`allies`/`enemies`/`opponent` + `participantsByMatch` block, and its byte-identical
+14-column select string, appear in `page.tsx`, `matches/page.tsx` and
+`player/[slug]/page.tsx`. One `lib/match-rows.ts` would remove ~120 duplicated lines.
+`ParticipantRow` is likewise redeclared verbatim in the same three files — which §3 above
+would also fix.
 
 ## 7. Deliberate non-features
 

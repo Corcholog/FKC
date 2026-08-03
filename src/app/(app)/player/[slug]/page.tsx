@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllByIds, fetchAllRows } from "@/lib/supabase/fetch-all";
 import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap, championDisplayName } from "@/lib/ddragon";
 import { notesByParticipant } from "@/lib/match-notes";
@@ -83,7 +84,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
   const [
     { data: matchListFull },
     { data: aiSummary },
-    { data: ownRows },
+    ownRows,
     { data: rankHistory },
     championMap,
   ] = await Promise.all([
@@ -105,14 +106,18 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
       .eq("player_id", id)
       .maybeSingle(),
     // This player's own row from every tracked match — role split, streaks and
-    // the time heatmap all read from it. Unbounded, like /team and /champions.
-    supabase
-      .from("match_participants")
-      .select(
-        "match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, matches!inner(game_creation, game_duration_seconds)",
-      )
-      .eq("player_id", id)
-      .returns<FullHistoryRow[]>(),
+    // the time heatmap all read from it. Paged, since "every tracked match" is
+    // exactly the kind of read PostgREST truncates at Max rows without saying so.
+    fetchAllRows<FullHistoryRow>((from, to) =>
+      supabase
+        .from("match_participants")
+        .select(
+          "match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, matches!inner(game_creation, game_duration_seconds)",
+        )
+        .eq("player_id", id)
+        .range(from, to)
+        .returns<FullHistoryRow[]>(),
+    ),
     supabase
       .from("player_rank_history")
       .select("tier, division, league_points, recorded_at")
@@ -124,7 +129,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
 
   const matchList = matchListFull ?? [];
 
-  const historyRows = (ownRows ?? []).map((r) => ({
+  const historyRows = ownRows.map((r) => ({
     ...r,
     game_duration_seconds: r.matches?.game_duration_seconds ?? 0,
     game_creation: r.matches?.game_creation ?? "",
@@ -155,19 +160,26 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
 
   // Matchups need the *enemy* rows too, so they can't come from the query above.
   // Second round trip, once the match ids are known.
+  //
+  // Chunked and paged (see lib/supabase/fetch-all.ts): this is ten rows per
+  // match over the player's entire history, so it's the query that crosses
+  // PostgREST's Max rows soonest — at ~100 games — and it's also the one that
+  // puts every match uuid into a query string.
   const historyMatchIds = [...new Set(historyRows.map((r) => r.match_id))];
-  const { data: allHistoryParticipants } =
-    historyMatchIds.length > 0
-      ? await supabase
-          .from("match_participants")
-          .select(
-            "match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists",
-          )
-          .in("match_id", historyMatchIds)
-          .returns<MatchupInput[]>()
-      : { data: [] as MatchupInput[] };
+  const allHistoryParticipants = await fetchAllByIds<MatchupInput>(
+    historyMatchIds,
+    (chunk, from, to) =>
+      supabase
+        .from("match_participants")
+        .select(
+          "match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists",
+        )
+        .in("match_id", chunk)
+        .range(from, to)
+        .returns<MatchupInput[]>(),
+  );
 
-  const matchups = matchupsForPlayer(allHistoryParticipants ?? [], id);
+  const matchups = matchupsForPlayer(allHistoryParticipants, id);
   const worstMatchup = nemesis(matchups);
   const nemesisName = worstMatchup
     ? championDisplayName(worstMatchup.championId, championMap, worstMatchup.championName)
@@ -177,19 +189,19 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
   // the filtered embed above only returns the one row matching player_id, not
   // all 10, so full team compositions need their own unfiltered query.
   const matchIds = matchList.map((m) => m.id);
-  const { data: allParticipants } =
-    matchIds.length > 0
-      ? await supabase
-          .from("match_participants")
-          .select(
-            "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs, vision_score",
-          )
-          .in("match_id", matchIds)
-          .returns<ParticipantRow[]>()
-      : { data: [] as ParticipantRow[] };
+  const allParticipants = await fetchAllByIds<ParticipantRow>(matchIds, (chunk, from, to) =>
+    supabase
+      .from("match_participants")
+      .select(
+        "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs, vision_score",
+      )
+      .in("match_id", chunk)
+      .range(from, to)
+      .returns<ParticipantRow[]>(),
+  );
 
   const participantsByMatch = new Map<string, ParticipantRow[]>();
-  for (const p of allParticipants ?? []) {
+  for (const p of allParticipants) {
     const list = participantsByMatch.get(p.match_id) ?? [];
     list.push(p);
     participantsByMatch.set(p.match_id, list);

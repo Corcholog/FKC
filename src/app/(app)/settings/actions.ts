@@ -2,7 +2,6 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireSession } from "@/lib/auth";
 import { getPuuidByRiotId, describeRiotError } from "@/lib/riot";
@@ -12,8 +11,12 @@ import { playerSlug } from "@/lib/slug";
 
 import type { PlayerFormState } from "./form-state";
 
-async function getRiotApiKey(supabase: SupabaseClient) {
-  const { data, error } = await supabase
+// Admin client, not the caller's session: since migration 011 the authenticated
+// role has no grant on sync_state.riot_api_key, so a session client reading this
+// gets a permission error rather than the key. The gate is requireSession() in
+// each caller — this function is only ever reached from an authed action.
+async function getRiotApiKey() {
+  const { data, error } = await createAdminClient()
     .from("sync_state")
     .select("riot_api_key")
     .eq("id", 1)
@@ -21,7 +24,7 @@ async function getRiotApiKey(supabase: SupabaseClient) {
 
   if (error || !data?.riot_api_key) {
     throw new Error(
-      "No Riot API key set yet — add one to sync_state.riot_api_key in the Supabase SQL editor first.",
+      "No Riot API key set yet — add one from the Riot API key form above first.",
     );
   }
   return data.riot_api_key as string;
@@ -69,7 +72,7 @@ export async function addPlayer(
       return { error: "Game name, tag line, and display name are required." };
     }
 
-    const apiKey = await getRiotApiKey(supabase);
+    const apiKey = await getRiotApiKey();
 
     let puuid: string;
     try {
@@ -136,7 +139,7 @@ export async function updatePlayer(
 
     let newPuuid: string | undefined;
     if (existing.riot_game_name !== gameName || existing.riot_tag_line !== tagLine) {
-      const apiKey = await getRiotApiKey(supabase);
+      const apiKey = await getRiotApiKey();
       try {
         newPuuid = await getPuuidByRiotId(gameName, tagLine, apiKey);
       } catch (e) {
@@ -222,13 +225,16 @@ export async function updateRiotKey(
   formData: FormData,
 ): Promise<PlayerFormState> {
   try {
-    const { supabase } = await requireSession();
+    // The session is the gate; the write itself goes through the admin client,
+    // because migration 011 left authenticated with no write grant on
+    // sync_state at all (it's the table holding the key in plaintext).
+    await requireSession();
 
     const key = (formData.get("riotApiKey") as string)?.trim();
     if (!key) return { error: "Riot API key is required." };
 
     // Optimistic reset — flips back to false on the next sync if it's still bad.
-    const { error } = await supabase
+    const { error } = await createAdminClient()
       .from("sync_state")
       .update({ riot_api_key: key, riot_key_valid: true, last_error: null })
       .eq("id", 1);

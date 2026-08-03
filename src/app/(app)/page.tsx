@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Users, Swords, BarChart3, LineChart, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { formatRelativeTime, formatKdaRatio, isoDaysAgo } from "@/lib/format";
@@ -104,7 +105,7 @@ export default async function DashboardPage() {
     { data: teamSummary },
     { data: weekRows },
     { data: matchListFull },
-    { data: awardRows },
+    awardRows,
     version,
   ] = await Promise.all([
       supabase
@@ -137,19 +138,25 @@ export default async function DashboardPage() {
         .limit(ACTIVITY_MATCH_LIMIT)
         .returns<MatchListRow[]>(),
       // Every tracked player's full history, for the award tiles and streaks
-      // below. Same unbounded-select shape as /team and /champions.
+      // below. Paged rather than a bare select: this is the whole roster's
+      // history in one read, so it's the largest query on the site and the one
+      // where a silent Max rows truncation would quietly rewrite who holds
+      // every award. Same treatment on /team, /champions and /insights.
       //
       // The columns after damage_dealt_to_champions arrive with migration 005
       // and are null on anything synced before it — see aggregatePlayerStats,
       // which counts them separately so a half-backfilled history isn't
       // averaged over zeroes.
-      supabase
-        .from("match_participants")
-        .select(
-          "player_id, team_position, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, vision_score, total_time_spent_dead, penta_kills, objectives_stolen, total_damage_taken, pings, first_blood_kill, matches!inner(game_duration_seconds, game_creation)",
-        )
-        .not("player_id", "is", null)
-        .returns<AwardStatRow[]>(),
+      fetchAllRows<AwardStatRow>((from, to) =>
+        supabase
+          .from("match_participants")
+          .select(
+            "player_id, team_position, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, vision_score, total_time_spent_dead, penta_kills, objectives_stolen, total_damage_taken, pings, first_blood_kill, matches!inner(game_duration_seconds, game_creation)",
+          )
+          .not("player_id", "is", null)
+          .range(from, to)
+          .returns<AwardStatRow[]>(),
+      ),
       getLatestVersion(),
     ]);
 
@@ -175,13 +182,13 @@ export default async function DashboardPage() {
     }
   }
 
-  const flatAwardRows = (awardRows ?? []).map((r) => ({
+  const flatAwardRows = awardRows.map((r) => ({
     ...r,
     game_duration_seconds: r.matches?.game_duration_seconds ?? 0,
   }));
   const awardStats = aggregatePlayerStats(flatAwardRows);
   const streaks = streaksByPlayer(
-    (awardRows ?? []).map((r) => ({
+    awardRows.map((r) => ({
       player_id: r.player_id,
       win: r.win,
       game_creation: r.matches?.game_creation ?? "",

@@ -409,3 +409,128 @@ The tone change that prompted this work — objective analysis instead of roasti
 smaller half of it. Splitting `VOICE_INSTRUCTION` into a shared *language* constant plus
 `RECAP_VOICE` / `ANALYST_VOICE` was enough for tone. The accuracy discipline is what
 actually made a richer prompt safe to send.
+
+---
+
+## ADR-023 — The Riot key stays in the database, but the browser loses its grant
+
+**Context.** ADR-002 put `riot_api_key` in `sync_state` so a daily key refresh is a form
+submit rather than a redeploy, and accepted that "the key is readable by any authenticated
+user" as the price. That sentence undersold it. `sync_state` carried
+`authenticated_full_access` — `for all` — and the browser client ships the publishable key
+by design, so any signed-in user could read the key from devtools with one line, and
+overwrite or delete the row while they were there. The shared read-only *viewer* account
+could do it too.
+
+The gaps doc filed this under "no admin role". It isn't the same thing: an over-broad admin
+UI lets a trusted person do something careless, whereas this handed out a live third-party
+credential to anyone who opened a console.
+
+**Decision.** Keep the key where it is — the operability argument still holds and the daily
+refresh is real — and take the browser off the table instead. Migration 011 drops the
+blanket policy for a select-only one, revokes all table privileges from `authenticated`,
+and re-grants SELECT on every column *except* `riot_api_key`. Reads and writes of the key
+now go through the service-role client, gated by `requireSession()` in the three actions
+that need it.
+
+Column grants rather than a view, because that's the idiom migration 002 already
+established for `players.user_id` / `display_name`.
+
+**Consequence.** `select("*")` on `sync_state` is now a permission error rather than a
+leak — a tripwire, and the reason the three read sites must keep their explicit column
+lists. `id` has to be granted despite never being rendered, since every read filters on it
+and Postgres requires SELECT to filter.
+
+What this does **not** fix: `/settings` is still open to every signed-in user, so anyone
+can still rotate the key, delete a player, or reset another player's password through a
+server action. That's the admin-role gap, it is still deliberate for a five-person group,
+and it is now the *only* thing standing there — which is the point of separating the two.
+
+---
+
+## ADR-024 — Aggregate reads are paged, but aggregation stays in JavaScript
+
+**Context.** Every stats page selects all relevant `match_participants` rows and folds them
+in JS. The known-gaps doc framed that as a scaling problem for later. The nearer problem
+was correctness: PostgREST caps every response at the project's "Max rows" setting (1000 by
+default) and **truncates silently** — no error, no flag, no short-read signal.
+
+The worst instance wasn't on a page at all. `refreshPlayerRank` counted a player's wins by
+selecting every one of their rows and filtering in JS, then wrote the result to
+`players.wins`/`losses`. Past the cap that persists a wrong record which every page then
+reads back as fact.
+
+**Decision.** Two changes, neither of which moves aggregation into Postgres.
+
+1. Counts that were computed by fetching rows are now `count: "exact", head: true` queries.
+   No row limit to hit, and no data moved.
+2. Aggregate reads go through `lib/supabase/fetch-all.ts`, which pages with `.range()` and
+   chunks over-long `.in()` id lists.
+
+`fetchAllRows` strides by the number of rows actually returned and stops only on an empty
+page. The obvious `page.length < PAGE_SIZE` termination check is wrong here: if Max rows is
+set *below* PAGE_SIZE, every full page looks short, and the loop would stop after one — the
+exact bug it was written to fix, reintroduced by the termination condition.
+
+**Consequence.** Correct totals regardless of the project's Max rows setting, at the cost
+of one extra empty round trip per aggregate read. Postgres-side aggregation is still the
+right end state and is still unbuilt (gaps §2) — this makes the current reads honest, it
+does not make them cheap. The distinction matters: those were being conflated, and only one
+of them was urgent.
+
+**A second bug found while verifying the first.** Checking `players.wins/losses` against a
+live count turned up three of nine players off by exactly one game — at 93 total rows,
+nowhere near any truncation cap. The cause was loop order in `runSync`: `refreshPlayerRank`
+counts W/L and runs in the *first* loop, while new matches are inserted in the *second*. So
+the totals were always as of before that same run's inserts, and the next run repeated it
+for whatever was new by then. Not transient staleness — a player who games daily sat
+permanently one sync behind in the dashboard's team winrate, the squad list and `/team`.
+
+`runSync` now recounts W/L after the match loop for every player it found games for.
+Recounting rather than reordering, because ranks-first is deliberate and unrelated (the LP
+series is what can't be recovered on a blown budget), and these are Postgres counts that
+cost no Riot calls.
+
+Worth noting `summary.ts` had already noticed the *symptom* — it deliberately omits
+`players.wins/losses` from the prompt because it "can disagree with a count taken from the
+match rows right now" — and attributed it to normal between-sync staleness. That's real and
+still true; it just wasn't the whole story, and the workaround meant nobody chased the
+disagreement to its cause.
+
+One deliberate exception. The navbar's lane prefill in `(app)/layout.tsx` reads a bounded
+500-row sample rather than paging, because it's a mode over `team_position` and the mode of
+a sample is the same lane as the mode of the history. It gained an `order("id")` at the
+same time — a LIMIT without an ORDER BY is an arbitrary subset that Postgres may return
+differently between calls, which would make the prefilled lane flicker between navigations.
+
+---
+
+## ADR-025 — Notifications push to Discord; the database stays the record
+
+**Context.** Observability was one row. `sync_state.last_error` and a banner are both
+*pull* signals: they require someone to go and look on a morning when nothing appears
+wrong. A cron failing at 07:00 could go unnoticed for days, and an expired Riot key — a
+roughly daily event — only surfaced once somebody opened the site.
+
+**Decision.** A Discord webhook (`src/lib/discord.ts`) for state changes: sync failures,
+Riot-key expiry, promotions and demotions, and the daily recap.
+
+Three constraints, all load-bearing:
+
+- **It cannot fail a job.** Every export swallows its own errors and carries a 5s timeout.
+  A notification channel must not become a dependency of the thing it reports on.
+- **It is optional.** No `DISCORD_WEBHOOK_URL` and every call no-ops.
+- **It fires on state changes, not activity.** No LP deltas, no per-match messages. A
+  webhook that fires forty times a day gets muted, and a muted webhook is worse than none,
+  because it still looks like coverage.
+
+Rank changes are *collected* during the sync into `SyncSummary.rankChanges` and sent by
+`/api/sync` after the run's status is written, rather than posted from inside
+`refreshPlayerRank`. That keeps a second failure mode and a second timeout out of the
+middle of a time-budgeted loop, and keeps the database the authoritative record of what
+happened.
+
+**Consequence.** The gaps doc's §5 ("observability is one database row") is now half
+closed: failures are pushed somewhere people actually read. Still missing, and still worth
+having: structured logging, an error tracker, and a `sync_runs` history table instead of
+one overwritten row.

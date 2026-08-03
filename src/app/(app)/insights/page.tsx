@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { ladderPoints, rankSortKey, formatWinRate } from "@/lib/rank";
 import { aggregateDuoStats, duoSynergy, duoWinRate, MIN_DUO_GAMES } from "@/lib/duo-stats";
 import { streaksByPlayer, NOTABLE_STREAK } from "@/lib/streaks";
@@ -85,7 +86,7 @@ function SectionCard({
 export default async function InsightsPage() {
   const supabase = await createClient();
 
-  const [{ data: players }, { data: rankHistory }, { data: participantRows }] = await Promise.all([
+  const [{ data: players }, { data: rankHistory }, participantRows] = await Promise.all([
     supabase
       .from("players")
       .select("id, slug, display_name, avatar_url, tier, division, league_points, wins, losses")
@@ -95,18 +96,25 @@ export default async function InsightsPage() {
       .select("player_id, tier, division, league_points, recorded_at")
       .order("recorded_at", { ascending: true })
       .returns<RankHistoryRow[]>(),
-    supabase
-      .from("match_participants")
-      .select("match_id, player_id, team_id, win, matches!inner(game_creation, game_duration_seconds)")
-      .not("player_id", "is", null)
-      .returns<InsightParticipantRow[]>(),
+    // The whole participant table for tracked players — duos, civil wars, the
+    // tilt curve and the heatmap all fold over it. Paged, because a silent Max
+    // rows truncation here wouldn't look like an error, it would look like a
+    // duo that never played together. See lib/supabase/fetch-all.ts.
+    fetchAllRows<InsightParticipantRow>((from, to) =>
+      supabase
+        .from("match_participants")
+        .select("match_id, player_id, team_id, win, matches!inner(game_creation, game_duration_seconds)")
+        .not("player_id", "is", null)
+        .range(from, to)
+        .returns<InsightParticipantRow[]>(),
+    ),
   ]);
 
   const roster = players ?? [];
   const rosterByRank = [...roster].sort((a, b) => rankSortKey(a) - rankSortKey(b));
   const playersById = new Map(roster.map((p) => [p.id, p]));
 
-  const rows = (participantRows ?? []).map((r) => ({
+  const rows = participantRows.map((r) => ({
     match_id: r.match_id,
     player_id: r.player_id,
     team_id: r.team_id,

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { allChampionsByPlayer, type ChampionStatInput } from "@/lib/champion-stats";
 import { ChampionsFilter } from "@/components/champions-filter";
@@ -42,15 +43,22 @@ export default async function ChampionsPage({
   const selectedPlayer = players.find((p) => p.slug === playerParam) ?? players[0];
   if (playerParam && !players.some((p) => p.slug === playerParam)) notFound();
 
-  const { data: statRows } = await supabase
-    .from("match_participants")
-    .select(
-      "player_id, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, matches!inner(game_duration_seconds)",
-    )
-    .eq("player_id", selectedPlayer.id)
-    .returns<(Omit<ChampionStatInput, "game_duration_seconds"> & { matches: { game_duration_seconds: number } | null })[]>();
+  type ChampionStatRow = Omit<ChampionStatInput, "game_duration_seconds"> & {
+    matches: { game_duration_seconds: number } | null;
+  };
 
-  const flatRows: ChampionStatInput[] = (statRows ?? []).map((r) => ({
+  const statRows = await fetchAllRows<ChampionStatRow>((from, to) =>
+    supabase
+      .from("match_participants")
+      .select(
+        "player_id, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, matches!inner(game_duration_seconds)",
+      )
+      .eq("player_id", selectedPlayer.id)
+      .range(from, to)
+      .returns<ChampionStatRow[]>(),
+  );
+
+  const flatRows: ChampionStatInput[] = statRows.map((r) => ({
     ...r,
     game_duration_seconds: r.matches?.game_duration_seconds ?? 0,
   }));

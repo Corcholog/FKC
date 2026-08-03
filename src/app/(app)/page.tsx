@@ -144,7 +144,7 @@ export default async function DashboardPage() {
       supabase
         .from("match_participants")
         .select(
-          "player_id, team_position, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, vision_score, total_time_spent_dead, penta_kills, objectives_stolen, total_damage_taken, pings, matches!inner(game_duration_seconds, game_creation)",
+          "player_id, team_position, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, vision_score, total_time_spent_dead, penta_kills, objectives_stolen, total_damage_taken, pings, first_blood_kill, matches!inner(game_duration_seconds, game_creation)",
         )
         .not("player_id", "is", null)
         .returns<AwardStatRow[]>(),
@@ -299,6 +299,15 @@ export default async function DashboardPage() {
       format: (v) => String(v),
       sub: detailSub,
       metric: "Pentakills, all-time total. Most first.",
+      detail: true,
+    },
+    {
+      label: "Most first bloods",
+      tone: "good",
+      ranking: award((a) => a.firstBloods, "max", detailGames),
+      format: (v) => String(v),
+      sub: detailSub,
+      metric: "First blood kills, all-time total. Most first.",
       detail: true,
     },
     {
@@ -605,7 +614,7 @@ export default async function DashboardPage() {
                           title={streakLabel}
                           className={`shrink-0 text-xs ${onFire ? "text-win" : "text-loss"}`}
                         >
-                          {onFire ? "🔥" : "💀"}
+                          {onFire ? "🔥" : "😈"}
                         </span>
                       )}
                       <RankBadge tier={p.tier} division={p.division} size="sm" />

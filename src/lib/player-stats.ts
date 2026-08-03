@@ -21,6 +21,7 @@ export type PlayerStatInput = {
   objectives_stolen?: number | null;
   total_damage_taken?: number | null;
   pings?: Record<string, number> | null;
+  first_blood_kill?: boolean | null;
 };
 
 export type PlayerAgg = {
@@ -52,6 +53,7 @@ export type PlayerAgg = {
   totalDamageTaken: number;
   missingPings: number;
   totalPings: number;
+  firstBloods: number;
 };
 
 function emptyAgg(): PlayerAgg {
@@ -75,6 +77,7 @@ function emptyAgg(): PlayerAgg {
     totalDamageTaken: 0,
     missingPings: 0,
     totalPings: 0,
+    firstBloods: 0,
   };
 }
 
@@ -105,6 +108,7 @@ function accumulate(agg: PlayerAgg, row: PlayerStatInput) {
     agg.pentaKills += row.penta_kills ?? 0;
     agg.objectivesStolen += row.objectives_stolen ?? 0;
     agg.totalDamageTaken += row.total_damage_taken ?? 0;
+    if (row.first_blood_kill) agg.firstBloods += 1;
 
     if (row.pings) {
       agg.missingPings += row.pings.enemyMissingPings ?? 0;

@@ -153,8 +153,42 @@ export function describeGeminiError(e: unknown): string {
   }
 }
 
-export async function generateText(prompt: string, apiKey: string): Promise<string> {
+// generationConfig used to be omitted entirely, which meant tone and length
+// were steered only by prose inside the prompt. The player summary wants a
+// lower temperature than the clan recap — it's asking for a reading of numbers,
+// and the creativity that makes the recap fun is what invents a winrate — so
+// the two callers now differ here rather than fighting it in wording.
+//
+// Field names are camelCase on the models/*:generateContent endpoint this
+// client uses. Google's newer docs show a different /v1beta/interactions shape
+// with snake_case; that is a different endpoint, not a rename, and switching is
+// deliberately out of scope. If a config field is ever wrong the API answers
+// 400 — which describeGeminiError reports as "the clan context grew too large",
+// so check the request body before believing that message.
+export type GenerationOptions = {
+  temperature?: number;
+  maxOutputTokens?: number;
+};
+
+export async function generateText(
+  prompt: string,
+  apiKey: string,
+  options: GenerationOptions = {},
+): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
+
+  const generationConfig: Record<string, number> = {};
+  if (typeof options.temperature === "number") generationConfig.temperature = options.temperature;
+  if (typeof options.maxOutputTokens === "number") {
+    generationConfig.maxOutputTokens = options.maxOutputTokens;
+  }
+
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: prompt }] }],
+    // Omitted rather than sent empty, so a caller that passes nothing gets
+    // byte-for-byte the request this client sent before generationConfig existed.
+    ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
+  });
 
   for (let attempt = 0; ; attempt += 1) {
     await geminiLimiter.acquire();
@@ -162,7 +196,7 @@ export async function generateText(prompt: string, apiKey: string): Promise<stri
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      body,
     });
 
     if (!res.ok) {

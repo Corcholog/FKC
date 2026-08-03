@@ -117,6 +117,17 @@ These are choices, not omissions:
 - **No public signup.** The app is private by construction.
 - **No re-fetching of stored matches during a normal sync.** Match data is immutable once a
   game ends; `refetchMatchDetails` is the explicit manual exception.
+- **A summary can stay stale indefinitely.** `/api/summaries` only rewrites one after
+  `MIN_NEW_GAMES` new games, so a player who plays three and stops keeps the old text and a
+  `stale` flag forever. That is the intended trade (ADR-021) — the alternative is spending a
+  metered daily request to rewrite a summary that would read almost identically — and the
+  player page says so rather than promising a refresh that isn't coming. Writing a note or
+  editing AI context sets `force_regenerate` and bypasses it, which covers the case where
+  someone actually wants an update now.
+- **The player summary can't cite anything outside its window or its splits.** By design:
+  it sees 30 games individually plus precomputed aggregates, and is told not to derive
+  totals by counting. A question like "how did they do on Ziggs eight months ago" has no
+  answer in the prompt, and the correct output is to say there isn't one.
 
 ## 8. Not yet built
 
@@ -136,7 +147,8 @@ In the order it would actually hurt:
    players it's hundreds of thousands of rows into memory on every page view.
 3. **The single-row sync lock.** Fine for one job; wrong the moment work is sharded across
    parallel invocations.
-4. **The Gemini per-day quota.** Fixed at roster + 1 per day, so 50 players means 51 calls
-   — likely past the free tier.
+4. **The Gemini per-day quota.** Capped at roster + 1 per day and usually well under it
+   since the `MIN_NEW_GAMES` floor skips anyone who barely played, but 50 active players
+   still means up to 51 calls — past the free tier on any busy day.
 5. **No admin role.** At any size beyond a friend group this becomes the first real
    security problem, not the last.

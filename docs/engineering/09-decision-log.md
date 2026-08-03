@@ -342,10 +342,70 @@ The through-line. Every constraint below produced a specific mechanism:
 | Riot key expires daily | Key in the database; validity flag; site-wide banner |
 | Vercel 60s functions | Deadline guard; partial runs as a first-class outcome; resumable cursor |
 | Vercel 1 cron/day | Sync and summaries as separate jobs, an hour apart |
-| Gemini requests/day | Batch generation; fixed daily cost; stale flags |
+| Gemini requests/day | Batch generation; stale flags; a new-games floor before rewriting |
 | Supabase 500 MB | `challenges` whitelisted rather than stored whole |
 | Supabase 7-day pause | The daily cron doubles as a keepalive |
 
 Worth saying plainly: a system with money behind it would make different choices for most
 of these. The engineering interest is in the constraint being *stated* and the mechanism
 being *traceable to it* — not in pretending the constraints don't exist.
+
+---
+
+## ADR-021 — Spend the AI quota on depth per summary, not on frequency
+
+**Context.** Gemini's free tier meters *requests per day*; prompt size is effectively free
+at any scale this app would send. Batching (ADR on §1 of [06](06-ai-layer.md)) had already
+moved generation off page views, but the cost stayed at roster-size + 1 requests on any day
+anyone played one ranked game. All of that budget went on frequency, which forced the
+player prompt to stay thin: fifteen games carrying only KDA and CS, and no way to see a
+pattern across them.
+
+**Decision.** Invert it. `MIN_NEW_GAMES = 5` — a summary is only rewritten once five games
+have been recorded since it was written — and the freed budget goes into a much richer
+prompt: splits computed over the whole history, plus the last 30 games in full detail with
+their notes attached.
+
+The argument in one line: **a summary five games out of date is still true; a thin one is
+vague every day.**
+
+**Consequence.** A quiet day costs zero requests instead of one per player. Two new
+mechanisms fall out of it:
+
+- `force_regenerate` (migration 008), because `stale` can't distinguish "five more games"
+  from "somebody wrote a note" — and a note *is* the input the summary most wants. Human
+  edits bypass the floor; the sync doesn't.
+- The threshold became user-visible. The card used to promise "refreshes on the next daily
+  run", which the floor made false, so it now shows the count against the threshold and
+  `MIN_NEW_GAMES` lives in `lib/summary.ts` where both the batch and the UI read it.
+
+The cost is latency-to-freshness: a player who plays three games and stops keeps a stale
+summary indefinitely. Recorded as intended in [10 §7](10-known-gaps.md).
+
+---
+
+## ADR-022 — The model narrates numbers; it does not compute them
+
+**Context.** The obvious way to make the player summary better is to send more games. At
+`gemini-3.6-flash` rates even a full history is a few cents a call, so cost doesn't forbid
+it. But a model asked to aggregate across hundreds of raw rows produces confident, wrong
+totals — "62% con Jinx" when it's 48% — and a wrong number in a summary is worse than a
+vague one, because it reads exactly as authoritative as a right one.
+
+**Decision.** Split the prompt. Everything about the long history is computed in TypeScript
+(`lib/player-signals.ts`, composed out of the existing `player-stats` / `champion-stats` /
+`matchups` / `sessions` / `streaks` modules) and handed over as finished numbers. Only a
+bounded window — 30 games — is sent raw, for the game-to-game texture that aggregates
+can't carry. The prompt states the division and forbids counting.
+
+**Consequence.** Every number in a generated summary is traceable to a field on
+`PlayerSignals` or a line in the window; anything else is a hallucination, which makes the
+output *checkable*. Two corollaries enforced in the prompt builder: a field that wasn't
+recorded is omitted rather than printed as `0` (nullable migration-005 columns), and the
+overall record is counted from the same rows as the splits rather than read off
+`players.wins/losses`, which is recounted at sync time and can disagree.
+
+The tone change that prompted this work — objective analysis instead of roasting — is the
+smaller half of it. Splitting `VOICE_INSTRUCTION` into a shared *language* constant plus
+`RECAP_VOICE` / `ANALYST_VOICE` was enough for tone. The accuracy discipline is what
+actually made a richer prompt safe to send.

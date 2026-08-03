@@ -346,11 +346,19 @@ export async function updatePlayerAiContext(
       .eq("id", playerId);
     if (error) return { error: error.message };
 
-    // This player's own summary and the team one both quote it.
+    // This player's own summary and the team one both quote it. Overrides the
+    // batch's new-games floor: someone editing this expects to see it reflected,
+    // not to wait until they've played five more games.
     await supabase
       .from("player_ai_summaries")
-      .upsert({ player_id: playerId, stale: true }, { onConflict: "player_id" });
-    await supabase.from("team_ai_summary").update({ stale: true }).eq("id", 1);
+      .upsert(
+        { player_id: playerId, stale: true, force_regenerate: true },
+        { onConflict: "player_id" },
+      );
+    await supabase
+      .from("team_ai_summary")
+      .update({ stale: true, force_regenerate: true })
+      .eq("id", 1);
 
     revalidatePath("/settings");
     return { success: true, message: "Saved. It'll be used on the next summary run." };
@@ -359,10 +367,21 @@ export async function updatePlayerAiContext(
   }
 }
 
+// The clan context reaches every prompt, so editing it invalidates everything —
+// and with force_regenerate, does so past the batch's new-games floor. This is
+// the one action that can make the next run cost a full roster of requests, so
+// it's also the one most likely to end partial. That's fine: the flags survive
+// and the next run picks up whoever it didn't reach, oldest first.
 async function markEverythingStale() {
   const admin = createAdminClient();
-  await admin.from("player_ai_summaries").update({ stale: true }).not("player_id", "is", null);
-  await admin.from("team_ai_summary").update({ stale: true }).eq("id", 1);
+  await admin
+    .from("player_ai_summaries")
+    .update({ stale: true, force_regenerate: true })
+    .not("player_id", "is", null);
+  await admin
+    .from("team_ai_summary")
+    .update({ stale: true, force_regenerate: true })
+    .eq("id", 1);
 }
 
 // Note: there is deliberately no "regenerate summaries" server action here.

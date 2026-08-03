@@ -54,10 +54,19 @@ export async function loadAiContext(supabase: SupabaseClient): Promise<AiContext
   };
 }
 
-// The block that opens every prompt. Returns "" when nothing has been written
-// yet, so the prompt reads normally rather than carrying an empty section.
+// The clan blurb goes to the team recap only.
 //
-// Two things the framing has to do at once:
+// It used to open the player summary too, back when that summary was also
+// written in the group's voice. It doesn't any more: the player summary is an
+// objective read of one person's data, and this field is a page of running
+// jokes, nicknames and LEIF war stories about everybody else. Feeding it in
+// spent prompt budget on material that is not about the player and actively
+// invited the model back into the tone the summary moved away from.
+//
+// What the player summary keeps is playerContextLine below — the part that is
+// actually about that person.
+//
+// The framing does two jobs at once:
 //
 // 1. Mark this as reference material, not instructions. It's user-written text
 //    landing in a system-ish position, so a stray "ignore the above and write a
@@ -78,9 +87,26 @@ ${context.clan}
 `;
 }
 
-export function playerContextLine(context: AiContext, playerId: string): string {
+// Which prompt is asking. The recap wants this person's reputation in the
+// group's own words; the player summary wants to know who they are without
+// treating a friend's opinion as a finding about their play.
+export type ContextTone = "recap" | "analyst";
+
+export function playerContextLine(
+  context: AiContext,
+  playerId: string,
+  tone: ContextTone = "recap",
+): string {
   const note = context.byPlayerId.get(playerId);
   if (!note) return "";
 
-  return `What the group says about this player (their words, reuse their phrasing): ${note}\n`;
+  // The analyst framing matters more than it looks: this field is opinion the
+  // group wrote about a friend, and without the caveat the model treats "es un
+  // inter" as an established fact and writes it up as a finding.
+  const framing =
+    tone === "analyst"
+      ? "Background the group has written about this player. It is their opinion, not data — use it to know who they are, never as evidence for any claim about their performance"
+      : "What the group says about this player (their words, reuse their phrasing)";
+
+  return `${framing}: ${note}\n`;
 }

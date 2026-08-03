@@ -198,13 +198,24 @@ export async function backfillPlayerHistory(
 // Flags whose summaries have something new to say. Nothing is generated here —
 // Gemini's free tier is metered per day, so all generation happens in one
 // scheduled batch (/api/summaries) that reads these flags.
+//
+// Summaries are opt-in (migration 009), and the filter belongs here rather than
+// only in the batch: upserting a row for an opted-out player would recreate the
+// row migration 009 just deleted, and their page would go from showing no card
+// to showing an empty one after the first sync.
 async function markSummariesStale(admin: SupabaseClient, playerIds: Set<string>) {
   if (playerIds.size === 0) return;
 
-  for (const playerId of playerIds) {
+  const { data: enabled } = await admin
+    .from("players")
+    .select("id")
+    .eq("ai_summary_enabled", true)
+    .in("id", [...playerIds]);
+
+  for (const row of enabled ?? []) {
     await admin
       .from("player_ai_summaries")
-      .upsert({ player_id: playerId, stale: true }, { onConflict: "player_id" });
+      .upsert({ player_id: row.id as string, stale: true }, { onConflict: "player_id" });
   }
 
   // Any new game changes the group picture too — duos, streaks, head-to-heads.

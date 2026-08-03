@@ -29,10 +29,20 @@ const MAX_REAL_CHAMPION_KEY = 10_000;
 
 /** Every real champion on the current patch, alphabetical by display name. */
 export async function getChampionList(version: string): Promise<ChampionInfo[]> {
-  const map = await getChampionMap(version);
+  return realChampions(await getChampionMap(version));
+}
+
+/**
+ * Same filtering and ordering as getChampionList, but keeps the numeric key —
+ * anything that has to line up champions with stored champion_id values (the
+ * tier list board) needs it.
+ */
+export function realChampions(
+  map: Map<number, ChampionInfo>,
+): Array<ChampionInfo & { championId: number }> {
   return [...map.entries()]
     .filter(([key]) => key < MAX_REAL_CHAMPION_KEY)
-    .map(([, info]) => info)
+    .map(([championId, info]) => ({ championId, ...info }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

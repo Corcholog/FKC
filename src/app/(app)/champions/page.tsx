@@ -32,7 +32,7 @@ export default async function ChampionsPage({
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
         <div>
           <h1 className="font-heading text-2xl font-semibold text-white">Champions</h1>
-          <p className="text-sm text-grey-light">Per-player champion tierlist.</p>
+          <p className="text-sm text-grey-light">Per-player champion stats.</p>
         </div>
         <p className="text-sm text-grey-mid">No players tracked yet.</p>
       </main>
@@ -69,7 +69,7 @@ export default async function ChampionsPage({
           </Avatar>
           <div>
             <h1 className="font-heading text-2xl font-semibold text-white">Champions</h1>
-            <p className="text-sm text-grey-light">{selectedPlayer.display_name}&apos;s champion tierlist.</p>
+            <p className="text-sm text-grey-light">{selectedPlayer.display_name}&apos;s champion stats.</p>
           </div>
         </div>
         <ChampionsFilter players={players} selectedId={selectedPlayer.slug} />

@@ -2,7 +2,7 @@
 // Kept out of lib/ddragon.ts because it's about a third-party site's URL shape,
 // not about Riot's asset CDN — the only thing the two share is the champion id.
 
-import { SUPPORT_POSITION } from "@/lib/roles";
+import { SUPPORT_POSITION, mainRole } from "@/lib/roles";
 
 // Lolalytics keys champions off DDragon's `id`, lowercased with everything
 // non-alphanumeric stripped: "Kaisa" → kaisa, "TwistedFate" → twistedfate,
@@ -46,27 +46,12 @@ export function laneForPosition(teamPosition: string | null): LolalyticsLane | n
 }
 
 /**
- * The lane a player queues for most, for prefilling the matchup lookup. Ties
- * break toward the earlier lane in LOLALYTICS_LANES so the default doesn't
- * flip between page loads.
+ * The lane a player queues for most, for prefilling the matchup lookup. Just
+ * mainRole translated into Lolalytics' spelling, so the lane prefilled here and
+ * the role the dashboard's awards are scoped to can't disagree.
  */
 export function mainLane(teamPositions: (string | null)[]): LolalyticsLane {
-  const games = new Map<LolalyticsLane, number>();
-  for (const position of teamPositions) {
-    const lane = laneForPosition(position);
-    if (lane) games.set(lane, (games.get(lane) ?? 0) + 1);
-  }
-
-  let best = DEFAULT_LANE;
-  let bestGames = 0;
-  for (const { value } of LOLALYTICS_LANES) {
-    const count = games.get(value) ?? 0;
-    if (count > bestGames) {
-      best = value;
-      bestGames = count;
-    }
-  }
-  return best;
+  return laneForPosition(mainRole(teamPositions)) ?? DEFAULT_LANE;
 }
 
 // `lane` and `vslane` are always the same value — a matchup is two champions in

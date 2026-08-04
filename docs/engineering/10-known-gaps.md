@@ -29,6 +29,7 @@ The highest-value tests, roughly in order:
 | `groupIntoSessions` | Gap measured from game *end*, not start |
 | `aggregateDuoStats` | Canonical pair ordering; five-stack → 10 pairs |
 | `aggregatePlayerStats` | The `detailGames` split and the two-clock per-minute rule |
+| `mainRole` / `aggregateMainRoleStats` | Mode over `team_position`, the `ROLE_ORDER` tiebreak, and the no-role-at-all fallback |
 | `nemesis` | Most-losses-first with winrate as tiebreak |
 | `toParticipantRow` | `undefined` → `null` normalisation for missing Riot fields |
 
@@ -185,12 +186,14 @@ These are choices, not omissions:
   totals by counting. A question like "how did they do on Ziggs eight months ago" has no
   answer in the prompt, and the correct output is to say there isn't one.
 
-## 8. Not yet built
+## 8. Cut, not pending
 
-**Phase 14 — private per-player AI chat.** The only roadmap item never started. All the
-identity groundwork exists (per-player `auth.users`, `players.user_id`, owner-scoped RLS
-patterns), so what's left is chat tables with RLS scoped to `auth.uid()`, plus the
-conversational UI. Everything else stays group-visible; only the chat is private.
+**Phase 14 — private per-player AI chat.** Dropped. It was the last unbuilt roadmap item,
+and the identity groundwork it needed shipped anyway in Phase 11 for note ownership, so
+nothing here is blocked or half-finished — there is simply no chat feature coming. The AI
+in this app stays one-way and group-visible: scheduled player summaries and a team recap
+that everyone reads. `match_notes` is therefore the only owner-scoped table the schema
+will need.
 
 ## 9. What would break first at 10× scale
 

@@ -23,6 +23,33 @@ export function isSupport(teamPosition: string | null): boolean {
   return teamPosition === SUPPORT_POSITION;
 }
 
+/**
+ * The role someone actually plays — the mode over their team_position values.
+ * Games Riot couldn't assign a role to don't vote, and null comes back when
+ * none of the rows carried a role at all.
+ *
+ * Ties break toward the earlier role in ROLE_ORDER, so a player split evenly
+ * between two lanes doesn't have their stats flip between renders.
+ */
+export function mainRole(teamPositions: (string | null)[]): string | null {
+  const games = new Map<string, number>();
+  for (const position of teamPositions) {
+    if (!position || !(position in ROLE_ORDER)) continue;
+    games.set(position, (games.get(position) ?? 0) + 1);
+  }
+
+  let best: string | null = null;
+  let bestGames = 0;
+  for (const role of Object.keys(ROLE_ORDER)) {
+    const count = games.get(role) ?? 0;
+    if (count > bestGames) {
+      best = role;
+      bestGames = count;
+    }
+  }
+  return best;
+}
+
 // Riot leaves teamPosition empty when it can't determine the role.
 export function formatRole(teamPosition: string | null): string {
   return ROLE_LABELS[teamPosition ?? ""] ?? "Unknown";

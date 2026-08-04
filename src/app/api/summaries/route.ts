@@ -4,7 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import { loadAiContext } from "@/lib/ai-context";
 import { generatePlayerSummary, generateTeamSummary, MIN_NEW_GAMES } from "@/lib/summary";
 import { describeGeminiError, geminiLimiter } from "@/lib/gemini";
-import { notifyDiscord } from "@/lib/discord";
 import { postDailyStandings } from "@/lib/standings";
 
 // Several Gemini calls in one invocation, paced by the shared limiter. Same
@@ -110,13 +109,6 @@ async function handle(request: NextRequest) {
       } else if (hasRoom()) {
         const team = await generateTeamSummary(admin, aiContext);
         result.team = !("notEnoughData" in team);
-
-        // Push the recap to Discord as well as the dashboard. It's written
-        // fresh at most once a day and it's the one piece of output the group
-        // would otherwise have to remember to go and look at.
-        if ("summaryText" in team) {
-          await notifyDiscord("📋 Daily recap", team.summaryText, "gold");
-        }
       } else {
         result.partial = true;
       }

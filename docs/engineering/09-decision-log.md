@@ -534,3 +534,47 @@ happened.
 closed: failures are pushed somewhere people actually read. Still missing, and still worth
 having: structured logging, an error tracker, and a `sync_runs` history table instead of
 one overwritten row.
+
+---
+
+## ADR-026 — Performance awards are scoped to the main role; counters are not
+
+**Context.** The Hall of fame / Hall of shame tiles ranked the roster on whatever games
+existed. A mid laner autofilled into support four times carried a support CS/min and a
+support vision score into a comparison against people who queue that role every game, so
+the tile answered "who got autofilled" rather than "who farms" or "who wards".
+
+**Decision.** Split the dashboard into two aggregates over the same rows.
+`aggregateMainRoleStats` counts only each player's modal `team_position` and backs every
+metric derived from kills, deaths, assists, CS, vision or damage — KDA, CS/min, winrate,
+damage/min, vision/min, deaths/game. `aggregatePlayerStats` stays unfiltered and backs the
+counters: pentakills, steals, first bloods, games, pings, time dead.
+
+The line is *skill claim vs. career counter*. A pentakill off-role is still a pentakill and
+scoping it would hide a real game; an off-role CS/min is a measurement of a different job.
+
+**Consequence.** Adjacent tiles now report different denominators, so the sub-text names
+the scope (`"12 main-role games"` vs `"40 games"`) rather than leaving it implied. Main
+role is a mode, not a declaration — nobody sets it in Settings, and it moves if someone's
+queue habits do. Streaks stay unfiltered on purpose: a loss streak is a loss streak
+whatever lane it happened in. `mainRole` also now backs `mainLane`, so the navbar's
+prefilled matchup lane and the role the awards measure can't drift apart.
+
+---
+
+## ADR-027 — Private per-player AI chat is cut, not deferred
+
+**Context.** Roadmap Phase 14 was a private chat with the AI agent, scoped per player. It
+was the reason the docs kept flagging the auth model as provisional: the feature needed
+real per-player identity, so `01_PRD.md`, `02_ARCHITECTURE.md`, `06_ROADMAP.md` and the
+gaps doc all carried a forward reference to it.
+
+**Decision.** Drop it. The AI in this app stays one-way and group-visible — scheduled
+player summaries and a team recap, written on a cron and read by everyone.
+
+**Consequence.** Nothing is stranded: the identity work shipped anyway in Phase 11 because
+note ownership needed it (ADR-012, ADR-013), so per-player logins and owner-scoped RLS are
+in production and load-bearing for `match_notes`. What changes is the docs — every
+"future, when the chat lands" pointer is now a statement that it isn't landing, so the
+next person reading them doesn't cost themselves a day designing chat tables. `match_notes`
+is the only owner-scoped table this schema will need.

@@ -17,7 +17,7 @@ streaks.ts         current / longest win & loss runs
 sessions.ts        queue sessions, the tilt curve
 time-stats.ts      hour × weekday heatmap, in Buenos Aires time
 rank.ts            tier/division/LP ↔ sortable & plottable numbers
-roles.ts           Riot's position strings → labels, order, lane opponent
+roles.ts           Riot's position strings → labels, order, main role, lane opponent
 ```
 
 ## 1. The aggregation conventions
@@ -38,6 +38,54 @@ Treating it as one death is the same convention op.gg and friends use, and the s
 is applied per-game in `format.ts:kdaRatioForGame` and per-champion in
 `champion-stats.ts:championKdaRatio` — three call sites, one convention.
 
+### Performance awards count the main role only; career counters count everything
+
+The dashboard builds **two** aggregates off the same rows, because the tiles are two
+different kinds of claim:
+
+```ts
+const mainRoleStats = aggregateMainRoleStats(flatAwardRows);   // performance
+const allStats      = aggregatePlayerStats(flatAwardRows);     // career counters
+```
+
+| Scope | Tiles | Why |
+|---|---|---|
+| **Main role only** | Best/Worst KDA, Best/Worst CS/min, Highest winrate, Best damage/min, Ward god, Most deaths/game | Anything derived from kills, deaths, assists, CS, vision or damage. These are *skill* claims, and off-role games answer a different question. |
+| **Every tracked game** | Objective thief, Pentakills, Most first bloods, Most games, Time spent dead, % of game dead, Most ? pings | Counters and volume. A pentakill off-role is still a pentakill — scoping these would just hide games that happened. |
+
+The filter itself:
+
+```ts
+// aggregateMainRoleStats, src/lib/player-stats.ts
+const roles = mainRoleByPlayer(rows);
+return aggregatePlayerStats(
+  rows.filter((row) => {
+    const role = row.player_id ? roles.get(row.player_id) : null;
+    return !role || row.team_position === role;
+  }),
+);
+```
+
+Main role is the **mode** over `team_position` (`roles.ts:mainRole`), ties breaking toward
+the earlier role in `ROLE_ORDER` so the filter doesn't flip between renders. Games Riot
+couldn't assign a role to don't vote, and a player whose rows carry *no* determinable role
+keeps their whole history rather than vanishing from half the awards.
+
+The reason for the split: a mid laner autofilled into support four times carries a vision
+score and a CS/min from a role they don't play, and those numbers then compete against
+people who queue that role every game — so the tile ranks who got autofilled rather than
+who farms or wards well.
+
+The cost is that the two kinds of tile show different game counts side by side, which is
+why the sub-text says which it is: `"12 main-role games"` vs `"40 games"`, with the
+standings dialog restating the scope in full.
+
+Streaks are deliberately **not** scoped this way — a loss streak is a loss streak whatever
+lane it happened in — so `streaksByPlayer` still reads the unfiltered rows.
+
+`mainRole` is also what `lolalytics.ts:mainLane` prefills the navbar matchup lookup with,
+so the lane the app assumes and the role the awards measure can't disagree.
+
 ### Support games are excluded from CS, on *both* sides of the ratio
 
 ```ts
@@ -53,7 +101,12 @@ anyone who fills support *some* of the time — punishing flexibility rather tha
 farming. Note the separate duration accumulator: excluding the numerator but not the
 denominator would be worse than not excluding at all.
 
-The award tile says `"12 games · excl. support"` so the exclusion is visible, not hidden.
+With the main-role scoping above already in front of them, the two CS tiles use this rule
+for one remaining job — keeping support *mains* out of the CS awards entirely (`csGames`
+hits 0, and `rankPlayers` drops them) rather than letting them place last on a stat their
+role doesn't have. The standings dialog says so: *"Support mains sit this one out."* The
+rule still does its original work on the player page, where `aggregateByRole` and
+`computeTrend` read unfiltered rows.
 
 ### Detail metrics average over the games that reported them
 

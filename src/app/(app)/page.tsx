@@ -9,6 +9,7 @@ import { notesByParticipant } from "@/lib/match-notes";
 import { findLaneOpponent, sortByRole } from "@/lib/roles";
 import { rankSortKey, formatWinRate } from "@/lib/rank";
 import {
+  aggregateMainRoleStats,
   aggregatePlayerStats,
   csPerMinute,
   damagePerMinute,
@@ -143,10 +144,13 @@ export default async function DashboardPage() {
       // where a silent Max rows truncation would quietly rewrite who holds
       // every award. Same treatment on /team, /champions and /insights.
       //
+      // team_position comes back for two reasons: the performance awards are
+      // scoped to each player's main role, and CS/min drops support games — see
+      // aggregateMainRoleStats.
+      //
       // The columns after damage_dealt_to_champions arrive with migration 005
-      // and are null on anything synced before it — see aggregatePlayerStats,
-      // which counts them separately so a half-backfilled history isn't
-      // averaged over zeroes.
+      // and are null on anything synced before it — see accumulate, which counts
+      // them separately so a half-backfilled history isn't averaged over zeroes.
       fetchAllRows<AwardStatRow>((from, to) =>
         supabase
           .from("match_participants")
@@ -186,7 +190,19 @@ export default async function DashboardPage() {
     ...r,
     game_duration_seconds: r.matches?.game_duration_seconds ?? 0,
   }));
-  const awardStats = aggregatePlayerStats(flatAwardRows);
+  // Two aggregates, because the tiles below split into two kinds of award.
+  //
+  // Performance metrics — anything derived from kills, deaths, assists, CS,
+  // vision or damage — read `mainRoleStats`, which counts only the role a player
+  // actually queues for. An autofilled support carries a CS/min and a vision
+  // score from a role they don't play, and folding those in means the tile ranks
+  // who got autofilled rather than who farms or wards well.
+  //
+  // Counting awards — pentakills, steals, first bloods, games, pings, time dead —
+  // read `allStats`. Those measure what happened over a career, and a pentakill
+  // off-role is still a pentakill; scoping them would just hide games.
+  const mainRoleStats = aggregateMainRoleStats(flatAwardRows);
+  const allStats = aggregatePlayerStats(flatAwardRows);
   const streaks = streaksByPlayer(
     awardRows.map((r) => ({
       player_id: r.player_id,
@@ -203,11 +219,26 @@ export default async function DashboardPage() {
   //
   // Returns the whole standings rather than just the winner: the tile shows
   // entry zero and hands the rest to the dialog behind it.
-  const award = (
+  const ranking = (
+    stats: Map<string, PlayerAgg>,
     score: (agg: PlayerAgg) => number,
     direction: "max" | "min",
     qualifier: (agg: PlayerAgg) => number = (agg) => agg.games,
-  ) => rankPlayers(roster, awardStats, (p) => p.id, score, qualifier, direction);
+  ) => rankPlayers(roster, stats, (p) => p.id, score, qualifier, direction);
+
+  /** A performance stat, over the player's main role only. */
+  const award = (
+    score: (agg: PlayerAgg) => number,
+    direction: "max" | "min",
+    qualifier?: (agg: PlayerAgg) => number,
+  ) => ranking(mainRoleStats, score, direction, qualifier);
+
+  /** A career counter, over every tracked game whatever role it was played in. */
+  const careerAward = (
+    score: (agg: PlayerAgg) => number,
+    direction: "max" | "min",
+    qualifier?: (agg: PlayerAgg) => number,
+  ) => ranking(allStats, score, direction, qualifier);
 
   const csGames = (agg: PlayerAgg) => agg.csGames;
   const detailGames = (agg: PlayerAgg) => agg.detailGames;
@@ -215,11 +246,14 @@ export default async function DashboardPage() {
   // Sub-text doubles as the honesty check on each tile: with no minimum-games
   // gate, a leader off two games should be visibly a leader off two games.
   const gamesSub = (games: number) => `${games} game${games === 1 ? "" : "s"}`;
-  const csSub = (games: number) => `${gamesSub(games)} · excl. support`;
+  // Says so on the tile, because the two kinds of award sit side by side and
+  // otherwise "Best KDA · 12 games" next to "Most games · 40" reads as a bug.
+  const mainRoleSub = (games: number) => `${games} main-role game${games === 1 ? "" : "s"}`;
   // Migration 005 columns only exist on games synced since it ran, so these
   // tiles say how many games they're actually built on rather than implying the
   // full history.
   const detailSub = (games: number) => `${gamesSub(games)} with full detail`;
+  const mainRoleDetailSub = (games: number) => `${mainRoleSub(games)} with full detail`;
 
   const oneDecimal = (v: number) => v.toFixed(1);
 
@@ -243,7 +277,7 @@ export default async function DashboardPage() {
   // Whether the roster has any migration-005 data at all. Until the settings
   // backfill has run, the tiles built on it would all be em dashes, so they're
   // dropped from their section rather than padding it out — see `visible` below.
-  const hasDetailedStats = [...awardStats.values()].some((agg) => agg.detailGames > 0);
+  const hasDetailedStats = [...allStats.values()].some((agg) => agg.detailGames > 0);
   const visible = (specs: AwardSpec[]) => specs.filter((spec) => hasDetailedStats || !spec.detail);
 
   const hallOfFame: AwardSpec[] = visible([
@@ -252,24 +286,25 @@ export default async function DashboardPage() {
       tone: "good",
       ranking: award(kdaRatio, "max"),
       format: formatKdaRatio,
-      sub: gamesSub,
-      metric: "(Kills + assists) ÷ deaths, over every tracked game. Highest first.",
+      sub: mainRoleSub,
+      metric: "(Kills + assists) ÷ deaths, over the player's main role only. Highest first.",
     },
     {
       label: "Best CS/min",
       tone: "good",
       ranking: award(csPerMinute, "max", csGames),
       format: oneDecimal,
-      sub: csSub,
-      metric: "Creep score per minute. Support games are excluded on both sides. Highest first.",
+      sub: mainRoleSub,
+      metric: "Creep score per minute in the player's main role. Support mains sit this one out. Highest first.",
     },
     {
       label: "Highest winrate",
       tone: "good",
       ranking: award(playerWinRate, "max"),
       format: (v) => `${v}%`,
-      sub: gamesSub,
-      metric: "Games won ÷ games played. No minimum — read the game count beside it. Highest first.",
+      sub: mainRoleSub,
+      metric:
+        "Main-role games won ÷ main-role games played. No minimum — read the game count beside it. Highest first.",
     },
     {
       label: "Best damage/min",
@@ -277,8 +312,8 @@ export default async function DashboardPage() {
       ranking: award(damagePerMinute, "max"),
       // Four-digit figure in a headline font — a tenth of a damage point is noise.
       format: (v) => Math.round(v).toLocaleString("en-US"),
-      sub: gamesSub,
-      metric: "Damage to champions per minute played. Highest first.",
+      sub: mainRoleSub,
+      metric: "Damage to champions per minute played, in the player's main role. Highest first.",
     },
     {
       label: "Ward god",
@@ -287,36 +322,36 @@ export default async function DashboardPage() {
       // Two decimals, not one: the whole roster lands between roughly 0.5 and
       // 3.0, so a single decimal would tie half of it together.
       format: (v) => v.toFixed(2),
-      sub: detailSub,
+      sub: mainRoleDetailSub,
       metric:
-        "Vision score per minute — wards placed, wards killed, time held. A rate, so a long game doesn't win it on its own. Highest first.",
+        "Vision score per minute in the player's main role — wards placed, wards killed, time held. A rate, so a long game doesn't win it on its own. Highest first.",
       detail: true,
     },
     {
       label: "Objective thief",
       tone: "good",
-      ranking: award((a) => a.objectivesStolen, "max", detailGames),
+      ranking: careerAward((a) => a.objectivesStolen, "max", detailGames),
       format: (v) => String(v),
       sub: detailSub,
-      metric: "Dragons, barons and heralds stolen, all-time total. Most first.",
+      metric: "Dragons, barons and heralds stolen, all-time total across every role. Most first.",
       detail: true,
     },
     {
       label: "Pentakills",
       tone: "good",
-      ranking: award((a) => a.pentaKills, "max", detailGames),
+      ranking: careerAward((a) => a.pentaKills, "max", detailGames),
       format: (v) => String(v),
       sub: detailSub,
-      metric: "Pentakills, all-time total. Most first.",
+      metric: "Pentakills, all-time total across every role. Most first.",
       detail: true,
     },
     {
       label: "Most first bloods",
       tone: "good",
-      ranking: award((a) => a.firstBloods, "max", detailGames),
+      ranking: careerAward((a) => a.firstBloods, "max", detailGames),
       format: (v) => String(v),
       sub: detailSub,
-      metric: "First blood kills, all-time total. Most first.",
+      metric: "First blood kills, all-time total across every role. Most first.",
       detail: true,
     },
     {
@@ -324,10 +359,10 @@ export default async function DashboardPage() {
       // reading as an achievement it isn't.
       label: "Most games",
       tone: "neutral",
-      ranking: award((a) => a.games, "max"),
+      ranking: careerAward((a) => a.games, "max"),
       format: (v) => String(v),
       sub: gamesSub,
-      metric: "Tracked games played. Most first.",
+      metric: "Tracked games played, every role included. Most first.",
     },
   ]);
 
@@ -337,32 +372,33 @@ export default async function DashboardPage() {
       tone: "bad",
       ranking: award(kdaRatio, "min"),
       format: formatKdaRatio,
-      sub: gamesSub,
-      metric: "(Kills + assists) ÷ deaths, over every tracked game. Lowest first.",
+      sub: mainRoleSub,
+      metric: "(Kills + assists) ÷ deaths, over the player's main role only. Lowest first.",
     },
     {
       label: "Worst CS/min",
       tone: "bad",
       ranking: award(csPerMinute, "min", csGames),
       format: oneDecimal,
-      sub: csSub,
-      metric: "Creep score per minute. Support games are excluded on both sides. Lowest first.",
+      sub: mainRoleSub,
+      metric: "Creep score per minute in the player's main role. Support mains sit this one out. Lowest first.",
     },
     {
       label: "Most deaths/game",
       tone: "bad",
       ranking: award(deathsPerGame, "max"),
       format: oneDecimal,
-      sub: gamesSub,
-      metric: "Deaths per game. Most first.",
+      sub: mainRoleSub,
+      metric: "Deaths per game in the player's main role. Most first.",
     },
     {
       label: "Time spent dead",
       tone: "bad",
-      ranking: award(minutesSpentDead, "max", detailGames),
+      ranking: careerAward(minutesSpentDead, "max", detailGames),
       format: (v) => `${Math.round(v)}m`,
       sub: detailSub,
-      metric: "Total minutes on the grey screen, all-time. Most first — playing more will win this.",
+      metric:
+        "Total minutes on the grey screen, all-time across every role. Most first — playing more will win this.",
       detail: true,
     },
     {
@@ -370,19 +406,20 @@ export default async function DashboardPage() {
       // otherwise win the raw total by default.
       label: "% of game dead",
       tone: "bad",
-      ranking: award(deadTimeShare, "max", detailGames),
+      ranking: careerAward(deadTimeShare, "max", detailGames),
       format: (v) => `${v.toFixed(1)}%`,
       sub: detailSub,
-      metric: "Share of total game time spent dead. The version of the tile beside it that game count can't win. Most first.",
+      metric:
+        "Share of total game time spent dead, every role included. The version of the tile beside it that game count can't win. Most first.",
       detail: true,
     },
     {
       label: "Most ? pings",
       tone: "neutral",
-      ranking: award(missingPingsPerGame, "max", detailGames),
+      ranking: careerAward(missingPingsPerGame, "max", detailGames),
       format: oneDecimal,
       sub: (games) => `per game · ${detailSub(games)}`,
-      metric: "Enemy-missing pings per game. Most first.",
+      metric: "Enemy-missing pings per game, every role included. Most first.",
       detail: true,
     },
   ]);

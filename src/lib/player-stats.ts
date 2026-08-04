@@ -1,4 +1,4 @@
-import { isSupport } from "@/lib/roles";
+import { isSupport, mainRole } from "@/lib/roles";
 
 export type PlayerStatInput = {
   player_id: string | null;
@@ -117,8 +117,9 @@ function accumulate(agg: PlayerAgg, row: PlayerStatInput) {
   }
 }
 
-// Rolls every tracked player's participant rows into one lifetime aggregate —
-// used for the dashboard's award tiles.
+// Rolls every tracked player's participant rows into one lifetime aggregate,
+// over whatever rows it's handed. The dashboard's award tiles go through
+// aggregateMainRoleStats below rather than calling this directly.
 export function aggregatePlayerStats(rows: PlayerStatInput[]): Map<string, PlayerAgg> {
   const byPlayer = new Map<string, PlayerAgg>();
 
@@ -130,6 +131,47 @@ export function aggregatePlayerStats(rows: PlayerStatInput[]): Map<string, Playe
   }
 
   return byPlayer;
+}
+
+/**
+ * Each player's main role, by game count — see mainRole in src/lib/roles.ts.
+ * Players whose rows carry no role at all (Riot leaves team_position empty on
+ * remakes and some autofills) map to null.
+ */
+export function mainRoleByPlayer(rows: PlayerStatInput[]): Map<string, string | null> {
+  const positionsByPlayer = new Map<string, (string | null)[]>();
+
+  for (const row of rows) {
+    if (!row.player_id) continue;
+    const positions = positionsByPlayer.get(row.player_id) ?? [];
+    positions.push(row.team_position);
+    positionsByPlayer.set(row.player_id, positions);
+  }
+
+  return new Map([...positionsByPlayer].map(([playerId, positions]) => [playerId, mainRole(positions)]));
+}
+
+/**
+ * Lifetime aggregate over each player's main role only — what the dashboard's
+ * award tiles rank on.
+ *
+ * Off-role games are noise for these awards: a mid laner filling support for
+ * three games takes a vision score and a CS/min from a role they don't play,
+ * and both numbers then compete against people who play that role every game.
+ * Dropping them means every tile compares like with like, at the cost of a
+ * lower game count on anyone who fills a lot — which the tile's sub-text shows.
+ *
+ * A player with no determinable role keeps their whole history rather than
+ * vanishing from every award.
+ */
+export function aggregateMainRoleStats(rows: PlayerStatInput[]): Map<string, PlayerAgg> {
+  const roles = mainRoleByPlayer(rows);
+  return aggregatePlayerStats(
+    rows.filter((row) => {
+      const role = row.player_id ? roles.get(row.player_id) : null;
+      return !role || row.team_position === role;
+    }),
+  );
 }
 
 // The same aggregate, split by the role played — keyed by Riot's raw

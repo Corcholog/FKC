@@ -22,4 +22,4 @@ Run the schema SQL against a fresh Supabase project's SQL Editor before first us
 
 ## Status
 
-MVP complete (Phases 0–9 of `docs/06_ROADMAP.md`), plus Phase 10 (per-player champion tierlist) and Phase 11 (per-player accounts + owned notes). Phase 12 (private per-player AI chat) is the only roadmap item not yet started. See commit history for progress.
+Every roadmap phase in `docs/06_ROADMAP.md` is shipped: the MVP (Phases 0–9), the per-player champion tierlist (10), per-player accounts with owned notes (11), insights (12), and the team recap with editable prompt context (13). Phase 14, private per-player AI chat, has been **cut** — the AI stays one-way and group-visible. See commit history for progress.

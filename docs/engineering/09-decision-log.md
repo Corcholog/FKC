@@ -674,3 +674,82 @@ so scouting costs no extra entry step — the price is that a typo splits one pe
 which is fixable by editing the series.
 
 The soloq side of the app was not touched by any of this, which was the point.
+
+## ADR-030 — Notes on a scrim game are an authored thread, not a text column
+
+**Context.** ADR-029's tables shipped `scrim_games.notes`, a single `text` column, and the
+entry form never grew a field for it — so a game's notes were rendered but unwritable. When
+the ask came in ("users should be able to write notes on every scrim match"), the cheap fix
+was to add the missing textarea and make it editable in place, the way `OpponentNotesForm`
+edits `scrim_opponents.notes`.
+
+That fix is wrong for this shape of data. A scouting note on an opponent is one team's
+shared summary and genuinely wants one field. A scrim game is reviewed by five people who
+all played it, on the same evening, after the same block. One column is last-write-wins:
+two of them typing means one set of observations disappears with nothing to indicate it ever
+existed. The app already had the right shape for this — `match_notes` is a thread of
+authored rows — and the group already knows that UI from soloq match rows.
+
+**Decision.** `scrim_game_notes`, mirroring `match_notes`. Migration 013 creates it, copies
+any existing `scrim_games.notes` across (attributed to the series' `created_by`, keeping the
+original `created_at`), and drops the column. In practice it copied nothing, since the column
+was never writable — it runs the copy first because "I'm sure it's empty" is not a reason to
+drop somebody's text.
+
+Two departures from `match_notes`, both because a scrim isn't one player's game:
+
+- **Anyone signed in may insert.** `notes_insert_own` gates on `owns_participant()`, because
+  a soloq game belongs to exactly one tracked player. All five played the scrim; there is
+  nothing to gate on.
+- **No `author_name`.** That column is a pre-login legacy fallback. Authors here resolve
+  through `players.user_id` at render time, so renaming a player relabels their whole
+  history rather than stranding old notes under an old spelling.
+
+**Editing stays author-only, which is the one place scrims break their own RLS rule.** The
+other four scrim tables are `authenticated_full_access` on the explicit reasoning that
+somebody has to be able to fix a typo in a draft they didn't enter. That reasoning covers
+shared data and stops there: a wrong champion is everyone's to correct, a written opinion is
+not. So notes get `select_all` + author-scoped insert/update/delete.
+
+**Consequence.** The entry form finally gets its per-game note field, and what's typed there
+becomes the first row of that game's thread rather than a separate entry-time field sitting
+beside a thread that says the same thing. Notes load via `fetchAllByIds` on the two pages
+that render them and nowhere else — prose feeds no aggregate, so `/scrims`, `/scrims/drafts`
+and the scouting pages don't pay for it. `revalidateScrimNotes()` is likewise narrower than
+`revalidateScrims()`: writing a sentence shouldn't recompute every stat on the site.
+
+The cost is a migration that has to be run before the code is deployed. `notesByGame` throws
+on a missing table rather than degrading to "no notes", which is deliberate — silently
+swallowing a PostgREST error would make a transient database fault look exactly like
+somebody's note having vanished.
+
+**Follow-up (migration 014): replies, nested in the data and flat in the rendering.** Any note
+can be answered, including a reply. `parent_note_id` stores the real target at whatever depth;
+nothing collapses it on write, because rewriting a parent silently changes what somebody was
+answering.
+
+The first cut *did* collapse it — the action rewrote a reply-to-a-reply onto the thread root,
+Slack-style, and only roots carried a Reply button. That was wrong twice over: it threw away
+information the writer supplied, and it made a normal move ("no, I meant *your* point") simply
+unavailable. The correct place for the constraint is the rendering, where the actual problem
+lives.
+
+So `threadNotes` flattens a thread to two visual levels: a root, then every answer below it in
+time order, with `replying to <name>` on any whose target isn't the root. That's what YouTube
+and Instagram do, and the reason is the container — a draft board carrying twenty champion
+portraits, where a third indent level is unreadable on a phone. A name costs one line and
+never runs out of horizontal space.
+
+The reader is defensive because actions are reachable by direct POST:
+
+- it walks to the root with a `seen` set rather than an arbitrary hop cap, so it terminates on
+  a cycle without dropping the notes caught in it
+- an unresolvable parent makes the note its own root — visible and wrong beats invisible
+- **every note is assigned to exactly one thread.** The first implementation didn't enforce
+  this, and a parent cycle produced two notes that were each other's replies *and* both roots,
+  rendering each of them twice. Caught by the harness, fixed by excluding roots from the
+  children map.
+
+Deleting a note cascades recursively, so `descendantCount` is the whole subtree rather than the
+direct children — the confirm dialog names that number. The alternative is answers orphaned
+under a question nobody can read.

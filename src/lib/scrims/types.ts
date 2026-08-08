@@ -69,7 +69,9 @@ export type ScrimGameRow = {
   patch: string | null;
   ally_bans: number[];
   enemy_bans: number[];
-  notes: string | null;
+  // No `notes` here. A game's notes are a thread in scrim_game_notes, loaded
+  // separately by lib/scrims/notes.ts — five people review the same scrim, and
+  // one column would be last-write-wins. Migration 013 dropped the column.
 };
 
 export type ScrimPickRow = {

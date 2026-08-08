@@ -25,7 +25,7 @@ src/app/
     │   ├── opponents/        /scrims/opponents        Teams; [slug] is the scouting page
     │   ├── new/              /scrims/new              The entry form
     │   ├── [id]/             /scrims/x                One series
-    │   └── actions.ts        Save / delete / opponent notes
+    │   └── actions.ts        Save / delete series, opponent notes, game-note CRUD
     ├── notes/                No page.tsx, so no route — just the note CRUD server
     │   ├── actions.ts        actions and their form-state type, shared by every
     │   └── form-state.ts     surface that renders a match row.
@@ -397,6 +397,43 @@ diagonal. Dimming alone reads as "disabled" or "still loading", and at 24px ther
 for a label. Empty ban slots render as dashed outlines rather than collapsing, so a series
 where somebody only entered three bans looks incomplete instead of looking like a
 three-ban format.
+
+### The note thread under the draft
+
+Every game card carries a thread (`components/scrims/scrim-game-notes.tsx`), on both
+`/scrims/history` and `/scrims/[id]`. Anyone can answer any note, **including a reply** — but
+the drawing stops at two levels however deep the conversation actually goes. Answers sit under
+the root behind a single left rule, in time order, and one whose target *isn't* the root prints
+`replying to <name>` above itself instead of earning another indent. Indenting per level inside
+a card that already carries twenty champion portraits is unreadable by the third reply on a
+phone; the name costs one line and never runs out of width.
+
+**Only the first reply stays visible**, with `Show N more replies` under it — same reason — and
+the oldest reply is where the exchange starts, so it's the one worth leaving up.
+
+Roots read newest-first and replies oldest-first, which looks inconsistent and isn't: the list
+of notes is a feed, and a conversation read backwards is nonsense.
+
+The composer stays pinned at the bottom of the thread rather than moving under whichever note
+was clicked, because replies append chronologically and that's where the next one will appear.
+`replying to <name>` above it is what keeps the target unambiguous, and it's keyed on the
+target id so switching who you're answering doesn't carry a half-typed reply across.
+
+Three more decisions in it:
+
+- **The composer is collapsed behind an "Add a note" button.** The history page renders
+  every game ever played; an always-open textarea per card would be a column of empty boxes
+  taller than the drafts they belong to. `NotesSection` on soloq matches keeps its textarea
+  open because it lives inside a row you had to expand first.
+- **Authors are resolved server-side** (`labelAuthors`), so the client component gets a plain
+  array and the user-id→name Map never enters the RSC payload — it would otherwise be
+  serialised once per card.
+- **`useTransition` + `toast`, not `useActionState`.** Matches `OpponentNotesForm` and
+  `DeleteSeriesButton`: the scrim actions take typed arguments, not `FormData`, so there's no
+  form state to thread. §7's table is the general rule; this is the same rule applied.
+
+Cards take `notes` as an optional prop. `undefined` means "this surface doesn't load notes";
+an empty array means "none yet", which still gets the composer.
 
 ### `BarRow`
 

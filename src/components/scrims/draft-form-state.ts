@@ -29,6 +29,7 @@ export type GameState = {
   duration: string;
   allyBans: Array<number | null>;
   enemyBans: Array<number | null>;
+  /** Optional. Saved as the opening note in this game's thread, not on the game. */
   notes: string;
   ally: Record<ScrimRole, PickState>;
   enemy: Record<ScrimRole, PickState>;

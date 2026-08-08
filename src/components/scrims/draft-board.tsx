@@ -9,7 +9,9 @@ import {
   type ScrimPickRow,
   type ScrimRole,
 } from "@/lib/scrims/types";
+import type { ScrimNoteThread } from "@/lib/scrims/notes";
 import { ChampionIcon } from "@/components/scrims/champion-icon";
+import { ScrimGameNotes } from "@/components/scrims/scrim-game-notes";
 import { MetaChip, ResultBadge, SideBadge } from "@/components/scrims/scrim-ui";
 import { cn } from "@/lib/utils";
 
@@ -291,18 +293,24 @@ export function GameHeader({ game }: { game: ScrimGameView }) {
   );
 }
 
-/** One game as a self-contained card — header, draft, and its note. */
+/** One game as a self-contained card — header, draft, and its note thread. */
 export function ScrimGameCard({
   game,
   version,
   championMap,
   playerNames,
+  notes,
+  currentUserId,
   ourName,
 }: {
   game: ScrimGameView;
   version: string;
   championMap: Map<number, ChampionInfo>;
   playerNames: PlayerLookup;
+  /** Newest first, replies attached. Omitted on surfaces that don't load notes. */
+  notes?: ScrimNoteThread[];
+  /** Whose notes carry Edit/Delete. Null for the shared viewer account. */
+  currentUserId?: string | null;
   ourName?: string;
 }) {
   return (
@@ -319,10 +327,14 @@ export function ScrimGameCard({
           playerNames={playerNames}
           ourName={ourName}
         />
-        {game.notes && (
-          <p className="border-t border-border pt-2 text-sm whitespace-pre-wrap text-grey-light">
-            {game.notes}
-          </p>
+        {/* Undefined means "this page doesn't do notes"; an empty array means
+            "no notes yet", which still gets the composer. */}
+        {notes !== undefined && (
+          <ScrimGameNotes
+            gameId={game.id}
+            threads={notes}
+            currentUserId={currentUserId ?? null}
+          />
         )}
       </div>
     </div>

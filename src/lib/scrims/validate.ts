@@ -44,6 +44,11 @@ export type ScrimGameInput = {
   durationSeconds: number | null;
   allyBans: number[];
   enemyBans: number[];
+  /**
+   * A note typed while entering the game. Stored as the first row of the
+   * game's note thread rather than on the game itself — see
+   * docs/migrations/013_scrim_game_notes.sql.
+   */
   notes: string | null;
   picks: ScrimPickInput[];
 };

@@ -1,35 +1,44 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { getSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getChampionMap, getLatestVersion } from "@/lib/ddragon";
 import { formatDuration } from "@/lib/format";
 import { loadSeries } from "@/lib/scrims/queries";
+import { authorsByUserId, labelAuthors, notesByGame, threadNotes } from "@/lib/scrims/notes";
 import { SCRIM_KIND_LABELS } from "@/lib/scrims/types";
 import { ScrimGameCard } from "@/components/scrims/draft-board";
 import { MetaChip, SeriesScore } from "@/components/scrims/scrim-ui";
 import { DeleteSeriesButton } from "@/components/scrims/delete-series-button";
 
-type RosterRow = { id: string; slug: string; display_name: string };
+// user_id rides along purely to put a name on each note's author — see
+// lib/scrims/notes.ts for why that's resolved at render time.
+type RosterRow = { id: string; slug: string; display_name: string; user_id: string | null };
 
 export default async function ScrimSeriesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const [games, { data: roster }, version] = await Promise.all([
+  const [games, { data: roster }, version, session] = await Promise.all([
     loadSeries(supabase, id),
-    supabase.from("players").select("id, slug, display_name").returns<RosterRow[]>(),
+    supabase.from("players").select("id, slug, display_name, user_id").returns<RosterRow[]>(),
     getLatestVersion(),
+    getSession(),
   ]);
 
   // A series with no games is unreachable through the form — it always writes at
   // least one — so this is a bad id, not an empty series.
   if (games.length === 0) notFound();
 
-  const championMap = await getChampionMap(version);
+  const [championMap, notes] = await Promise.all([
+    getChampionMap(version),
+    notesByGame(supabase, games.map((g) => g.id)),
+  ]);
   const playerNames = new Map(
     (roster ?? []).map((p) => [p.id, { display_name: p.display_name, slug: p.slug }]),
   );
+  const authors = authorsByUserId(roster ?? []);
 
   const { series, opponent } = games[0];
   const wins = games.filter((g) => g.win).length;
@@ -90,6 +99,8 @@ export default async function ScrimSeriesPage({ params }: { params: Promise<{ id
           version={version}
           championMap={championMap}
           playerNames={playerNames}
+          notes={threadNotes(labelAuthors(notes.get(game.id) ?? [], authors))}
+          currentUserId={session?.user.id ?? null}
         />
       ))}
     </div>

@@ -271,9 +271,9 @@ resume mechanism.
 
 ## 9. Scrims — a second, deliberately separate island
 
-Four tables (`scrim_opponents`, `scrim_series`, `scrim_games`, `scrim_picks`) hold
-hand-entered tournament games. They share no rows with anything above, and that is the
-design, not an accident of sequencing.
+Five tables (`scrim_opponents`, `scrim_series`, `scrim_games`, `scrim_picks`,
+`scrim_game_notes`) hold hand-entered tournament games. They share no rows with anything
+above, and that is the design, not an accident of sequencing.
 
 **Why they can't share `matches` / `match_participants`.** `matches.riot_match_id` is
 `unique not null` and a scrim has no Riot id; `match_participants.puuid` is `not null` and
@@ -302,6 +302,52 @@ stat columns are named to match `ChampionStatInput`. So:
 | `scrim_series` | `played_on` is a `date`, not a timestamptz: nobody records what time a scrim started. `fearless` scopes "no repeats", which only means anything inside a series. |
 | `scrim_games` | `side` is *ours*; theirs is implied. Bans are `integer[]` — no role, no player, order is the data, ≤5 a side. Same call as `match_participants.items`. `duration_seconds` is nullable, and a missing one costs the CS/min column rather than the game. |
 | `scrim_picks` | `unique (game_id, ally, team_position)` — ten rows, one per role per side. This is what stops a mistyped draft becoming a six-man team. |
+| `scrim_game_notes` | A thread per game, not a column on the game. Added in migration 013, which also dropped the `scrim_games.notes` it replaced. `parent_note_id` (014) carries replies at any depth. |
+
+**Notes on a game are a thread, and that's the one place scrims don't follow their own RLS
+rule.** The other four tables are `authenticated_full_access` — five people who play the same
+games, so anyone can fix anyone's typo (ADR-029). Notes invert on both axes:
+
+- *Why a table, not the column it replaced.* One text field is last-write-wins. Two players
+  writing up the same block on the same evening would overwrite each other with no trace of
+  which observation survived. The column shipped in 012 and was never writable — the entry
+  form had no field for it — so 013's data migration moved nothing in practice, but it runs
+  the copy before the `drop column` anyway.
+- *Why author-scoped writes.* A wrong champion in a draft is shared data anybody should
+  correct. Somebody else's written opinion isn't theirs to rewrite. So `scrim_game_notes`
+  follows `match_notes`: everyone reads, author-only edit and delete.
+- *Why anyone may insert.* `match_notes` gates inserts on `owns_participant()`, because a
+  soloq game belongs to exactly one tracked player. A scrim belongs to all five, so there is
+  nothing to gate on.
+- *Why no `author_name`.* That column on `match_notes` is a legacy fallback from before
+  per-player logins. Here the author is resolved through `players.user_id` at render time
+  (`lib/scrims/notes.ts`), so a display-name change relabels their whole history instead of
+  stranding old notes under an old spelling.
+
+A note typed while entering a game becomes the first row of that game's thread, authored by
+whoever entered the series — one concept for "notes on this game" rather than an entry-time
+field sitting beside a thread that says the same thing.
+
+**Replies nest in the data and flatten in the rendering.** A reply can be replied to, so
+`parent_note_id` holds the real target at whatever depth — collapsing it on write would
+silently change what somebody was answering. `threadNotes` then flattens each thread to two
+visual levels, ordering every answer below a root by time and labelling any whose target
+*isn't* the root (`replyingTo`). That's the YouTube/Instagram shape, chosen because this sits
+inside a card already carrying twenty champion portraits.
+
+The reader is deliberately defensive, because actions are reachable by direct POST and a row
+written outside `addScrimGameNote` must still render:
+
+- it walks to the root rather than trusting one hop, with a `seen` set instead of an
+  arbitrary depth cap, so it terminates on a cycle without losing the notes in it
+- an unresolvable parent (another game, deleted between reads) makes the note its own root —
+  visible and slightly wrong beats invisible
+- every note is assigned to exactly one thread. Without that, a parent cycle yields two notes
+  that are each other's replies *and* both roots, and the page renders each of them twice.
+  A harness case covers it.
+
+`descendantCount` is the whole subtree, not the direct children, because deleting a note
+cascades recursively — the confirm dialog names that count before it happens.
 
 **Opponent rosters are derived, not stored.** Grouping enemy picks by
 `(team_position, lower(player_name))` yields "their toplaner is Peluca, Renekton ×4" with no
@@ -309,6 +355,8 @@ extra entry step. A real opponent-player table would mean registering every enem
 draft could be typed, which is the kind of friction that stops drafts being typed at all.
 The price is that a typo splits one person in two — fixable by editing the series.
 
-**Reads go through `fetchAllRows`/`fetchAllByIds` like everything else** (`lib/scrims/queries.ts`).
-At ten picks a game, PostgREST's silent 1000-row truncation arrives at a hundred games, which
-one tournament season passes.
+**Reads go through `fetchAllRows`/`fetchAllByIds` like everything else** (`lib/scrims/queries.ts`,
+`lib/scrims/notes.ts`). At ten picks a game, PostgREST's silent 1000-row truncation arrives at a
+hundred games, which one tournament season passes. Notes are loaded the same way and only on the
+two pages that render them — every other scrim page derives aggregates, and prose feeds none of
+them.

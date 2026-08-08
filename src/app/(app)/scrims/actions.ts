@@ -110,7 +110,6 @@ export async function saveScrimSeries(input: ScrimSeriesInput): Promise<ScrimAct
           duration_seconds: game.durationSeconds,
           ally_bans: game.allyBans,
           enemy_bans: game.enemyBans,
-          notes: cleanText(game.notes, MAX_NOTE_CHARS),
         })),
       )
       .select("id, game_number")
@@ -140,6 +139,26 @@ export async function saveScrimSeries(input: ScrimSeriesInput): Promise<ScrimAct
 
     const { error: picksError } = await supabase.from("scrim_picks").insert(pickRows);
     if (picksError) throw new Error(picksError.message);
+
+    // A note typed while entering the game becomes the first note in that
+    // game's thread, authored by whoever entered it. One concept for "notes on
+    // this game" rather than an entry-time field sitting next to a thread that
+    // says the same thing.
+    const noteRows = input.games.flatMap((game, index) => {
+      const note = cleanText(game.notes, MAX_NOTE_CHARS);
+      if (!note) return [];
+      return [
+        {
+          game_id: gameIdByNumber.get(index + 1) as string,
+          note,
+          author_user_id: session.user.id,
+        },
+      ];
+    });
+    if (noteRows.length > 0) {
+      const { error: notesError } = await supabase.from("scrim_game_notes").insert(noteRows);
+      if (notesError) throw new Error(notesError.message);
+    }
 
     revalidateScrims();
     return { seriesId: series.id };
@@ -199,6 +218,140 @@ export async function updateOpponentNotes(
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not save those notes." };
   }
+}
+
+// ------------------------------------------------------------
+// Notes on a game
+// ------------------------------------------------------------
+// A thread, not a field: everyone played the scrim, so everyone writes, and a
+// single shared column would be last-write-wins. See
+// docs/migrations/013_scrim_game_notes.sql.
+//
+// Anyone signed in may add one — unlike soloq notes, where addNote checks the
+// game belongs to you first. There's no equivalent check to make here, and RLS
+// says the same thing. Editing and deleting stay author-only, which RLS
+// enforces; the zero-rows check below is what turns a silent refusal into a
+// sentence.
+
+const NOT_YOUR_NOTE = "You can only edit your own notes.";
+
+export async function addScrimGameNote(
+  gameId: string,
+  note: string,
+  /** The note being answered, or null for a new top-level note. */
+  parentNoteId: string | null = null,
+): Promise<ScrimActionResult> {
+  try {
+    const { supabase, user } = await requireSession();
+    if (!gameId) return { error: "Missing game." };
+
+    const text = cleanText(note, MAX_NOTE_CHARS);
+    if (!text) return { error: "Write something first." };
+
+    // The parent is stored as given, at whatever depth: a reply can be replied
+    // to, and that answers the reply rather than the thread. Depth is capped in
+    // the *rendering* (threadNotes flattens to two visual levels and names who
+    // a deeper answer is for), not in the data — collapsing it here would
+    // silently rewrite what somebody was answering.
+    //
+    // An insert can't create a parent cycle: a note that doesn't exist yet has
+    // nothing pointing at it.
+    //
+    // The game check isn't paranoia about our own UI — actions are reachable by
+    // direct POST, and a reply pointed at another game's note would render
+    // under a draft nobody wrote it about.
+    if (parentNoteId) {
+      const { data: target } = await supabase
+        .from("scrim_game_notes")
+        .select("id, game_id")
+        .eq("id", parentNoteId)
+        .maybeSingle<{ id: string; game_id: string }>();
+
+      if (!target || target.game_id !== gameId) {
+        return { error: "That note is gone — reload the page." };
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("scrim_game_notes")
+      .insert({
+        game_id: gameId,
+        note: text,
+        author_user_id: user.id,
+        parent_note_id: parentNoteId,
+      })
+      .select("id");
+
+    if (error) return { error: error.message };
+    if (!data || data.length === 0) {
+      return { error: "That note was blocked. Try signing out and back in." };
+    }
+
+    revalidateScrimNotes();
+    return {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not save that note." };
+  }
+}
+
+export async function updateScrimGameNote(
+  noteId: string,
+  note: string,
+): Promise<ScrimActionResult> {
+  try {
+    const { supabase } = await requireSession();
+    if (!noteId) return { error: "Missing note." };
+
+    const text = cleanText(note, MAX_NOTE_CHARS);
+    if (!text) return { error: "Write something first." };
+
+    const { data, error } = await supabase
+      .from("scrim_game_notes")
+      .update({ note: text, updated_at: new Date().toISOString() })
+      .eq("id", noteId)
+      .select("id");
+
+    if (error) return { error: error.message };
+    // An RLS-blocked update isn't an error, it just matches nothing.
+    if (!data || data.length === 0) return { error: NOT_YOUR_NOTE };
+
+    revalidateScrimNotes();
+    return {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not save that note." };
+  }
+}
+
+export async function deleteScrimGameNote(noteId: string): Promise<ScrimActionResult> {
+  try {
+    const { supabase } = await requireSession();
+    if (!noteId) return { error: "Missing note." };
+
+    const { data, error } = await supabase
+      .from("scrim_game_notes")
+      .delete()
+      .eq("id", noteId)
+      .select("id");
+
+    if (error) return { error: error.message };
+    if (!data || data.length === 0) return { error: NOT_YOUR_NOTE };
+
+    revalidateScrimNotes();
+    return {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not delete that note." };
+  }
+}
+
+/**
+ * Only the two surfaces that render notes. Deliberately narrower than
+ * revalidateScrims(): a note changes no aggregate, so throwing away the drafts
+ * and opponent pages would be recomputing every stat on the site because
+ * somebody typed a sentence.
+ */
+function revalidateScrimNotes() {
+  revalidatePath("/scrims/history");
+  revalidatePath("/scrims/[id]", "page");
 }
 
 /**

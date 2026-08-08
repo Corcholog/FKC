@@ -21,8 +21,10 @@ import type {
 
 const OPPONENT_COLUMNS = "id, name, slug, notes, created_at";
 const SERIES_COLUMNS = "id, opponent_id, played_on, kind, fearless, notes, created_by, created_at";
+// No notes column — a game's notes are a thread, loaded by lib/scrims/notes.ts
+// only on the two pages that render them.
 const GAME_COLUMNS =
-  "id, series_id, game_number, side, win, duration_seconds, patch, ally_bans, enemy_bans, notes";
+  "id, series_id, game_number, side, win, duration_seconds, patch, ally_bans, enemy_bans";
 const PICK_COLUMNS =
   "id, game_id, ally, team_position, champion_id, champion_name, player_id, player_name, kills, deaths, assists, total_cs";
 

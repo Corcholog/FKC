@@ -7,6 +7,8 @@ import type { ChampionInfo } from "@/lib/ddragon";
 import { ChampionCombobox } from "@/components/champion-combobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -349,6 +351,24 @@ export function ScrimGameFields({
             />
           ))}
         </div>
+      </div>
+
+      {/* Optional, and last on purpose — the draft is why anyone opens this
+          form. What's typed here becomes the first note in the game's thread,
+          so it can be edited, replied to and deleted afterwards like any
+          other. */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`${game.key}-notes`} className="text-xs">
+          Game notes
+        </Label>
+        <Textarea
+          id={`${game.key}-notes`}
+          value={game.notes}
+          onChange={(e) => onChange({ notes: e.target.value })}
+          placeholder="Optional — how it went, what to review."
+          rows={2}
+          className="text-sm"
+        />
       </div>
     </div>
   );

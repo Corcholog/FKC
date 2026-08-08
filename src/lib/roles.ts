@@ -15,6 +15,17 @@ const ROLE_LABELS: Record<string, string> = {
   UTILITY: "Support",
 };
 
+// Three-letter forms, for places where the role is a column marker rather than
+// a label — the scrim draft board puts it between two teams, where "Support"
+// would be wider than the gap it sits in.
+const ROLE_LABELS_SHORT: Record<string, string> = {
+  TOP: "TOP",
+  JUNGLE: "JGL",
+  MIDDLE: "MID",
+  BOTTOM: "BOT",
+  UTILITY: "SUP",
+};
+
 function roleRank(teamPosition: string | null): number {
   return ROLE_ORDER[teamPosition ?? ""] ?? 5;
 }
@@ -53,6 +64,11 @@ export function mainRole(teamPositions: (string | null)[]): string | null {
 // Riot leaves teamPosition empty when it can't determine the role.
 export function formatRole(teamPosition: string | null): string {
   return ROLE_LABELS[teamPosition ?? ""] ?? "Unknown";
+}
+
+/** TOP/JGL/MID/BOT/SUP — for tight columns. Falls back to a dash, not "Unknown". */
+export function formatRoleShort(teamPosition: string | null): string {
+  return ROLE_LABELS_SHORT[teamPosition ?? ""] ?? "—";
 }
 
 // Standard Top/Jungle/Mid/ADC/Support order — used everywhere a team's 5

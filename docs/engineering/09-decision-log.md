@@ -578,3 +578,99 @@ in production and load-bearing for `match_notes`. What changes is the docs — e
 "future, when the chat lands" pointer is now a statement that it isn't landing, so the
 next person reading them doesn't cost themselves a day designing chat tables. `match_notes`
 is the only owner-scoped table this schema will need.
+
+---
+
+## ADR-028 — Scrims are entered by hand, because Riot cannot serve custom games
+
+**Context.** The roster started playing university-tournament scrims and friendlies —
+1-3 game blocks against fifteen-plus other universities, sometimes fearless. None of it
+exists in `matches`, because the sync only asks Riot for `queue=420`.
+
+The obvious first question was whether it *could* be synced. It cannot, on any route:
+Match-V5 dropped custom-game support (a known custom matchId returns 404), its matchlist
+`type` filter has no `custom` value, and the two endpoints that do carry customs —
+`lol-rso-match-v1` and `tournament-v5` — both require an approved **production** key,
+which additionally means tournament codes generated before every lobby. Riot's LoL policy
+is explicit that custom match data may only reach a player through RSO. A private
+five-person tracker will not be granted a production key. The evidence and links are in
+`04_RIOT_API_INTEGRATION.md` §7.
+
+**Decision.** A person types the draft in after the block. Roughly two minutes a game.
+
+**Consequence.** This is a smaller loss than it looks. What matters for tournament prep is
+the *draft* — what they pick, what they ban against us, how we do on blue versus red — and
+a draft is about twenty champion selections, not a hundred stat fields. Draft patterns also
+outlive patches in a way that per-game numbers don't.
+
+What it does mean is that the entry form is the feature. If typing a game is slow, the data
+stops arriving and every page downstream is empty; nothing here is recoverable later, unlike
+soloq, where a missed sync just re-fetches. So the form is where the effort went: the ally
+lineup is pre-seeded from the last series (falling back to each player's `mainRole`), sides
+alternate automatically between games, and the champion picker greys out anything already
+picked or banned in that game — and, in a fearless series, anything *played* earlier in it.
+
+**Fearless carries picks, not bans.** Within one game all twenty slots compete for the same
+pool: a champion can't be picked twice, banned twice, or picked and banned. Across games of
+a fearless series only the ten *played* champions are removed — one banned in game 1 and
+never played is still available in game 2, to pick or to ban again. This shipped wrong (bans
+carried over too, on the reasoning that greying one champion too many was the safe
+direction) and was corrected against how the roster actually plays. It isn't the safe
+direction: it silently blocks a legal ban, and the person entering the game has no way to
+override it. Some organisers do count bans; `usedEarlierInSeries` (live form) and
+`championsUsedInSeries` (saved games) are the only two places that would change, and they
+must always agree.
+
+**What is deliberately not collected: pick order.** It would be ten more fields a game on
+top of the draft and the K/D/A/CS, which is exactly the kind of weight that stops people
+entering anything. The cost is that nothing can say who first-picked or who countered whom.
+Side is recorded and blue picks first, so `hadFirstPick` is as close as this data gets, and
+`/scrims/drafts` says so on the page rather than implying more precision than it has. Ban
+*order* is kept, because you type bans in order anyway and it's free.
+
+---
+
+## ADR-029 — Scrims get their own tables, not a queue flag on `matches`
+
+**Context.** Scrims are League games with ten participants, champions, roles and a result.
+Reusing `matches` and `match_participants` with a queue id of 0 is the obvious move, and it
+would have made `MatchRow` and every stat module work on scrims for free.
+
+**Decision.** Four new tables — `scrim_opponents`, `scrim_series`, `scrim_games`,
+`scrim_picks`. Reuse the *column names*, not the tables.
+
+**Context for why the obvious move fails.** Three things, in increasing order of severity:
+
+1. `matches.riot_match_id` is `unique not null`. A scrim has no Riot id, so every row would
+   need a synthetic one, and the uniqueness that protects the sync from double-inserting
+   would be protecting nothing.
+2. `match_participants.puuid` is `not null`. Enemy university players have no known puuid
+   and never will — they aren't Riot accounts we can resolve, they're a nickname somebody
+   typed.
+3. The real one: **every** soloq read path joins `match_participants!inner` with no queue
+   filter. That's the dashboard's hall of fame and shame, `/champions`, `/team`,
+   `/insights`, the player page, duo stats, streaks, sessions, the hour heatmap, the AI
+   prompt builder and the Discord standings — around twelve modules that are correct today.
+   Sharing a table means every one of them needs a filter added, and the failure mode of
+   missing one is not a crash. It's a scrim quietly counting toward somebody's ranked KDA
+   award, which nobody notices until the number is wrong and nobody knows why.
+
+The two domains also answer different questions. Nothing on `/scrims` wants an LP graph, and
+nothing on the dashboard wants a ban list.
+
+**Consequence.** The reuse that was actually worth having is name-level, and it's total.
+`scrim_picks.team_position` holds Riot's own `TOP/JUNGLE/MIDDLE/BOTTOM/UTILITY` strings, so
+`sortByRole`, `formatRole` and `mainRole` from `lib/roles.ts` take scrim rows with no
+adapter — `sortByRole` is already generic over `{ team_position: string | null }`. And a
+pick joined to its game is structurally a `ChampionStatInput`, so `topChampionsByPlayer`,
+`allChampionsByPlayer`, `championWinRate`, `championKdaRatio`, `byGamesThenRecord` and
+`byWinRateThenGames` all work unchanged (`damage_dealt_to_champions` is passed as 0 —
+scrims don't record damage, and nothing renders a damage column for them).
+
+Bans are `integer[]` on `scrim_games` rather than rows, following `match_participants.items`:
+a ban carries no role and no player, the order is the data, and there are at most five a
+side. Opponent *rosters* are derived from the nicknames on enemy picks rather than stored,
+so scouting costs no extra entry step — the price is that a typo splits one person in two,
+which is fixable by editing the series.
+
+The soloq side of the app was not touched by any of this, which was the point.

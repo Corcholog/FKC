@@ -10,6 +10,7 @@ import {
   Trophy,
   LineChart,
   ListOrdered,
+  Shield,
   Settings,
   Menu,
   Loader2,
@@ -24,6 +25,10 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
+// Browsing destinations only. Settings is deliberately not here: it's the admin
+// page, not somewhere you go to look at something, and it already sits visually
+// with /account on the right. Keeping it out is what left room for Scrims
+// without making this row tighter than it already is at the lg breakpoint.
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/team", label: "Team", icon: Users },
@@ -31,8 +36,22 @@ const NAV_ITEMS = [
   { href: "/champions", label: "Champions", icon: Trophy },
   { href: "/tierlists", label: "Tier Lists", icon: ListOrdered },
   { href: "/insights", label: "Insights", icon: LineChart },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/scrims", label: "Scrims", icon: Shield },
 ];
+
+/**
+ * Whether a nav item owns the current page.
+ *
+ * Prefix-matching, not equality: /scrims has four tabs under it, and an exact
+ * match would leave the navbar highlighting nothing the moment you opened one.
+ * The same bug applied to /player/[slug] and /tierlists/[slug] before this.
+ *
+ * "/" is special-cased because every path starts with it.
+ */
+function isActive(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 function Crest() {
   // Placeholder crest — swap for the real Fake Clan PNG (e.g. next/image
@@ -150,7 +169,7 @@ export function Navbar({
                 href={item.href}
                 label={item.label}
                 Icon={item.icon}
-                active={pathname === item.href}
+                active={isActive(pathname, item.href)}
               />
             ))}
           </nav>
@@ -186,12 +205,31 @@ export function Navbar({
             {!syncing && <Swords className="h-4 w-4" />}
           </Button>
 
+          {/* Settings lives here rather than in NAV_ITEMS — see the comment on
+              that array. Icon-only: it's the one destination nobody needs a
+              label to find, and the row has no width to spare. */}
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            title="Settings"
+            className={cn(
+              "hidden h-8 w-8 items-center justify-center rounded-md transition-colors sm:inline-flex",
+              isActive(pathname, "/settings")
+                ? "text-gold-bright"
+                : "text-grey-light hover:text-white",
+            )}
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
+
           {accountLabel && (
             <Link
               href="/account"
               className={cn(
                 "hidden max-w-40 items-center gap-1.5 truncate rounded-md px-2 py-1.5 text-sm transition-colors sm:inline-flex",
-                pathname === "/account" ? "text-gold-bright" : "text-grey-light hover:text-white",
+                isActive(pathname, "/account")
+                  ? "text-gold-bright"
+                  : "text-grey-light hover:text-white",
               )}
             >
               <UserRound className="h-4 w-4 shrink-0" />
@@ -240,18 +278,29 @@ export function Navbar({
                     href={item.href}
                     label={item.label}
                     Icon={item.icon}
-                    active={pathname === item.href}
+                    active={isActive(pathname, item.href)}
                     onNavigate={() => setSheetOpen(false)}
                   />
                 ))}
               </nav>
+              {/* sm:hidden, same as it already was: from sm up these three are
+                  in the header, and the gear there covers Settings too. Below
+                  sm the header hides them all, so this block is the only way
+                  to reach any of them. */}
               <div className="mt-auto flex flex-col gap-2 border-t border-border p-4 sm:hidden">
+                <NavLink
+                  href="/settings"
+                  label="Settings"
+                  Icon={Settings}
+                  active={isActive(pathname, "/settings")}
+                  onNavigate={() => setSheetOpen(false)}
+                />
                 {accountLabel && (
                   <NavLink
                     href="/account"
                     label={accountLabel}
                     Icon={UserRound}
-                    active={pathname === "/account"}
+                    active={isActive(pathname, "/account")}
                     onNavigate={() => setSheetOpen(false)}
                   />
                 )}

@@ -16,6 +16,16 @@ src/app/
     ├── insights/page.tsx     /insights      Cross-player analysis
     ├── player/[slug]/page.tsx  /player/x    Detail: LP chart, top champions, roles,
     │                                        matchups, heatmap, recent form
+    ├── tierlists/            /tierlists     Hand-made rankings; [slug] is the editor
+    ├── scrims/               Section with its own layout + tab strip (see below)
+    │   ├── layout.tsx        Heading, tabs, "New scrim" — wraps everything under it
+    │   ├── page.tsx          /scrims                  Overview: records, players
+    │   ├── history/          /scrims/history          Every series, drafts rendered
+    │   ├── drafts/           /scrims/drafts           Pick/ban aggregates
+    │   ├── opponents/        /scrims/opponents        Teams; [slug] is the scouting page
+    │   ├── new/              /scrims/new              The entry form
+    │   ├── [id]/             /scrims/x                One series
+    │   └── actions.ts        Save / delete / opponent notes
     ├── notes/                No page.tsx, so no route — just the note CRUD server
     │   ├── actions.ts        actions and their form-state type, shared by every
     │   └── form-state.ts     surface that renders a match row.
@@ -30,6 +40,28 @@ the navbar.
 **Every page except `/login` is a Server Component.** No `"use client"`, no `useEffect`
 data fetching, no loading state management. Client components exist only where
 interactivity genuinely requires them.
+
+### The navbar has seven slots, and Scrims cost nothing to add
+
+`NAV_ITEMS` in `components/navbar.tsx` collapses into a sheet at `lg`, and it was already
+tight at seven. Adding Scrims as an eighth would have made that worse, so **Settings moved
+out** of the array and into the right-hand cluster as a gear icon next to `/account` —
+which is where it already sat visually. It's an admin page, not a browsing destination, and
+it's the one link nobody needs a label to find. Below `sm`, where the whole right-hand
+cluster hides, the sheet footer carries Settings alongside account and sign-out, exactly as
+it already did for those two.
+
+Scrim sub-pages are **tabs under one nav slot**, not four more of them. The tab strip lives
+in `scrims/layout.tsx` so each tab stays a server component with its own query; only the
+strip itself (`components/scrims/scrim-tabs.tsx`) is a client component, because only it
+needs `usePathname`.
+
+### Active state is prefix-matched
+
+`active={pathname === item.href}` meant `/scrims/history` lit nothing — and that had always
+been true of `/player/[slug]` and `/tierlists/[slug]` too, it just wasn't noticed because
+those are leaf pages you arrive at by clicking through. `isActive()` special-cases `/`
+(every path starts with it) and prefix-matches the rest.
 
 ## 2. The data-fetching pattern
 
@@ -320,3 +352,56 @@ a red number at rank 1 and reads as the same statement rather than a mistake.
 The general principle: **an aggregate that can't be decomposed invites distrust.** A
 roster-wide heatmap cell is exactly the shape of number someone looks at and thinks "that
 isn't me" — so let them check.
+
+## 11. The scrim draft board
+
+`components/scrims/draft-board.tsx` is the densest component in the app — twenty
+champions, ten stat lines and a result, per game — so its layout is load-bearing rather
+than decorative.
+
+### Role-paired rows, not two team lists
+
+The first version rendered each team as its own list: role label, champion icon, player
+name on a `flex-1` spacer, then K/D/A and CS pushed to the far edge. That reads wrong in
+two ways. The champion ends up visually glued to the *role label*, which tells you nothing,
+while its own K/D/A and CS — the numbers that describe that exact pick — sit an inch away
+across a stretched gap. And the same five role labels appear twice.
+
+It's now five rows, one per role, ally on the left and enemy on the right with the role as
+the axis between them:
+
+```
+[icon] Dr. Mundo             TOP             Trundle [icon]
+       Joshy · 2/4/7 · 197 cs      10/2/5 · 240 cs
+```
+
+Champion name and its stats are one block. The lane matchup — the pair you actually review
+a scrim for — reads straight down the middle. Role labels halve.
+
+Two width rules make it work, and both were wrong at first:
+
+- **The board is capped and centred** (`max-w-3xl` inside the card). At `1fr` per side on a
+  `max-w-6xl` page the two teams get pinned to opposite edges with a canyon between them,
+  which is the opposite of a face-off.
+- **The cap lives on `ScrimGameCard`, not on the board**, so the header (`Game 1 · WIN ·
+  BLUE SIDE … 30:34`) shares the board's measure instead of spanning past it.
+
+Row heights stay equal by truncating rather than wrapping. Truncation would eat the CS
+number first, so **CS/min is `hidden sm:inline`** — it's derived from the CS already shown,
+making it the one thing on the line you can drop for free.
+
+### Bans read as bans
+
+`ChampionIcon` takes `banned`, which greys *and* strikes the portrait through a clipped
+diagonal. Dimming alone reads as "disabled" or "still loading", and at 24px there's no room
+for a label. Empty ban slots render as dashed outlines rather than collapsing, so a series
+where somebody only entered three bans looks incomplete instead of looking like a
+three-ban format.
+
+### `BarRow`
+
+Ranked champion lists (`/scrims/drafts`, the scouting page) draw each row's value as a
+tinted fill *behind* the row. The shape of the distribution — "these three, then a long
+tail" — lands before any number does, and a background fill costs no horizontal space,
+which matters inside a two-column grid. Pick and ban lists scale against the top row of
+their own list; presence scales against 100%, because it's a rate with a real ceiling.

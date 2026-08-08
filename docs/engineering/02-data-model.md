@@ -268,3 +268,47 @@ idx_players_display_name_lower    lower(display_name) UNIQUE
 details" action can page through matches oldest-fetch-first and bump `fetched_at` as it
 goes, which makes an interrupted run resume rather than restart. The index *is* the
 resume mechanism.
+
+## 9. Scrims — a second, deliberately separate island
+
+Four tables (`scrim_opponents`, `scrim_series`, `scrim_games`, `scrim_picks`) hold
+hand-entered tournament games. They share no rows with anything above, and that is the
+design, not an accident of sequencing.
+
+**Why they can't share `matches` / `match_participants`.** `matches.riot_match_id` is
+`unique not null` and a scrim has no Riot id; `match_participants.puuid` is `not null` and
+an enemy university player is a nickname somebody typed, not a resolvable account. But the
+reason that actually decided it is §3's invariant read the other way round: *every* soloq
+read path joins `match_participants!inner` with no queue filter. That invariant is what
+makes `excluded` work — and it's also what would silently pull scrim rows into the hall of
+fame, `/champions`, duo stats, streaks, sessions, the hour heatmap, the AI prompts and the
+Discord standings. Around twelve modules, each needing a filter added, where missing one
+produces a wrong number rather than an error. ADR-029.
+
+**What is shared is the vocabulary, and it's shared completely.** `scrim_picks.team_position`
+holds the same `TOP/JUNGLE/MIDDLE/BOTTOM/UTILITY` strings as `match_participants`, and the
+stat columns are named to match `ChampionStatInput`. So:
+
+- `sortByRole`, `formatRole`, `mainRole` (`lib/roles.ts`) take scrim picks with no adapter
+- a pick joined to its game *is* a `ChampionStatInput`, so `topChampionsByPlayer`,
+  `championWinRate`, `championKdaRatio` and both champion comparators work unchanged
+  (`damage_dealt_to_champions` is passed as 0 — scrims don't record damage)
+
+**Shape notes.**
+
+| Table | Worth knowing |
+|---|---|
+| `scrim_opponents` | Unique on `lower(name)`. Free text would fragment one team's history across `UBA`/`uba`, which is the one thing scouting can't survive. |
+| `scrim_series` | `played_on` is a `date`, not a timestamptz: nobody records what time a scrim started. `fearless` scopes "no repeats", which only means anything inside a series. |
+| `scrim_games` | `side` is *ours*; theirs is implied. Bans are `integer[]` — no role, no player, order is the data, ≤5 a side. Same call as `match_participants.items`. `duration_seconds` is nullable, and a missing one costs the CS/min column rather than the game. |
+| `scrim_picks` | `unique (game_id, ally, team_position)` — ten rows, one per role per side. This is what stops a mistyped draft becoming a six-man team. |
+
+**Opponent rosters are derived, not stored.** Grouping enemy picks by
+`(team_position, lower(player_name))` yields "their toplaner is Peluca, Renekton ×4" with no
+extra entry step. A real opponent-player table would mean registering every enemy before a
+draft could be typed, which is the kind of friction that stops drafts being typed at all.
+The price is that a typo splits one person in two — fixable by editing the series.
+
+**Reads go through `fetchAllRows`/`fetchAllByIds` like everything else** (`lib/scrims/queries.ts`).
+At ten picks a game, PostgREST's silent 1000-row truncation arrives at a hundred games, which
+one tournament season passes.

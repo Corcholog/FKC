@@ -428,3 +428,70 @@ Structural typing does the heavy lifting: `XInput` describes the *columns needed
 concrete row type, so a page can select one superset of columns and pass the same array to
 `aggregatePlayerStats`, `streaksByPlayer`, and `aggregateByTime` without mapping between
 shapes. That's why `/insights` can fetch once and derive six different views from it.
+
+## 11. Scrim stats (`lib/scrims/`)
+
+Same convention as everything above: pure, I/O-free functions over plain rows, called from
+server components that fetch once and fold many times. `lib/scrims/queries.ts` is the single
+read path and the only part that touches Supabase.
+
+| Module | Answers |
+|---|---|
+| `team-stats.ts` | Overall record, blue/red split, by series type, head-to-head per opponent, per-player aggregates |
+| `draft-stats.ts` | Pick and ban frequency per side, per-role pools, presence, the fearless pool |
+| `opponents.ts` | An opponent's roster and pools, derived from nicknames |
+| `validate.ts` | What a submitted series must satisfy before it's written |
+
+**These reuse the soloq helpers rather than re-deriving them**, which is the whole reason
+`scrim_picks` is named the way it is. `aggregatePicks` sorts with `byGamesThenRecord`;
+`toChampionStatInput` reshapes picks into `ChampionStatInput` so `topChampionsByPlayer` and
+`championWinRate` apply directly. Anything that ranks champions therefore agrees with
+`/champions` and the player page about what "first" means.
+
+### A pick's result is its team's result
+
+`scrim_games.win` is always *ours*. Every enemy-side aggregate negates it — `aggregatePicks`,
+`toChampionStatInput` and `deriveOpponentRoster` each do this at the top of their loop. Getting
+it wrong is invisible in the output (the numbers still look plausible) and inverts every
+scouting conclusion, so it's stated once per function rather than assumed.
+
+### CS/min averages only over games that recorded a duration
+
+`duration_seconds` is nullable, and one game entered without it would otherwise drag
+everybody's rate down by a fifth. `ScrimPlayerAgg` carries `timedGames`/`timedSeconds`
+separately, and `scrimCsPerMinute` returns **null**, not 0, when nothing timed — the same
+distinction §1's "detail metrics average over the games that reported them" makes, and for
+the same reason: unknown isn't zero, and the page renders `—`.
+
+### Presence counts picks and bans; both sides' bans
+
+`championPresence` is `(picked + banned) / games`, so a champion banned by both teams every
+game reads 200%. That's correct and intentional — presence measures draft relevance, not a
+probability. Ban-only champions still appear, which is the point of the metric.
+
+### Pick order isn't recorded, so nothing claims to know it
+
+No blind-vs-counter, no first-pick champion. Side is stored and blue picks first, so
+`hadFirstPick` is the whole of it. `/scrims/drafts` says this on the page rather than
+letting the omission read as an oversight. ADR-028.
+
+### Validation lives in `lib/`, not in the action
+
+A `"use server"` module may only export async server functions, so validation written inside
+the action is unreachable from anything else — including a test. `validate.ts` holds it and
+`scrims/actions.ts` imports it, exactly as `normalizeTiers` relates to the tier list action.
+The rule that catches most real mistakes is that a champion can appear at most once per game
+across all twenty slots; fearless is deliberately *not* enforced server-side, because
+organisers' rules differ and rejecting a legitimately-played game is worse than accepting an
+odd-looking one. The form greys used champions out instead.
+
+### Fearless removes picks, not bans
+
+Within one game all twenty slots share a pool — no champion twice, and never both picked and
+banned. *Across* games of a fearless series only the ten played champions are unavailable: a
+champion banned in game 1 and never played can be picked or banned again in game 2.
+
+`championsUsedInSeries` (saved games, here) and `usedEarlierInSeries` (the live form, in
+`components/scrims/draft-form-state.ts`) implement this, and must agree — if they drift, the
+form greys a champion that a saved series says is legal. Both exclude bans; `usedInGame` is
+the within-game one and includes them.

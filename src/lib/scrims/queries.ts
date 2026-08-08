@@ -1,0 +1,176 @@
+// The one read path for scrim data.
+//
+// Every scrim page needs the same thing — games, with their draft and their
+// opponent attached — and then folds it differently. So this loads it once, in
+// full, and the stat modules stay pure functions over the result.
+//
+// Four round trips instead of one embedded query on purpose: PostgREST embeds
+// of an embed get awkward to type and impossible to page correctly, and the
+// opponent list is ~20 rows that every series shares. Joining in JS is cheaper
+// than either.
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllByIds, fetchAllRows } from "@/lib/supabase/fetch-all";
+import type {
+  ScrimGameRow,
+  ScrimGameView,
+  ScrimOpponentRow,
+  ScrimPickRow,
+  ScrimSeriesRow,
+} from "@/lib/scrims/types";
+
+const OPPONENT_COLUMNS = "id, name, slug, notes, created_at";
+const SERIES_COLUMNS = "id, opponent_id, played_on, kind, fearless, notes, created_by, created_at";
+const GAME_COLUMNS =
+  "id, series_id, game_number, side, win, duration_seconds, patch, ally_bans, enemy_bans, notes";
+const PICK_COLUMNS =
+  "id, game_id, ally, team_position, champion_id, champion_name, player_id, player_name, kills, deaths, assists, total_cs";
+
+export async function loadOpponents(supabase: SupabaseClient): Promise<ScrimOpponentRow[]> {
+  return fetchAllRows<ScrimOpponentRow>((from, to) =>
+    supabase
+      .from("scrim_opponents")
+      .select(OPPONENT_COLUMNS)
+      .order("name")
+      .order("id") // total order, so paging can't overlap — see loadScrimGames
+      .range(from, to)
+      .returns<ScrimOpponentRow[]>(),
+  );
+}
+
+export async function findOpponentBySlug(
+  supabase: SupabaseClient,
+  slug: string,
+): Promise<ScrimOpponentRow | null> {
+  const { data } = await supabase
+    .from("scrim_opponents")
+    .select(OPPONENT_COLUMNS)
+    .eq("slug", slug)
+    .maybeSingle<ScrimOpponentRow>();
+  return data ?? null;
+}
+
+/**
+ * Every recorded game, newest series first, each with its full draft.
+ *
+ * `fetchAllRows`/`fetchAllByIds` rather than plain selects because PostgREST
+ * truncates at the project's Max rows setting *silently* — and at ten picks per
+ * game that ceiling is only a hundred games, which one tournament season
+ * passes. A truncated read here produces stats that are wrong, not obviously
+ * broken. Same reasoning as every soloq aggregate; see lib/supabase/fetch-all.ts.
+ */
+export async function loadScrimGames(
+  supabase: SupabaseClient,
+  options: { opponentId?: string; seriesId?: string } = {},
+): Promise<ScrimGameView[]> {
+  // Every paged query below ends on a column combination that is *unique*, and
+  // that is not cosmetic. `.range()` paging is only coherent if the underlying
+  // order is total: Postgres gives no ordering guarantee without ORDER BY, so
+  // two windows over an ambiguous sort can overlap or skip rows entirely. Under
+  // one page it never shows; past a page it silently duplicates and drops
+  // drafts. Same class of bug fetch-all.ts exists to prevent, one level down.
+  const series = await fetchAllRows<ScrimSeriesRow>((from, to) => {
+    let q = supabase.from("scrim_series").select(SERIES_COLUMNS);
+    if (options.opponentId) q = q.eq("opponent_id", options.opponentId);
+    if (options.seriesId) q = q.eq("id", options.seriesId);
+    return q
+      .order("played_on", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id") // tie-break: two series on one day can share a timestamp
+      .range(from, to)
+      .returns<ScrimSeriesRow[]>();
+  });
+  if (series.length === 0) return [];
+
+  const games = await fetchAllByIds<ScrimGameRow>(
+    series.map((s) => s.id),
+    (chunk, from, to) =>
+      supabase
+        .from("scrim_games")
+        .select(GAME_COLUMNS)
+        .in("series_id", chunk)
+        // unique (series_id, game_number) — a total order, and it matches
+        // idx_scrim_games_series so the sort is free.
+        .order("series_id")
+        .order("game_number")
+        .range(from, to)
+        .returns<ScrimGameRow[]>(),
+  );
+  if (games.length === 0) return [];
+
+  const [picks, opponents] = await Promise.all([
+    fetchAllByIds<ScrimPickRow>(
+      games.map((g) => g.id),
+      (chunk, from, to) =>
+        supabase
+          .from("scrim_picks")
+          .select(PICK_COLUMNS)
+          .in("game_id", chunk)
+          .order("game_id")
+          .order("id") // the primary key, so the pair is total
+          .range(from, to)
+          .returns<ScrimPickRow[]>(),
+    ),
+    loadOpponents(supabase),
+  ]);
+
+  const seriesById = new Map(series.map((s) => [s.id, s]));
+  const opponentById = new Map(opponents.map((o) => [o.id, o]));
+  const picksByGame = new Map<string, ScrimPickRow[]>();
+  for (const pick of picks) {
+    const list = picksByGame.get(pick.game_id) ?? [];
+    list.push(pick);
+    picksByGame.set(pick.game_id, list);
+  }
+
+  // Series order already came back from Postgres; the JS sort below only has to
+  // keep games within a series in playing order. A game whose series or
+  // opponent is missing is dropped rather than rendered half-blank — the
+  // foreign keys make that unreachable, but the types don't know it.
+  return games
+    .flatMap((game) => {
+      const parent = seriesById.get(game.series_id);
+      const opponent = parent ? opponentById.get(parent.opponent_id) : undefined;
+      if (!parent || !opponent) return [];
+      return [{ ...game, series: parent, opponent, picks: picksByGame.get(game.id) ?? [] }];
+    })
+    .sort(
+      (a, b) =>
+        b.series.played_on.localeCompare(a.series.played_on) ||
+        b.series.created_at.localeCompare(a.series.created_at) ||
+        a.game_number - b.game_number,
+    );
+}
+
+/** The games of one series, in playing order. */
+export async function loadSeries(
+  supabase: SupabaseClient,
+  seriesId: string,
+): Promise<ScrimGameView[]> {
+  return loadScrimGames(supabase, { seriesId });
+}
+
+/**
+ * Games regrouped into the series they belong to, newest first.
+ *
+ * The history page and the "recent series" strip both want this, and neither
+ * wants to redo the grouping.
+ */
+export function groupBySeries(games: ScrimGameView[]): Array<{
+  series: ScrimSeriesRow;
+  opponent: ScrimOpponentRow;
+  games: ScrimGameView[];
+}> {
+  const bySeries = new Map<string, { series: ScrimSeriesRow; opponent: ScrimOpponentRow; games: ScrimGameView[] }>();
+  for (const game of games) {
+    const entry = bySeries.get(game.series_id) ?? {
+      series: game.series,
+      opponent: game.opponent,
+      games: [],
+    };
+    entry.games.push(game);
+    bySeries.set(game.series_id, entry);
+  }
+  // Insertion order is already newest-first: loadScrimGames sorted that way.
+  return [...bySeries.values()];
+}

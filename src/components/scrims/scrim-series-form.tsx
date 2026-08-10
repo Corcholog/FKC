@@ -33,10 +33,13 @@ import {
 import {
   buildSeriesPayload,
   emptyGame,
+  formSignature,
   otherSide,
   usedEarlierInSeries,
   type GameState,
+  type SeriesFormState,
 } from "@/components/scrims/draft-form-state";
+import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 import { cn } from "@/lib/utils";
 
 const NEW_OPPONENT = "__new__";
@@ -78,17 +81,45 @@ export function ScrimSeriesForm({
   const router = useRouter();
   const [saving, startSaving] = useTransition();
 
-  const [opponentId, setOpponentId] = useState<string | null>(
-    editing?.opponentId ?? opponents[0]?.id ?? null,
-  );
-  const [opponentName, setOpponentName] = useState("");
-  const [playedOn, setPlayedOn] = useState(() => editing?.playedOn ?? todayInputValue());
-  const [kind, setKind] = useState<ScrimKind>(editing?.kind ?? "scrim");
-  const [fearless, setFearless] = useState(editing?.fearless ?? false);
-  const [notes, setNotes] = useState(editing?.notes ?? "");
-  const [games, setGames] = useState<GameState[]>(
-    () => editing?.games ?? [emptyGame("blue", defaultLineup)],
-  );
+  // The form as it was handed over: the saved series when editing, an empty
+  // one otherwise. Held as state with a lazy initialiser so it's built once —
+  // emptyGame() mints a new key each call, and re-running it every render would
+  // remount the champion fields mid-typing.
+  const [initial] = useState<SeriesFormState>(() => ({
+    opponentId: editing?.opponentId ?? opponents[0]?.id ?? null,
+    opponentName: "",
+    playedOn: editing?.playedOn ?? todayInputValue(),
+    kind: editing?.kind ?? "scrim",
+    fearless: editing?.fearless ?? false,
+    notes: editing?.notes ?? "",
+    games: editing?.games ?? [emptyGame("blue", defaultLineup)],
+  }));
+
+  const [opponentId, setOpponentId] = useState<string | null>(initial.opponentId);
+  const [opponentName, setOpponentName] = useState(initial.opponentName);
+  const [playedOn, setPlayedOn] = useState(initial.playedOn);
+  const [kind, setKind] = useState<ScrimKind>(initial.kind);
+  const [fearless, setFearless] = useState(initial.fearless);
+  const [notes, setNotes] = useState(initial.notes);
+  const [games, setGames] = useState<GameState[]>(initial.games);
+
+  const current: SeriesFormState = {
+    opponentId,
+    opponentName,
+    playedOn,
+    kind,
+    fearless,
+    notes,
+    games,
+  };
+
+  // Twenty champion selections and forty numbers, none of it autosaved. The
+  // comparison is against what's stored — where the form started, and then
+  // whatever the last successful save wrote — so undoing an edit by hand clears
+  // the warning instead of leaving it stuck on, and a save clears it without
+  // the fields having to change.
+  const [baseline, setBaseline] = useState(() => formSignature(initial));
+  const unsaved = formSignature(current) !== baseline;
 
   const championsById = useMemo(
     () => new Map(champions.map((c) => [c.championId, c])),
@@ -121,14 +152,16 @@ export function ScrimSeriesForm({
   }
 
   function save() {
-    const built = buildSeriesPayload(
-      { opponentId, opponentName, playedOn, kind, fearless, notes },
-      games,
-    );
+    const built = buildSeriesPayload(current);
     if (!built.ok) {
       toast.error(built.error);
       return;
     }
+
+    // Taken before the round trip, so a field typed while it's in flight stays
+    // counted as unsaved rather than being marked stored by a save that didn't
+    // include it.
+    const snapshot = formSignature(current);
 
     startSaving(async () => {
       const result = editing
@@ -142,6 +175,10 @@ export function ScrimSeriesForm({
       toast.success(
         editing ? "Series updated." : `Saved ${games.length} game${games.length === 1 ? "" : "s"}.`,
       );
+      // What's on screen is now what's stored, which disarms the guard for the
+      // navigation below — without it, clicking anything while the destination
+      // renders would ask about saving work that's already saved.
+      setBaseline(snapshot);
       router.push(result.seriesId ? `/scrims/${result.seriesId}` : "/scrims/history");
       router.refresh();
     });
@@ -276,10 +313,19 @@ export function ScrimSeriesForm({
           <Plus />
           Add game
         </Button>
+        {/* Same warning the tier list editor carries, for the same reason:
+            nothing here autosaves, and this form is twenty champion selections
+            deep before it's worth anything. */}
+        {unsaved && (
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning-bg px-2 py-0.5 text-xs font-medium text-warning">
+            <span className="size-1.5 rounded-full bg-warning" />
+            Unsaved changes
+          </span>
+        )}
         {editing && (
           <Link
             href={`/scrims/${editing.id}`}
-            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "ml-auto")}
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), !unsaved && "ml-auto")}
           >
             Cancel
           </Link>
@@ -289,12 +335,26 @@ export function ScrimSeriesForm({
           size="sm"
           onClick={save}
           disabled={saving}
-          className={cn(!editing && "ml-auto")}
+          className={cn(!editing && !unsaved && "ml-auto")}
         >
           {saving ? <Loader2 className="animate-spin" /> : <Save />}
           {saving ? "Saving…" : editing ? "Save changes" : "Save series"}
         </Button>
       </div>
+
+      {/* A scrim goes in from a screenshot after the block, usually late, in one
+          sitting. Clicking anything in the navbar mid-entry used to drop the
+          lot without a word — a client-side navigation never fires
+          beforeunload. */}
+      <UnsavedChangesGuard
+        when={unsaved}
+        title={editing ? "Leave without saving your changes?" : "Leave without saving this series?"}
+        description={
+          editing
+            ? "The corrections you've made to this series aren't stored yet, and leaving drops them."
+            : "This series hasn't been saved yet. Leaving now loses every game you've entered."
+        }
+      />
     </div>
   );
 }

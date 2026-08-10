@@ -255,6 +255,17 @@ export type BuildResult =
   | { ok: true; payload: ScrimSeriesInput }
   | { ok: false; error: string };
 
+/** Everything the form holds: the fields above the games, and the games. */
+export type SeriesFormState = {
+  opponentId: string | null;
+  opponentName: string;
+  playedOn: string;
+  kind: ScrimSeriesInput["kind"];
+  fearless: boolean;
+  notes: string;
+  games: GameState[];
+};
+
 /**
  * Turns the form into the action's payload, refusing anything incomplete.
  *
@@ -263,17 +274,7 @@ export type BuildResult =
  * out about an empty champion field *before* a round trip is the difference
  * between a form that feels solid and one that feels like it's arguing.
  */
-export function buildSeriesPayload(
-  meta: {
-    opponentId: string | null;
-    opponentName: string;
-    playedOn: string;
-    kind: ScrimSeriesInput["kind"];
-    fearless: boolean;
-    notes: string;
-  },
-  games: GameState[],
-): BuildResult {
+export function buildSeriesPayload({ games, ...meta }: SeriesFormState): BuildResult {
   if (!meta.opponentId && !meta.opponentName.trim()) {
     return { ok: false, error: "Pick an opponent, or type a name for a new one." };
   }
@@ -329,4 +330,57 @@ export function buildSeriesPayload(
       games: gameInputs,
     },
   };
+}
+
+// ------------------------------------------------------------
+// Has anything actually changed?
+// ------------------------------------------------------------
+
+/**
+ * The whole form as one comparable string.
+ *
+ * "Is there unsaved work here?" is this string against the one taken when the
+ * form opened — which means an edit that ends up back where it started stops
+ * counting as a change, and nobody is warned about undoing their own typo.
+ *
+ * Not `JSON.stringify(state)`. That would compare a *shape*: key order decides
+ * the result, and `key` — the React identity of a row, regenerated every time a
+ * game is added — would read as content. So everything is written out
+ * positionally, and only the parts a save would actually store are included:
+ *
+ *   * `key` is left out, being identity rather than content
+ *   * the strings are trimmed, since trailing space in a name is not an edit
+ *   * a typed new-opponent name only counts while "New team…" is selected —
+ *     text left behind in a field that no longer applies changes nothing
+ */
+export function formSignature(form: SeriesFormState): string {
+  const pick = (p: PickState) => [
+    p.championId,
+    p.playerId,
+    p.playerName.trim(),
+    p.kills.trim(),
+    p.deaths.trim(),
+    p.assists.trim(),
+    p.totalCs.trim(),
+  ];
+
+  return JSON.stringify([
+    form.opponentId,
+    form.opponentId === null ? form.opponentName.trim() : "",
+    form.playedOn,
+    form.kind,
+    form.fearless,
+    form.notes.trim(),
+    form.games.map((game) => [
+      game.id,
+      game.side,
+      game.win,
+      game.duration.trim(),
+      game.allyBans,
+      game.enemyBans,
+      game.notes.trim(),
+      SCRIM_ROLES.map((role) => pick(game.ally[role])),
+      SCRIM_ROLES.map((role) => pick(game.enemy[role])),
+    ]),
+  ]);
 }

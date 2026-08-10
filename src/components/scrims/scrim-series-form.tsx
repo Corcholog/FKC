@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Save } from "lucide-react";
 import { toast } from "sonner";
-import { saveScrimSeries } from "@/app/(app)/scrims/actions";
+import { saveScrimSeries, updateScrimSeries } from "@/app/(app)/scrims/actions";
 import {
   SCRIM_KINDS,
   SCRIM_KIND_LABELS,
@@ -13,7 +14,7 @@ import {
   type ScrimRole,
 } from "@/lib/scrims/types";
 import type { ScrimOpponentRow } from "@/lib/scrims/types";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,8 +37,26 @@ import {
   usedEarlierInSeries,
   type GameState,
 } from "@/components/scrims/draft-form-state";
+import { cn } from "@/lib/utils";
 
 const NEW_OPPONENT = "__new__";
+
+/**
+ * The series this form is editing, loaded into the shape the form works in.
+ *
+ * One component for both jobs rather than two: entering a series and correcting
+ * one are the same twenty fields, and a second copy of the draft grid would
+ * drift from this one the first time either changed.
+ */
+export type EditingSeries = {
+  id: string;
+  opponentId: string;
+  playedOn: string;
+  kind: ScrimKind;
+  fearless: boolean;
+  notes: string;
+  games: GameState[];
+};
 
 export function ScrimSeriesForm({
   opponents,
@@ -45,6 +64,7 @@ export function ScrimSeriesForm({
   defaultLineup,
   champions,
   version,
+  editing,
 }: {
   opponents: ScrimOpponentRow[];
   roster: RosterOption[];
@@ -52,17 +72,23 @@ export function ScrimSeriesForm({
   defaultLineup: Record<ScrimRole, string | null>;
   champions: PickableChampion[];
   version: string;
+  /** Set to rewrite an existing series; omitted to enter a new one. */
+  editing?: EditingSeries;
 }) {
   const router = useRouter();
   const [saving, startSaving] = useTransition();
 
-  const [opponentId, setOpponentId] = useState<string | null>(opponents[0]?.id ?? null);
+  const [opponentId, setOpponentId] = useState<string | null>(
+    editing?.opponentId ?? opponents[0]?.id ?? null,
+  );
   const [opponentName, setOpponentName] = useState("");
-  const [playedOn, setPlayedOn] = useState(() => todayInputValue());
-  const [kind, setKind] = useState<ScrimKind>("scrim");
-  const [fearless, setFearless] = useState(false);
-  const [notes, setNotes] = useState("");
-  const [games, setGames] = useState<GameState[]>(() => [emptyGame("blue", defaultLineup)]);
+  const [playedOn, setPlayedOn] = useState(() => editing?.playedOn ?? todayInputValue());
+  const [kind, setKind] = useState<ScrimKind>(editing?.kind ?? "scrim");
+  const [fearless, setFearless] = useState(editing?.fearless ?? false);
+  const [notes, setNotes] = useState(editing?.notes ?? "");
+  const [games, setGames] = useState<GameState[]>(
+    () => editing?.games ?? [emptyGame("blue", defaultLineup)],
+  );
 
   const championsById = useMemo(
     () => new Map(champions.map((c) => [c.championId, c])),
@@ -84,6 +110,13 @@ export function ScrimSeriesForm({
   }
 
   function removeGame(index: number) {
+    // Dropping a saved game takes its note thread with it — scrim_game_notes
+    // cascades off the game row. Said out loud here rather than in a dialog:
+    // nothing is gone until the series is saved, so a warning that blocks the
+    // click would be asking to confirm something that hasn't happened yet.
+    if (games[index]?.id) {
+      toast.warning("Game removed. Saving deletes it, and any notes written on it.");
+    }
     setGames((prev) => prev.filter((_, i) => i !== index));
   }
 
@@ -98,12 +131,17 @@ export function ScrimSeriesForm({
     }
 
     startSaving(async () => {
-      const result = await saveScrimSeries(built.payload);
+      const result = editing
+        ? await updateScrimSeries(editing.id, built.payload)
+        : await saveScrimSeries(built.payload);
+
       if (result.error) {
         toast.error(result.error);
         return;
       }
-      toast.success(`Saved ${games.length} game${games.length === 1 ? "" : "s"}.`);
+      toast.success(
+        editing ? "Series updated." : `Saved ${games.length} game${games.length === 1 ? "" : "s"}.`,
+      );
       router.push(result.seriesId ? `/scrims/${result.seriesId}` : "/scrims/history");
       router.refresh();
     });
@@ -219,6 +257,9 @@ export function ScrimSeriesForm({
           version={version}
           fearlessUsed={fearless ? usedEarlierInSeries(games, index) : EMPTY_SET}
           canRemove={games.length > 1}
+          // A saved game's notes are an authored thread on the series page, so
+          // the entry-time note box would be a field that writes nothing here.
+          showNotes={!editing}
           onChange={(patch) => patchGame(index, patch)}
           onRemove={() => removeGame(index)}
         />
@@ -235,9 +276,23 @@ export function ScrimSeriesForm({
           <Plus />
           Add game
         </Button>
-        <Button type="button" size="sm" onClick={save} disabled={saving} className="ml-auto">
+        {editing && (
+          <Link
+            href={`/scrims/${editing.id}`}
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "ml-auto")}
+          >
+            Cancel
+          </Link>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          onClick={save}
+          disabled={saving}
+          className={cn(!editing && "ml-auto")}
+        >
           {saving ? <Loader2 className="animate-spin" /> : <Save />}
-          {saving ? "Saving…" : `Save series`}
+          {saving ? "Saving…" : editing ? "Save changes" : "Save series"}
         </Button>
       </div>
     </div>

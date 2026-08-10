@@ -39,6 +39,16 @@ export type ScrimPickInput = {
 };
 
 export type ScrimGameInput = {
+  /**
+   * The saved row this game already is, when a series is being *edited*. Null
+   * for a game being added, and ignored entirely by saveScrimSeries, where
+   * every game is new.
+   *
+   * Carrying it is what lets an edit update a game in place instead of
+   * recreating it — which matters because scrim_game_notes hangs off
+   * scrim_games.id with `on delete cascade`. See updateScrimSeries.
+   */
+  id?: string | null;
   side: (typeof SCRIM_SIDES)[number];
   win: boolean;
   durationSeconds: number | null;

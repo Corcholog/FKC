@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -40,6 +40,7 @@ import { DeleteTierListButton } from "@/components/tierlist/delete-tier-list-but
 import { DownloadPngButton } from "@/components/tierlist/download-png-button";
 import { TierListExportNode } from "@/components/tierlist/tier-list-export-node";
 import { TierSettingsDialog } from "@/components/tierlist/tier-settings-dialog";
+import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 import {
   POOL_ID,
   SortableChampion,
@@ -159,15 +160,6 @@ export function TierListEditor({
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-
-  useEffect(() => {
-    if (!dirty) return;
-    function warn(event: BeforeUnloadEvent) {
-      event.preventDefault();
-    }
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
 
   // ----------------------------------------------------------------
   // Drag and drop
@@ -354,9 +346,15 @@ export function TierListEditor({
               redirectTo="/tierlists"
             />
           )}
+          {/* A tier list is twenty-odd deliberate placements and nothing about
+              it autosaves, so while it's dirty this reads as a warning rather
+              than as status text — same reason the guard below exists. */}
           <span className="ml-auto text-xs text-grey-mid">
             {dirty ? (
-              <span className="text-warning">Unsaved changes</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning-bg px-2 py-0.5 font-medium text-warning">
+                <span className="size-1.5 rounded-full bg-warning" />
+                Unsaved changes
+              </span>
             ) : hasSavedList || savedJson ? (
               "All changes saved"
             ) : (
@@ -416,6 +414,15 @@ export function TierListEditor({
         tiers={tiers}
         champions={championsById}
         version={version}
+      />
+
+      {/* Nothing here autosaves, and a tier list is an hour of somebody's
+          opinions. Clicking any link in the navbar used to drop the lot without
+          a word — a client-side navigation never fires beforeunload. */}
+      <UnsavedChangesGuard
+        when={dirty}
+        title="Leave without saving this tier list?"
+        description="The tiers you've moved since the last save aren't stored anywhere yet, and leaving loses them."
       />
 
       <TierSettingsDialog

@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Save } from "lucide-react";
 import { toast } from "sonner";
-import { saveScrimSeries } from "@/app/(app)/scrims/actions";
+import { saveScrimSeries, updateScrimSeries } from "@/app/(app)/scrims/actions";
 import {
   SCRIM_KINDS,
   SCRIM_KIND_LABELS,
@@ -13,7 +14,7 @@ import {
   type ScrimRole,
 } from "@/lib/scrims/types";
 import type { ScrimOpponentRow } from "@/lib/scrims/types";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,12 +33,33 @@ import {
 import {
   buildSeriesPayload,
   emptyGame,
+  formSignature,
   otherSide,
   usedEarlierInSeries,
   type GameState,
+  type SeriesFormState,
 } from "@/components/scrims/draft-form-state";
+import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
+import { cn } from "@/lib/utils";
 
 const NEW_OPPONENT = "__new__";
+
+/**
+ * The series this form is editing, loaded into the shape the form works in.
+ *
+ * One component for both jobs rather than two: entering a series and correcting
+ * one are the same twenty fields, and a second copy of the draft grid would
+ * drift from this one the first time either changed.
+ */
+export type EditingSeries = {
+  id: string;
+  opponentId: string;
+  playedOn: string;
+  kind: ScrimKind;
+  fearless: boolean;
+  notes: string;
+  games: GameState[];
+};
 
 export function ScrimSeriesForm({
   opponents,
@@ -45,6 +67,7 @@ export function ScrimSeriesForm({
   defaultLineup,
   champions,
   version,
+  editing,
 }: {
   opponents: ScrimOpponentRow[];
   roster: RosterOption[];
@@ -52,17 +75,51 @@ export function ScrimSeriesForm({
   defaultLineup: Record<ScrimRole, string | null>;
   champions: PickableChampion[];
   version: string;
+  /** Set to rewrite an existing series; omitted to enter a new one. */
+  editing?: EditingSeries;
 }) {
   const router = useRouter();
   const [saving, startSaving] = useTransition();
 
-  const [opponentId, setOpponentId] = useState<string | null>(opponents[0]?.id ?? null);
-  const [opponentName, setOpponentName] = useState("");
-  const [playedOn, setPlayedOn] = useState(() => todayInputValue());
-  const [kind, setKind] = useState<ScrimKind>("scrim");
-  const [fearless, setFearless] = useState(false);
-  const [notes, setNotes] = useState("");
-  const [games, setGames] = useState<GameState[]>(() => [emptyGame("blue", defaultLineup)]);
+  // The form as it was handed over: the saved series when editing, an empty
+  // one otherwise. Held as state with a lazy initialiser so it's built once —
+  // emptyGame() mints a new key each call, and re-running it every render would
+  // remount the champion fields mid-typing.
+  const [initial] = useState<SeriesFormState>(() => ({
+    opponentId: editing?.opponentId ?? opponents[0]?.id ?? null,
+    opponentName: "",
+    playedOn: editing?.playedOn ?? todayInputValue(),
+    kind: editing?.kind ?? "scrim",
+    fearless: editing?.fearless ?? false,
+    notes: editing?.notes ?? "",
+    games: editing?.games ?? [emptyGame("blue", defaultLineup)],
+  }));
+
+  const [opponentId, setOpponentId] = useState<string | null>(initial.opponentId);
+  const [opponentName, setOpponentName] = useState(initial.opponentName);
+  const [playedOn, setPlayedOn] = useState(initial.playedOn);
+  const [kind, setKind] = useState<ScrimKind>(initial.kind);
+  const [fearless, setFearless] = useState(initial.fearless);
+  const [notes, setNotes] = useState(initial.notes);
+  const [games, setGames] = useState<GameState[]>(initial.games);
+
+  const current: SeriesFormState = {
+    opponentId,
+    opponentName,
+    playedOn,
+    kind,
+    fearless,
+    notes,
+    games,
+  };
+
+  // Twenty champion selections and forty numbers, none of it autosaved. The
+  // comparison is against what's stored — where the form started, and then
+  // whatever the last successful save wrote — so undoing an edit by hand clears
+  // the warning instead of leaving it stuck on, and a save clears it without
+  // the fields having to change.
+  const [baseline, setBaseline] = useState(() => formSignature(initial));
+  const unsaved = formSignature(current) !== baseline;
 
   const championsById = useMemo(
     () => new Map(champions.map((c) => [c.championId, c])),
@@ -84,26 +141,44 @@ export function ScrimSeriesForm({
   }
 
   function removeGame(index: number) {
+    // Dropping a saved game takes its note thread with it — scrim_game_notes
+    // cascades off the game row. Said out loud here rather than in a dialog:
+    // nothing is gone until the series is saved, so a warning that blocks the
+    // click would be asking to confirm something that hasn't happened yet.
+    if (games[index]?.id) {
+      toast.warning("Game removed. Saving deletes it, and any notes written on it.");
+    }
     setGames((prev) => prev.filter((_, i) => i !== index));
   }
 
   function save() {
-    const built = buildSeriesPayload(
-      { opponentId, opponentName, playedOn, kind, fearless, notes },
-      games,
-    );
+    const built = buildSeriesPayload(current);
     if (!built.ok) {
       toast.error(built.error);
       return;
     }
 
+    // Taken before the round trip, so a field typed while it's in flight stays
+    // counted as unsaved rather than being marked stored by a save that didn't
+    // include it.
+    const snapshot = formSignature(current);
+
     startSaving(async () => {
-      const result = await saveScrimSeries(built.payload);
+      const result = editing
+        ? await updateScrimSeries(editing.id, built.payload)
+        : await saveScrimSeries(built.payload);
+
       if (result.error) {
         toast.error(result.error);
         return;
       }
-      toast.success(`Saved ${games.length} game${games.length === 1 ? "" : "s"}.`);
+      toast.success(
+        editing ? "Series updated." : `Saved ${games.length} game${games.length === 1 ? "" : "s"}.`,
+      );
+      // What's on screen is now what's stored, which disarms the guard for the
+      // navigation below — without it, clicking anything while the destination
+      // renders would ask about saving work that's already saved.
+      setBaseline(snapshot);
       router.push(result.seriesId ? `/scrims/${result.seriesId}` : "/scrims/history");
       router.refresh();
     });
@@ -219,6 +294,9 @@ export function ScrimSeriesForm({
           version={version}
           fearlessUsed={fearless ? usedEarlierInSeries(games, index) : EMPTY_SET}
           canRemove={games.length > 1}
+          // A saved game's notes are an authored thread on the series page, so
+          // the entry-time note box would be a field that writes nothing here.
+          showNotes={!editing}
           onChange={(patch) => patchGame(index, patch)}
           onRemove={() => removeGame(index)}
         />
@@ -235,11 +313,48 @@ export function ScrimSeriesForm({
           <Plus />
           Add game
         </Button>
-        <Button type="button" size="sm" onClick={save} disabled={saving} className="ml-auto">
+        {/* Same warning the tier list editor carries, for the same reason:
+            nothing here autosaves, and this form is twenty champion selections
+            deep before it's worth anything. */}
+        {unsaved && (
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning-bg px-2 py-0.5 text-xs font-medium text-warning">
+            <span className="size-1.5 rounded-full bg-warning" />
+            Unsaved changes
+          </span>
+        )}
+        {editing && (
+          <Link
+            href={`/scrims/${editing.id}`}
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), !unsaved && "ml-auto")}
+          >
+            Cancel
+          </Link>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          onClick={save}
+          disabled={saving}
+          className={cn(!editing && !unsaved && "ml-auto")}
+        >
           {saving ? <Loader2 className="animate-spin" /> : <Save />}
-          {saving ? "Saving…" : `Save series`}
+          {saving ? "Saving…" : editing ? "Save changes" : "Save series"}
         </Button>
       </div>
+
+      {/* A scrim goes in from a screenshot after the block, usually late, in one
+          sitting. Clicking anything in the navbar mid-entry used to drop the
+          lot without a word — a client-side navigation never fires
+          beforeunload. */}
+      <UnsavedChangesGuard
+        when={unsaved}
+        title={editing ? "Leave without saving your changes?" : "Leave without saving this series?"}
+        description={
+          editing
+            ? "The corrections you've made to this series aren't stored yet, and leaving drops them."
+            : "This series hasn't been saved yet. Leaving now loses every game you've entered."
+        }
+      />
     </div>
   );
 }

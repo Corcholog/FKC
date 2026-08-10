@@ -5,7 +5,13 @@
 // testable plain functions rather than closures inside a 400-line client
 // component.
 
-import { BANS_PER_SIDE, SCRIM_ROLES, type ScrimRole, type ScrimSide } from "@/lib/scrims/types";
+import {
+  BANS_PER_SIDE,
+  SCRIM_ROLES,
+  type ScrimGameView,
+  type ScrimRole,
+  type ScrimSide,
+} from "@/lib/scrims/types";
 import type { ScrimGameInput, ScrimPickInput, ScrimSeriesInput } from "@/lib/scrims/validate";
 
 /** Numbers live as strings while being typed: "" is a real state, 0 isn't. */
@@ -23,6 +29,11 @@ export type PickState = {
 export type GameState = {
   /** Stable across reorders so React keys — and field remounts — behave. */
   key: string;
+  /**
+   * The saved row this game is, when editing an existing series. Null for a
+   * game being added, and for every game in the new-series form.
+   */
+  id: string | null;
   side: ScrimSide;
   win: boolean;
   /** "32:14", or "32" for whole minutes. Empty is allowed. */
@@ -61,6 +72,7 @@ export function emptyGame(side: ScrimSide, lineup: Record<ScrimRole, string | nu
 
   return {
     key: newGameKey(),
+    id: null,
     side,
     win: true,
     duration: "",
@@ -69,6 +81,68 @@ export function emptyGame(side: ScrimSide, lineup: Record<ScrimRole, string | nu
     notes: "",
     ally: forSide(true),
     enemy: forSide(false),
+  };
+}
+
+/**
+ * A saved game as form state, for editing a series that already exists.
+ *
+ * The exact inverse of what the form does on the way out: stored numbers become
+ * the strings the inputs hold, and the ban arrays are padded back to five slots
+ * so a game recorded with three bans still shows five boxes.
+ *
+ * `notes` stays empty because it isn't part of an edit — a game's notes are an
+ * authored thread on the series page, not a field of the game, so the edit form
+ * hides the box rather than offering one that writes nothing.
+ */
+export function gameStateFromView(game: ScrimGameView): GameState {
+  const bans = (stored: number[]): Array<number | null> =>
+    Array.from({ length: BANS_PER_SIDE }, (_, i) => stored[i] ?? null);
+
+  const draft = (ally: boolean): Record<ScrimRole, PickState> => {
+    const byRole = new Map(
+      game.picks.filter((p) => p.ally === ally).map((p) => [p.team_position, p]),
+    );
+
+    return Object.fromEntries(
+      SCRIM_ROLES.map((role) => {
+        const pick = byRole.get(role);
+        // A missing role is unreachable through the form — ten picks are
+        // required — but a half-written game shouldn't be the one game nobody
+        // can open the editor on to fix.
+        if (!pick) return [role, emptyPick()];
+
+        return [
+          role,
+          {
+            championId: pick.champion_id,
+            // Enemy rows have no roster player, and storing one would show a
+            // teammate's name on their draft.
+            playerId: ally ? pick.player_id : null,
+            playerName: pick.player_name ?? "",
+            kills: String(pick.kills),
+            deaths: String(pick.deaths),
+            assists: String(pick.assists),
+            totalCs: String(pick.total_cs),
+          } satisfies PickState,
+        ];
+      }),
+    ) as Record<ScrimRole, PickState>;
+  };
+
+  return {
+    // The row id doubles as the React key: unique already, and stable across
+    // the removal of any other game.
+    key: game.id,
+    id: game.id,
+    side: game.side,
+    win: game.win,
+    duration: formatDurationInput(game.duration_seconds),
+    allyBans: bans(game.ally_bans),
+    enemyBans: bans(game.enemy_bans),
+    notes: "",
+    ally: draft(true),
+    enemy: draft(false),
   };
 }
 
@@ -181,6 +255,17 @@ export type BuildResult =
   | { ok: true; payload: ScrimSeriesInput }
   | { ok: false; error: string };
 
+/** Everything the form holds: the fields above the games, and the games. */
+export type SeriesFormState = {
+  opponentId: string | null;
+  opponentName: string;
+  playedOn: string;
+  kind: ScrimSeriesInput["kind"];
+  fearless: boolean;
+  notes: string;
+  games: GameState[];
+};
+
 /**
  * Turns the form into the action's payload, refusing anything incomplete.
  *
@@ -189,17 +274,7 @@ export type BuildResult =
  * out about an empty champion field *before* a round trip is the difference
  * between a form that feels solid and one that feels like it's arguing.
  */
-export function buildSeriesPayload(
-  meta: {
-    opponentId: string | null;
-    opponentName: string;
-    playedOn: string;
-    kind: ScrimSeriesInput["kind"];
-    fearless: boolean;
-    notes: string;
-  },
-  games: GameState[],
-): BuildResult {
+export function buildSeriesPayload({ games, ...meta }: SeriesFormState): BuildResult {
   if (!meta.opponentId && !meta.opponentName.trim()) {
     return { ok: false, error: "Pick an opponent, or type a name for a new one." };
   }
@@ -231,6 +306,8 @@ export function buildSeriesPayload(
     }
 
     gameInputs.push({
+      // Null on a new game, which is every game when entering a series.
+      id: game.id,
       side: game.side,
       win: game.win,
       durationSeconds,
@@ -253,4 +330,57 @@ export function buildSeriesPayload(
       games: gameInputs,
     },
   };
+}
+
+// ------------------------------------------------------------
+// Has anything actually changed?
+// ------------------------------------------------------------
+
+/**
+ * The whole form as one comparable string.
+ *
+ * "Is there unsaved work here?" is this string against the one taken when the
+ * form opened — which means an edit that ends up back where it started stops
+ * counting as a change, and nobody is warned about undoing their own typo.
+ *
+ * Not `JSON.stringify(state)`. That would compare a *shape*: key order decides
+ * the result, and `key` — the React identity of a row, regenerated every time a
+ * game is added — would read as content. So everything is written out
+ * positionally, and only the parts a save would actually store are included:
+ *
+ *   * `key` is left out, being identity rather than content
+ *   * the strings are trimmed, since trailing space in a name is not an edit
+ *   * a typed new-opponent name only counts while "New team…" is selected —
+ *     text left behind in a field that no longer applies changes nothing
+ */
+export function formSignature(form: SeriesFormState): string {
+  const pick = (p: PickState) => [
+    p.championId,
+    p.playerId,
+    p.playerName.trim(),
+    p.kills.trim(),
+    p.deaths.trim(),
+    p.assists.trim(),
+    p.totalCs.trim(),
+  ];
+
+  return JSON.stringify([
+    form.opponentId,
+    form.opponentId === null ? form.opponentName.trim() : "",
+    form.playedOn,
+    form.kind,
+    form.fearless,
+    form.notes.trim(),
+    form.games.map((game) => [
+      game.id,
+      game.side,
+      game.win,
+      game.duration.trim(),
+      game.allyBans,
+      game.enemyBans,
+      game.notes.trim(),
+      SCRIM_ROLES.map((role) => pick(game.ally[role])),
+      SCRIM_ROLES.map((role) => pick(game.enemy[role])),
+    ]),
+  ]);
 }

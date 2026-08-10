@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getChampionMap, getLatestVersion } from "@/lib/ddragon";
@@ -11,6 +11,10 @@ import { SCRIM_KIND_LABELS } from "@/lib/scrims/types";
 import { ScrimGameCard } from "@/components/scrims/draft-board";
 import { MetaChip, SeriesScore } from "@/components/scrims/scrim-ui";
 import { DeleteSeriesButton } from "@/components/scrims/delete-series-button";
+// A Link styled as a button, not a Button rendering a Link — base-ui's Button
+// wants a real <button> underneath. Same call as tierlists/page.tsx.
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // user_id rides along purely to put a name on each note's author — see
 // lib/scrims/notes.ts for why that's resolved at render time.
@@ -84,7 +88,16 @@ export default async function ScrimSeriesPage({ params }: { params: Promise<{ id
 
         <div className="ml-auto flex items-center gap-3">
           <SeriesScore wins={wins} losses={games.length - wins} className="text-2xl" />
-          <DeleteSeriesButton seriesId={series.id} opponentName={opponent.name} />
+          <div className="flex items-center gap-1">
+            <Link
+              href={`/scrims/${series.id}/edit`}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            >
+              <Pencil />
+              Edit
+            </Link>
+            <DeleteSeriesButton seriesId={series.id} opponentName={opponent.name} />
+          </div>
         </div>
       </div>
 

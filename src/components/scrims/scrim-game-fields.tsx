@@ -185,6 +185,7 @@ export function ScrimGameFields({
   version,
   fearlessUsed,
   canRemove,
+  showNotes = true,
   onChange,
   onRemove,
 }: {
@@ -197,6 +198,12 @@ export function ScrimGameFields({
   /** Champions used earlier in this series, when the series is fearless. */
   fearlessUsed: Set<number>;
   canRemove: boolean;
+  /**
+   * Off when editing a saved series: by then the game's notes are a thread on
+   * the series page, written by whoever wrote them, and this box would be a
+   * second place to type something that goes nowhere.
+   */
+  showNotes?: boolean;
   onChange: (patch: Partial<GameState>) => void;
   onRemove: () => void;
 }) {
@@ -357,19 +364,21 @@ export function ScrimGameFields({
           form. What's typed here becomes the first note in the game's thread,
           so it can be edited, replied to and deleted afterwards like any
           other. */}
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`${game.key}-notes`} className="text-xs">
-          Game notes
-        </Label>
-        <Textarea
-          id={`${game.key}-notes`}
-          value={game.notes}
-          onChange={(e) => onChange({ notes: e.target.value })}
-          placeholder="Optional — how it went, what to review."
-          rows={2}
-          className="text-sm"
-        />
-      </div>
+      {showNotes && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${game.key}-notes`} className="text-xs">
+            Game notes
+          </Label>
+          <Textarea
+            id={`${game.key}-notes`}
+            value={game.notes}
+            onChange={(e) => onChange({ notes: e.target.value })}
+            placeholder="Optional — how it went, what to review."
+            rows={2}
+            className="text-sm"
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -1,11 +1,24 @@
-export default function DraftChampionsPage() {
+import { createClient } from "@/lib/supabase/server";
+import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
+import { loadChampionProfiles, loadDraftTags } from "@/lib/draft/queries";
+import { ChampionProfileTable } from "@/components/draft/champion-profile-table";
+
+export default async function DraftChampionsPage() {
+  const supabase = await createClient();
+  const version = await getLatestVersion();
+
+  const [championMap, functionTags, profiles] = await Promise.all([
+    getChampionMap(version),
+    loadDraftTags(supabase, "function"),
+    loadChampionProfiles(supabase),
+  ]);
+
   return (
-    <div className="panel-hex flex flex-col items-center justify-center gap-2 p-12 text-center">
-      <h2 className="font-heading text-lg font-semibold text-white">Champions</h2>
-      <p className="max-w-md text-sm text-grey-light">
-        Lane roles and function tags per champion — Engage, Poke, AOE CC and the rest —
-        land in Phase 1.
-      </p>
-    </div>
+    <ChampionProfileTable
+      champions={realChampions(championMap)}
+      version={version}
+      functionTags={functionTags}
+      profiles={[...profiles.values()]}
+    />
   );
 }

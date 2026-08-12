@@ -360,3 +360,42 @@ The price is that a typo splits one person in two — fixable by editing the ser
 hundred games, which one tournament season passes. Notes are loaded the same way and only on the
 two pages that render them — every other scrim page derives aggregates, and prose feeds none of
 them.
+
+## 10. Draft strategy — `draft_tags` and `champion_profiles`
+
+Migration 015, first of three for the draft-tools section documented in
+`docs/features/draft-strategy/`. This entry covers the two tables that phase shipped;
+`champion_counters` (016) and `draft_comps` (017) get their own entries when they land.
+
+**No foreign key on `champion_profiles.champion_id`, and none is possible.** Exactly the
+`champion_tier_lists` precedent from §2: there is no champions table in this database, and
+this migration doesn't create one. Names and icons come from Data Dragon at request time
+(`src/lib/ddragon.ts`); `champion_profiles` holds only what DDragon can't — lane roles and
+function tags — keyed by DDragon's numeric id, validated server-side against
+`new Set(championMap.keys())` on every write instead of by a constraint the database can't
+express.
+
+**A champion with no annotations has no row.** The page joins the full DDragon roster
+against this table and renders an empty state per champion; there is no pre-seed and no
+backfill when Riot ships a new one.
+
+**`draft_tags` is a managed vocabulary, not free text and not a constant.** Free text
+fragments across `Engage`/`engage`/`Engaje` within a week — the same problem
+`scrim_opponents` solves for team names (§9). A hardcoded array would be type-safe but
+needs a deploy to add a tag, and the vocabulary is meant to grow while prepping for a
+specific opponent. `idx_draft_tags_label_lower` is case-insensitive **per kind**, so
+`'Engage'` (function) and a hypothetical `'Engage'` (win_condition) don't collide with each
+other — they mean different things in different tables' rows.
+
+**One `kind` column serves two tables' vocabularies.** `function` tags describe a champion
+(`champion_profiles.tags`); `win_condition` tags describe what a comp or synergy is trying
+to do (`draft_comps.win_conditions`, migration 017). They're the same *kind* of thing —
+free-form, team-agreed labels — read through the same UI component
+(`TagMultiSelect`), so one table serves both rather than duplicating the CRUD, the
+uniqueness index and the rename/delete flow twice.
+
+**RLS follows `champion_tier_lists`, not `match_notes`.** `authenticated_full_access` on
+both tables — anyone signed in can annotate, correct or delete anything.
+`champion_profiles.updated_by` is attribution ("last touched by Corcho"), not enforcement,
+same reasoning as `scrim_series.created_by` (§9): somebody has to be able to fix a
+teammate's tag.

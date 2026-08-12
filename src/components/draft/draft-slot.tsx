@@ -27,6 +27,10 @@ export function DraftSlot({
   active,
   onActivate,
   onClear,
+  selecting = false,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
 }: {
   slot: SlotRef;
   /** Resolved champion, or null for an empty slot. */
@@ -35,28 +39,54 @@ export function DraftSlot({
   active: boolean;
   onActivate: () => void;
   onClear: () => void;
+  /**
+   * Synergy selection is running. Every slot goes inert except the selectable
+   * ones — a mode that both edits and selects produces accidental picks, and
+   * the board is one right-click away from losing a champion.
+   */
+  selecting?: boolean;
+  /** This slot can be picked for the synergy: filled, and on the chosen side. */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const label = slotLabel(slot);
   const isBan = slot.kind === "ban";
+  const inert = selecting && !selectable;
 
   return (
     <div className="group relative">
       <button
         type="button"
-        onClick={onActivate}
+        onClick={selecting ? onToggleSelect : onActivate}
+        disabled={inert}
         onContextMenu={(e) => {
           // Without this the menu covers the board and the clear happens
           // underneath it anyway.
           e.preventDefault();
-          if (champion) onClear();
+          // Not while selecting: the whole point of the mode is that the board
+          // can't change under it.
+          if (champion && !selecting) onClear();
         }}
         aria-label={
-          champion ? `${label}: ${champion.name}. Click to select this slot.` : `${label}, empty`
+          selecting
+            ? `${label}${champion ? `: ${champion.name}` : ""}${selectable ? `. ${selected ? "Selected" : "Select"} for this synergy.` : ", not selectable"}`
+            : champion
+              ? `${label}: ${champion.name}. Click to select this slot.`
+              : `${label}, empty`
         }
-        aria-pressed={active}
+        aria-pressed={selecting ? selected : active}
         className={cn(
           "flex flex-col items-center gap-1 rounded-sm border p-1 transition-colors",
-          active ? "border-gold bg-gold-muted/20" : "border-border hover:border-grey-mid",
+          selecting
+            ? selected
+              ? "border-gold bg-gold-muted/30"
+              : selectable
+                ? "border-border hover:border-gold"
+                : "cursor-not-allowed border-dashed border-border opacity-40"
+            : active
+              ? "border-gold bg-gold-muted/20"
+              : "border-border hover:border-grey-mid",
           !champion && "border-dashed",
         )}
       >
@@ -71,6 +101,7 @@ export function DraftSlot({
             version={version}
             size={isBan ? "md" : "lg"}
             banned={isBan}
+            selected={selected}
           />
         ) : (
           // The grey silhouette rather than an empty box: it reads as a slot
@@ -102,7 +133,7 @@ export function DraftSlot({
         </span>
       </button>
 
-      {champion && (
+      {champion && !selecting && (
         <button
           type="button"
           onClick={onClear}

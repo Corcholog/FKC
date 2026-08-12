@@ -576,6 +576,36 @@ is what makes "after hydration" a value the render can branch on. The stored JSO
 untrusted input and goes through `isGameBoard` first; a key left by an earlier version of
 the board would otherwise crash the render rather than fail cleanly.
 
+### Saving off the board
+
+Two buttons write `draft_comps` rows through **Phase 3's `saveDraftComp`, unchanged** — that
+action takes its kind in the payload and assumes nothing about where the champions came
+from precisely so this could exist without a second write path into the same table. Two save
+paths into one table is the duplication the one-table decision was made to avoid.
+
+**Save composition** takes one side's five picks, in slot order. With both sides full the
+dialog asks which; with one, it's preselected and the chooser doesn't render. The dialog
+previews the champions it will write — non-negotiable, because it covers the board while
+open, so "did I save blue or red" is otherwise unanswerable until you visit `/draft/comps`.
+
+**Save synergy** is a mode over the board rather than a dialog-first flow. Filled pick slots
+become selectable; empty slots, bans and the whole champion grid go inert. A mode that both
+selects and edits produces accidental picks, and picking a champion mid-selection would
+change the very slots being selected. **Selection is confined to one side** — the first pick
+locks the other side for the rest of the mode. A synergy spanning both teams isn't a
+synergy, and the contextual panel would later match it against your own picks and suggest a
+combo containing an enemy champion. Escape leaves the mode, but the listener detaches while
+the save dialog is open, or one keypress unwinds both and throws away the selection behind
+it — the nested-dismissal problem `ChampionCombobox` solves with `stopPropagation`.
+
+**Nothing about the board changes on save.** No clear, no navigate, no deselect. Someone who
+just saved blue is usually about to save red and keep drafting; saving is a read of the
+board, not a state transition on it. The toast carries a "View" action instead, the same
+call `OpponentNotesForm` makes by saving in place.
+
+Note that the save dialog follows `DRAFT_COMP_SHAPE`, so a synergy gets no win-condition
+field and neither kind requires a name — see §12 of [02](02-data-model.md).
+
 ### Performance, once, so it doesn't come up again
 
 There are ~170 champions and availability is one `Set.has` per tile, built once per render

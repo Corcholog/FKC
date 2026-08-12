@@ -204,6 +204,23 @@ export function unavailableInSeries(
 }
 
 /**
+ * The picks of one side, in slot order (B1…B5), empties preserved as null.
+ *
+ * Not compacted, for two reasons: a comp stores pick order and that's real
+ * information about how the draft was meant to go (see the champion_ids comment
+ * in migration 017), and keeping the holes lets the caller say *which* slot is
+ * missing rather than only that one is.
+ */
+export function sidePicks(board: GameBoard, side: Side): (number | null)[] {
+  return [...board.picks[side]];
+}
+
+/** The same, with the holes dropped — what a save actually writes. */
+export function filledSidePicks(board: GameBoard, side: Side): number[] {
+  return sidePicks(board, side).filter((id): id is number => id !== null);
+}
+
+/**
  * Games *after* `gameIndex` where `championId` already sits in a slot, as
  * 1-based game numbers.
  *

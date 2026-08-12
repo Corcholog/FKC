@@ -1,13 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { toast } from "sonner";
 import type { ChampionInfo } from "@/lib/ddragon";
-import type { ChampionProfileRow } from "@/lib/draft/types";
+import {
+  COMP_SIZE,
+  SYNERGY_MAX_SIZE,
+  SYNERGY_MIN_SIZE,
+  type ChampionProfileRow,
+  type DraftCompKind,
+  type DraftTagRow,
+} from "@/lib/draft/types";
 import {
   clearSlot,
   conflictsAfter,
   emptyBoard,
   emptySeries,
+  filledSidePicks,
   gameFillCounts,
   isBoardEmpty,
   isSeriesBoard,
@@ -16,6 +25,7 @@ import {
   readSlot,
   releaseChampionAfter,
   setSlot,
+  SIDES,
   slotKey,
   slotLabel,
   SLOTS_PER_SIDE,
@@ -30,6 +40,7 @@ import { DraftChampionGrid } from "@/components/draft/draft-champion-grid";
 import { DraftControls } from "@/components/draft/draft-controls";
 import { DraftSlot } from "@/components/draft/draft-slot";
 import { PickConflictDialog } from "@/components/draft/pick-conflict-dialog";
+import { SaveCompDialog, type CompSource } from "@/components/draft/save-comp-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -130,11 +141,14 @@ export function DraftSimulator({
   champions,
   version,
   profiles,
+  winConditionTags,
 }: {
   champions: Champion[];
   version: string;
   /** Phase 1's annotations, for the grid's role filter. */
   profiles: ChampionProfileRow[];
+  /** Phase 1's win-condition vocabulary, for the save dialog. */
+  winConditionTags: DraftTagRow[];
 }) {
   const [series, setSeries] = useState<SeriesBoard>(emptySeries);
   const [currentGame, setCurrentGame] = useState(0);
@@ -147,6 +161,14 @@ export function DraftSimulator({
     slot: SlotRef;
     games: number[];
   } | null>(null);
+  // Synergy selection: a mode over the board, not a dialog-first flow. `picked`
+  // is in click order but is sorted into slot order before saving.
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<SlotRef[]>([]);
+  // The comp/synergy save dialog, with the champions it will write.
+  const [saving, setSaving] = useState<{ kind: DraftCompKind; sources: CompSource[] } | null>(
+    null,
+  );
   const [restored, setRestored] = useState(false);
   const hydrated = useHydrated();
 
@@ -193,6 +215,24 @@ export function DraftSimulator({
       // Private mode or a full quota. The board still works for this session.
     }
   }, [series, currentGame, fearless, restored]);
+
+  // Escape leaves selection mode — but only when no dialog is open, or Escape
+  // would unwind both at once and the user would lose the selection they were
+  // trying to keep. Same nested-dismissal problem ChampionCombobox solves with
+  // stopPropagation inside the mobile sheet.
+  useEffect(() => {
+    // Not while the dialog is up: it has its own Escape, and this listener
+    // would fire on the same keypress and throw away the selection behind it.
+    if (!selecting || saving) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setSelecting(false);
+        setPicked([]);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selecting, saving]);
 
   /** Replaces the game on screen, leaving the rest of the series alone. */
   function updateGame(change: (board: GameBoard) => GameBoard) {
@@ -251,10 +291,62 @@ export function DraftSimulator({
     setActive(null);
   }
 
+  // ----- saving off the board -------------------------------------------
+
+  /** Sides of the visible game with at least `min` picks, blue first. */
+  function sidesWith(min: number): CompSource[] {
+    return SIDES.flatMap((side) => {
+      const championIds = filledSidePicks(board, side);
+      return championIds.length >= min ? [{ side, championIds }] : [];
+    });
+  }
+
+  const compSources = sidesWith(COMP_SIZE);
+  const synergySides = sidesWith(SYNERGY_MIN_SIZE);
+  const pickedSide = picked[0]?.side ?? null;
+
+  function exitSelection() {
+    setSelecting(false);
+    setPicked([]);
+  }
+
+  function toggleSelect(slot: SlotRef) {
+    setPicked((prev) => {
+      const already = prev.some((s) => slotKey(s) === slotKey(slot));
+      if (already) return prev.filter((s) => slotKey(s) !== slotKey(slot));
+      if (prev.length >= SYNERGY_MAX_SIZE) {
+        toast.error(`A synergy holds at most ${SYNERGY_MAX_SIZE} champions.`);
+        return prev;
+      }
+      return [...prev, slot];
+    });
+  }
+
+  function confirmSelection() {
+    if (!pickedSide || picked.length < SYNERGY_MIN_SIZE) return;
+    // Slot order, not click order — B1 before B3 however they were clicked.
+    const championIds = [...picked]
+      .sort((a, b) => a.index - b.index)
+      .flatMap((slot) => {
+        const id = readSlot(board, slot);
+        return id === null ? [] : [id];
+      });
+    setSaving({ kind: "synergy", sources: [{ side: pickedSide, championIds }] });
+  }
+
   function renderRow(side: Side, kind: SlotKind) {
     return Array.from({ length: SLOTS_PER_SIDE }, (_, index) => {
       const slot: SlotRef = { side, kind, index };
       const championId = readSlot(board, slot);
+      // Selectable: a filled pick, and — once anything is chosen — on that same
+      // side. A synergy spanning both teams isn't a synergy, and locking the
+      // other side the moment the first is picked is cheaper than explaining
+      // the rule after the fact.
+      const selectable =
+        selecting &&
+        kind === "pick" &&
+        championId !== null &&
+        (pickedSide === null || pickedSide === side);
       return (
         <DraftSlot
           key={slotKey(slot)}
@@ -266,6 +358,10 @@ export function DraftSimulator({
           active={active !== null && slotKey(active) === slotKey(slot)}
           onActivate={() => setActive(slot)}
           onClear={() => clearOne(slot)}
+          selecting={selecting}
+          selectable={selectable}
+          selected={picked.some((s) => slotKey(s) === slotKey(slot))}
+          onToggleSelect={() => toggleSelect(slot)}
         />
       );
     });
@@ -305,8 +401,10 @@ export function DraftSimulator({
                 setCurrentGame(i);
                 // The old active slot belongs to the game we just left; keeping
                 // it would send the next grid click into a board nobody is
-                // looking at.
+                // looking at. A selection belongs to that game's picks for the
+                // same reason.
                 setActive(null);
+                exitSelection();
               }}
               aria-pressed={i === currentGame}
               aria-label={`Game ${i + 1}${fillCounts[i] > 0 ? `, ${fillCounts[i]} filled` : ", empty"}`}
@@ -420,9 +518,48 @@ export function DraftSimulator({
             gamesWithContent={fillCounts.filter((n) => n > 0).length}
             onClearGame={clearGame}
             onClearSeries={clearSeries}
+            canSaveComp={compSources.length > 0}
+            canSaveSynergy={synergySides.length > 0}
+            onSaveComp={() => setSaving({ kind: "comp", sources: compSources })}
+            onSaveSynergy={() => {
+              setActive(null);
+              setPicked([]);
+              setSelecting(true);
+            }}
           />
         </div>
       </div>
+
+      {selecting && (
+        <div
+          className="panel-hex flex flex-wrap items-center justify-between gap-2 p-2"
+          data-export-hide
+        >
+          <p className="text-xs text-grey-light">
+            {picked.length === 0 ? (
+              <>Pick two to four champions from one side.</>
+            ) : (
+              <>
+                <span className="tabular-nums text-white">{picked.length}</span> selected
+                {picked.length < SYNERGY_MIN_SIZE && " — one more at least"}
+              </>
+            )}
+          </p>
+          <div className="flex items-center gap-1">
+            <Button type="button" size="sm" variant="outline" onClick={exitSelection}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={confirmSelection}
+              disabled={picked.length < SYNERGY_MIN_SIZE}
+            >
+              Save synergy
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* No md:items-start — the default stretch is what lets the pick
             columns match the grid's height. */}
@@ -436,6 +573,7 @@ export function DraftSimulator({
             profiles={profiles}
             onPick={pick}
             activeSlotLabel={active ? slotLabel(active) : null}
+            inert={selecting}
           />
         </div>
         {pickColumn("red")}
@@ -450,6 +588,23 @@ export function DraftSimulator({
           games={conflict.games}
           onConfirm={resolveConflict}
           onCancel={() => setConflict(null)}
+        />
+      )}
+
+      {saving && (
+        <SaveCompDialog
+          kind={saving.kind}
+          sources={saving.sources}
+          championById={championById}
+          version={version}
+          winConditionTags={winConditionTags}
+          onClose={() => {
+            setSaving(null);
+            // Only the synergy path was in a mode. Leaving it here rather than
+            // in the dialog keeps the dialog ignorant of where its champions
+            // came from.
+            if (selecting) exitSelection();
+          }}
         />
       )}
     </div>

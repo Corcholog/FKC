@@ -40,6 +40,7 @@ export function DraftChampionGrid({
   profiles,
   onPick,
   activeSlotLabel,
+  inert = false,
 }: {
   champions: Champion[];
   version: string;
@@ -54,6 +55,12 @@ export function DraftChampionGrid({
   onPick: (championId: number) => void;
   /** Where a click will land, named in the hint. Null when no slot is active. */
   activeSlotLabel: string | null;
+  /**
+   * Synergy selection is running. The grid goes dim and unclickable — a mode
+   * that both selects and edits produces accidental picks, and picking a
+   * champion mid-selection would change the very slots being selected.
+   */
+  inert?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState(ALL_ROLES);
@@ -72,7 +79,13 @@ export function DraftChampionGrid({
   }, [champions, query, roleFilter, rolesByChampion]);
 
   return (
-    <div className="panel-hex flex flex-col gap-3 p-3">
+    <div
+      className={cn(
+        "panel-hex flex flex-col gap-3 p-3 transition-opacity",
+        inert && "pointer-events-none opacity-40",
+      )}
+      aria-hidden={inert}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2" data-export-hide>
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 text-grey-mid" />

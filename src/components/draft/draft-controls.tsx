@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eraser, Trash2 } from "lucide-react";
+import { Eraser, Link2, Trash2, Users } from "lucide-react";
 import { DownloadPngButton } from "@/components/tierlist/download-png-button";
 import { Button } from "@/components/ui/button";
 import {
@@ -95,6 +95,10 @@ export function DraftControls({
   gamesWithContent,
   onClearGame,
   onClearSeries,
+  canSaveComp,
+  canSaveSynergy,
+  onSaveComp,
+  onSaveSynergy,
 }: {
   boardElementId: string;
   fileName: string;
@@ -104,9 +108,49 @@ export function DraftControls({
   gamesWithContent: number;
   onClearGame: () => void;
   onClearSeries: () => void;
+  /** A side of the visible game has all five picks. */
+  canSaveComp: boolean;
+  /** A side of the visible game has at least two picks. */
+  canSaveSynergy: boolean;
+  onSaveComp: () => void;
+  onSaveSynergy: () => void;
 }) {
   return (
     <div className="flex items-center gap-1" data-export-hide>
+      {/* The saves read as primary against the clears and the export, because
+          they're the reason to have drafted anything here. Disabled states say
+          what's missing rather than just refusing — a greyed button with no
+          explanation reads as broken. */}
+      <Button
+        type="button"
+        size="icon-sm"
+        disabled={!canSaveComp}
+        onClick={onSaveComp}
+        aria-label="Save composition"
+        title={
+          canSaveComp
+            ? "Save a side's five picks as a composition"
+            : "Fill one side's five picks to save a composition"
+        }
+      >
+        <Users />
+      </Button>
+
+      <Button
+        type="button"
+        size="icon-sm"
+        disabled={!canSaveSynergy}
+        onClick={onSaveSynergy}
+        aria-label="Save synergy"
+        title={
+          canSaveSynergy
+            ? "Pick two to four champions from one side"
+            : "Two picks on one side are needed to save a synergy"
+        }
+      >
+        <Link2 />
+      </Button>
+
       <ConfirmButton
         icon={<Eraser />}
         label={`Clear game ${gameNumber}`}

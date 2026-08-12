@@ -167,7 +167,9 @@ export function DraftSimulator({
         <DraftSlot
           key={slotKey(slot)}
           slot={slot}
-          champion={championId === null ? null : (championById.get(championId) ?? null)}
+          champion={
+            championId === null ? null : (championById.get(championId) ?? null)
+          }
           version={version}
           active={active !== null && slotKey(active) === slotKey(slot)}
           onActivate={() => setActive(slot)}
@@ -183,7 +185,12 @@ export function DraftSimulator({
     // way a real draft looks. There is no phase-one/phase-two logic behind it,
     // no ordering rule and no gating. It looks like state and isn't.
     return (
-      <div className={cn("flex items-start gap-1", side === "red" && "flex-row-reverse")}>
+      <div
+        className={cn(
+          "flex items-start gap-1",
+          side === "red" && "flex-row-reverse",
+        )}
+      >
         <div className="flex gap-1">{slots.slice(0, 3)}</div>
         <div className="flex gap-1">{slots.slice(3)}</div>
       </div>
@@ -231,54 +238,63 @@ export function DraftSimulator({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Everything inside this id is what the PNG captures. Chrome within it
-          carries data-export-hide; the controls row below sits outside entirely.
-
-          The attribute has to be spelled kebab-case: the DOM lowercases
-          attribute names, so data-exportHide arrives as data-exporthide and
-          reads back as dataset.exporthide — which download-png-button's filter,
-          checking dataset.exportHide, never sees. It would have exported every
-          bit of chrome silently, and React's "spell it lowercase" warning is
-          the only thing that says so. */}
-      <div id={BOARD_ELEMENT_ID} className="flex flex-col gap-3">
-        {/* Centred, not spread. justify-between pinned the two sides to
+    // Everything inside this id is what the PNG captures — which is now
+    // everything, controls included, so each piece of chrome has to opt out
+    // for itself with data-export-hide rather than by sitting outside.
+    //
+    // The attribute has to be spelled kebab-case: the DOM lowercases attribute
+    // names, so data-exportHide arrives as data-exporthide and reads back as
+    // dataset.exporthide — which download-png-button's filter, checking
+    // dataset.exportHide, never sees. It would have exported every bit of
+    // chrome silently, and React's "spell it lowercase" warning is the only
+    // thing that says so.
+    <div id={BOARD_ELEMENT_ID} className="flex flex-col gap-3">
+      {/* Centred, not spread. justify-between pinned the two sides to
             opposite edges of a max-w-7xl panel with a canyon of nothing in
             between — §11's scrim board learned the same lesson and capped
             itself for the same reason: a face-off reads as a face-off when the
-            two sides are near each other. Nothing is being reserved here for
-            the fearless switcher; that lands as its own control. */}
-        <div className="panel-hex flex flex-wrap items-center justify-center gap-x-6 gap-y-3 p-3">
+            two sides are near each other.
+
+            Three columns rather than a flex row with the controls appended:
+            the empty first column mirrors the controls' width, so the bans stay
+            centred on the panel instead of being pushed left by them. The
+            controls ride along in this panel's corner because they needed no
+            vertical space of their own — a full row for two buttons was the
+            cheapest thing on the page to give back to the grid. */}
+      <div className="panel-hex grid grid-cols-[1fr_auto_1fr] items-start gap-2 p-3">
+        <div />
+        <div className="flex min-w-0 flex-wrap items-center justify-center gap-x-6 gap-y-3">
           {banRow("blue")}
-          <span className="text-[10px] tracking-wider text-grey-mid uppercase">Bans</span>
+          <span className="text-[10px] tracking-wider text-grey-mid uppercase">
+            Bans
+          </span>
           {banRow("red")}
         </div>
-
-        {/* No md:items-start — the default stretch is what lets the pick
-            columns match the grid's height. */}
-        <div className="flex flex-col gap-3 md:flex-row">
-          {pickColumn("blue")}
-          <div className="min-w-0 flex-1">
-            <DraftChampionGrid
-              champions={champions}
-              version={version}
-              unavailable={unavailable}
-              profiles={profiles}
-              onPick={pick}
-              activeSlotLabel={active ? slotLabel(active) : null}
-            />
-          </div>
-          {pickColumn("red")}
+        <div className="flex justify-end">
+          <DraftControls
+            boardElementId={BOARD_ELEMENT_ID}
+            fileName={`draft-${todayStamp()}.png`}
+            canClear={!isBoardEmpty(board)}
+            onClear={clearAll}
+          />
         </div>
       </div>
 
-      <div data-export-hide>
-        <DraftControls
-          boardElementId={BOARD_ELEMENT_ID}
-          fileName={`draft-${todayStamp()}.png`}
-          canClear={!isBoardEmpty(board)}
-          onClear={clearAll}
-        />
+      {/* No md:items-start — the default stretch is what lets the pick
+            columns match the grid's height. */}
+      <div className="flex flex-col gap-3 md:flex-row">
+        {pickColumn("blue")}
+        <div className="min-w-0 flex-1">
+          <DraftChampionGrid
+            champions={champions}
+            version={version}
+            unavailable={unavailable}
+            profiles={profiles}
+            onPick={pick}
+            activeSlotLabel={active ? slotLabel(active) : null}
+          />
+        </div>
+        {pickColumn("red")}
       </div>
     </div>
   );

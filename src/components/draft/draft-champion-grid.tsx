@@ -113,13 +113,14 @@ export function DraftChampionGrid({
 
           Derived from the viewport rather than a constant: the board is only
           worth opening mid-draft if it fits on screen without scrolling, and
-          the tile area is the one part that can absorb the difference. 32.5rem
+          the tile area is the one part that can absorb the difference. 29.5rem
           is the rest of the page — navbar, the section heading and tabs, the
-          ban row, the controls, this panel's own chrome. The floor is what five
-          pick slots need beside it; below that the flanks would overflow
-          instead of spacing out, so a short viewport scrolls a little rather
-          than squashing the board. */}
-      <div className="flex h-[clamp(21.5rem,calc(100vh-32.5rem),34rem)] flex-wrap content-start gap-1 overflow-y-auto p-1">
+          ban row, this panel's own chrome — and it dropped by 3rem when the
+          controls moved into the ban panel's corner and stopped costing a row.
+          The floor is what five pick slots need beside it; below that the
+          flanks would overflow instead of spacing out, so a short viewport
+          scrolls a little rather than squashing the board. */}
+      <div className="flex h-[clamp(21.5rem,calc(100vh-29.5rem),36rem)] flex-wrap content-start gap-1 overflow-y-auto p-1">
         {shown.length === 0 ? (
           <p className="p-2 text-sm text-grey-mid">No champion matches that.</p>
         ) : (

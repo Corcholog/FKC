@@ -10,6 +10,10 @@
 export const DRAFT_TAG_KINDS = ["function", "win_condition"] as const;
 export type DraftTagKind = (typeof DRAFT_TAG_KINDS)[number];
 
+// Riot's own strings, stored verbatim. **Never display these raw, and never
+// slice them** — UTILITY is support and BOTTOM is the ADC, so `role.slice(0, 3)`
+// renders "UTI" and "BOT" where a player expects "SUP" and "BOT".
+// formatRoleShort in lib/roles.ts is the one place that knows the difference.
 export const DRAFT_ROLES = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"] as const;
 export type DraftRole = (typeof DRAFT_ROLES)[number];
 

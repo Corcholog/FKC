@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { suggest } from "@/lib/champion-search";
 import type { ChampionInfo } from "@/lib/ddragon";
+import { formatRoleShort } from "@/lib/roles";
 import type { UnavailableReason } from "@/lib/draft/board";
 import { DRAFT_ROLES, type ChampionProfileRow } from "@/lib/draft/types";
 import { ChampionAvatar } from "@/components/champion-avatar";
@@ -114,7 +115,7 @@ export function DraftChampionGrid({
                     : "border-border text-grey-mid hover:text-grey-light",
                 )}
               >
-                {role.slice(0, 3)}
+                {formatRoleShort(role)}
               </button>
             ))}
           </div>

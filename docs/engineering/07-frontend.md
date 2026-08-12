@@ -523,6 +523,10 @@ series is played forwards but edited in any order, so the carried set is recompu
 switch rather than fixed per game. This is where the scrim form differs: it renders every
 game's fields at once, so its set is fixed per field.
 
+The switcher is five plain buttons. They carried a filled-slot count for a while, on the
+theory that an untouched G4 should be visible from G1 — in use it was noise, and switching
+to a game is one click.
+
 **Greyed means two different things, and the grid says which.** A champion greyed because
 someone just banned it this game is a different situation from one your mid laner played in
 game 1. Both are equally unclickable and look the same; the carried one carries a `G1` /
@@ -583,10 +587,19 @@ action takes its kind in the payload and assumes nothing about where the champio
 from precisely so this could exist without a second write path into the same table. Two save
 paths into one table is the duplication the one-table decision was made to avoid.
 
-**Save composition** takes one side's five picks, in slot order. With both sides full the
-dialog asks which; with one, it's preselected and the chooser doesn't render. The dialog
-previews the champions it will write — non-negotiable, because it covers the board while
-open, so "did I save blue or red" is otherwise unanswerable until you visit `/draft/comps`.
+**Save composition** takes one side's five picks. With both sides full the dialog asks
+which; with one, it's preselected and the chooser doesn't render. The dialog previews the
+champions it will write — non-negotiable, because it covers the board while open, so "did I
+save blue or red" is otherwise unanswerable until you visit `/draft/comps`.
+
+That preview is also the control: `CompOrderEditor` makes it a `@dnd-kit` sortable row.
+Champions arrive in draft order, which is rarely how anyone reads a comp, so dragging them
+into TOP→SUP is what makes the saved row legible later — and for a five-champion comp each
+position is labelled with the role it implies, both here and on `CompCard` afterwards. The
+label goes gold when `champion_profiles` says that champion plays there, which is a hint
+while sorting rather than a claim about the row: a champion can be annotated for several
+roles, so nothing derives one role per slot. Position does that. See §12 of
+[02](02-data-model.md).
 
 **Save synergy** is a mode over the board rather than a dialog-first flow. Filled pick slots
 become selectable; empty slots, bans and the whole champion grid go inert. A mode that both

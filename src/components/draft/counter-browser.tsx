@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
 import type { ChampionInfo } from "@/lib/ddragon";
+import { formatRoleShort } from "@/lib/roles";
 import { indexCounters } from "@/lib/draft/queries";
 import { DRAFT_ROLES, type ChampionCounterRow, type ChampionProfileRow } from "@/lib/draft/types";
 import { ChampionAvatar } from "@/components/champion-avatar";
@@ -122,7 +123,7 @@ export function CounterBrowser({
                     : "border-border text-grey-mid hover:text-grey-light",
                 )}
               >
-                {role.slice(0, 3)}
+                {formatRoleShort(role)}
               </button>
             ))}
           </div>

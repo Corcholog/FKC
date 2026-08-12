@@ -273,11 +273,8 @@ export function releaseChampionAfter(
 }
 
 /**
- * How many slots each game has filled.
- *
- * Drives two things at once: the switcher's per-game badge, so an untouched G4
- * is visibly untouched from G1 without switching to it, and whether "clear
- * series" has anything to clear.
+ * How many slots each game has filled — which games "clear series" would
+ * actually take, so its confirmation can name a number.
  */
 export function gameFillCounts(series: SeriesBoard): number[] {
   return series.map((board) => boardChampionIds(board).length);

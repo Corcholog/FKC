@@ -6,13 +6,14 @@ import { toast } from "sonner";
 import type { ChampionInfo } from "@/lib/ddragon";
 import type { Side } from "@/lib/draft/board";
 import {
+  COMP_SIZE,
   DRAFT_COMP_SHAPE,
   MAX_COMP_LABEL_CHARS,
   type DraftCompKind,
   type DraftTagRow,
 } from "@/lib/draft/types";
 import { saveDraftComp } from "@/app/(app)/draft/actions";
-import { ChampionAvatar } from "@/components/champion-avatar";
+import { CompOrderEditor } from "@/components/draft/comp-order-editor";
 import { TagMultiSelect } from "@/components/draft/tag-multi-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,7 @@ export function SaveCompDialog({
   championById,
   version,
   winConditionTags,
+  rolesByChampion,
   onClose,
 }: {
   kind: DraftCompKind;
@@ -74,11 +76,19 @@ export function SaveCompDialog({
   championById: Map<number, Champion>;
   version: string;
   winConditionTags: DraftTagRow[];
+  /** championId → roles from champion_profiles, for the role-fit hint. */
+  rolesByChampion: Map<number, string[]>;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [saving, startSaving] = useTransition();
   const [sourceIndex, setSourceIndex] = useState(0);
+  // The order the save will write, seeded from the board and then draggable.
+  // Keyed by side so switching the chooser re-seeds from that side's picks
+  // rather than carrying the other side's ordering across.
+  const [order, setOrder] = useState<Record<string, number[]>>(() =>
+    Object.fromEntries(sources.map((s) => [s.side, [...s.championIds]])),
+  );
   const [label, setLabel] = useState("");
   const [winConditions, setWinConditions] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
@@ -86,6 +96,7 @@ export function SaveCompDialog({
   const copy = COPY[kind];
   const shape = DRAFT_COMP_SHAPE[kind];
   const source = sources[sourceIndex] ?? sources[0];
+  const championIds = order[source.side] ?? source.championIds;
 
   function save() {
     // Snapshot before the transition, not inside it: the board is live and can
@@ -93,7 +104,7 @@ export function SaveCompDialog({
     const payload = {
       kind,
       label: label.trim() || null,
-      championIds: [...source.championIds],
+      championIds: [...championIds],
       winConditions: shape.winConditions ? winConditions : [],
       notes: notes.trim() || null,
     };
@@ -140,26 +151,28 @@ export function SaveCompDialog({
             </div>
           )}
 
-          {/* Not optional. The dialog covers the board, so without this "did I
-              save blue or red" is unanswerable until you visit /draft/comps.
-              It's five avatars. */}
+          {/* Preview and control at once. Not optional as a preview — the
+              dialog covers the board, so without it "did I save blue or red"
+              is unanswerable until you visit /draft/comps — and the order it
+              shows is the order that gets stored. */}
           <div
             className={cn(
-              "flex flex-wrap gap-1 rounded-sm p-2",
+              "flex flex-col gap-1 rounded-sm p-2",
               source.side === "blue" ? "bg-cyan/10" : "bg-loss/10",
             )}
           >
-            {source.championIds.map((id, i) => {
-              const champion = championById.get(id);
-              return champion ? (
-                <ChampionAvatar
-                  key={`${id}-${i}`}
-                  champion={champion}
-                  version={version}
-                  size="md"
-                />
-              ) : null;
-            })}
+            <CompOrderEditor
+              championIds={championIds}
+              championById={championById}
+              version={version}
+              rolesByChampion={rolesByChampion}
+              onReorder={(next) => setOrder((prev) => ({ ...prev, [source.side]: next }))}
+            />
+            <p className="text-center text-[10px] text-grey-mid">
+              {championIds.length === COMP_SIZE
+                ? "Drag to sort into team order — position sets the role."
+                : "Drag to reorder."}
+            </p>
           </div>
 
           <Input

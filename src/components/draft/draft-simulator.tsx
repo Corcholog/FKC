@@ -184,6 +184,10 @@ export function DraftSimulator({
   );
   const fillCounts = useMemo(() => gameFillCounts(series), [series]);
   const conflictChampion = conflict ? championById.get(conflict.championId) : null;
+  const rolesByChampion = useMemo(
+    () => new Map(profiles.map((p) => [p.champion_id, p.roles])),
+    [profiles],
+  );
 
   // Rehydration happens *during render*, once, rather than in an effect.
   //
@@ -407,14 +411,9 @@ export function DraftSimulator({
                 exitSelection();
               }}
               aria-pressed={i === currentGame}
-              aria-label={`Game ${i + 1}${fillCounts[i] > 0 ? `, ${fillCounts[i]} filled` : ", empty"}`}
+              aria-label={`Game ${i + 1}`}
             >
               G{i + 1}
-              {/* So an untouched G4 is visibly untouched from G1, without
-                  having to switch to it and back. */}
-              {fillCounts[i] > 0 && (
-                <span className="ml-1 text-[10px] tabular-nums opacity-70">{fillCounts[i]}</span>
-              )}
             </Button>
           ))}
         </div>
@@ -598,6 +597,7 @@ export function DraftSimulator({
           championById={championById}
           version={version}
           winConditionTags={winConditionTags}
+          rolesByChampion={rolesByChampion}
           onClose={() => {
             setSaving(null);
             // Only the synergy path was in a mode. Leaving it here rather than

@@ -480,11 +480,23 @@ match nothing for most rows). `CompCard` deliberately does *not* use it: it show
 portraits already, so a heading spelling them out would be two rows saying one thing. The
 card's rule is that a real name leads and the champions carry the controls otherwise.
 
-**`champion_ids` is ordered and nothing sorts it.** For a synergy the order is arbitrary
-and harmless. For a comp it is the pick order off one side of a board — B1 through B5 —
-which is real information about how the draft was meant to go. Sorting at save time for
-tidiness would throw that away, so neither `saveDraftComp` nor `CompCard` touches it.
+**`champion_ids` is ordered, the order is the author's, and nothing sorts it.** Champions
+arrive off the board in draft order and the save dialog lets them be dragged into whatever
+order the comp should read in. For a five-champion comp that's team order — top through
+support — which makes **position double as role** on every surface that renders it:
+`CompOrderEditor` labels each position while you drag, and `CompCard` labels them the same
+way afterwards. A synergy is 2–4 champions with no such mapping, so it gets no labels;
+inventing them there would be inventing information.
+
+Neither `saveDraftComp` nor `CompCard` sorts the array. An automatic sort would overwrite a
+deliberate choice, and a comp read back in an order nobody picked is worse than useless.
 Same call as `scrim_games.ally_bans` (§9).
+
+The role labels are positional, not derived from `champion_profiles` — a champion can be
+annotated for several roles, so there is no reading of the data that assigns one per slot.
+The profile roles do one smaller job: in the save dialog, a position's label goes gold when
+that champion is annotated for it, which is a hint while sorting rather than a claim about
+the row.
 
 **The size constraint uses `cardinality()`, not `array_length()`.** `array_length('{}', 1)`
 is `NULL` rather than `0`, so `array_length(champion_ids, 1) = 5` evaluates to `NULL` for an

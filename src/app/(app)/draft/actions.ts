@@ -322,9 +322,10 @@ export type SaveDraftCompResult = DraftActionResult & { compId?: string };
  * the board that will be the same call with a label typed into a small dialog
  * and nothing else different.
  *
- * champion_ids goes in exactly as given. For a comp that array is the pick
- * order off one side of a board, and sorting it for tidiness would silently
- * destroy that.
+ * champion_ids goes in exactly as given. The order is the author's — the save
+ * dialog lets it be dragged, and for a five-champion comp that means team
+ * order, so position doubles as role wherever it's rendered. Sorting it here
+ * for tidiness would silently overwrite that choice.
  */
 export async function saveDraftComp(
   input: DraftCompInput & { id?: string },

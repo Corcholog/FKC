@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { suggest } from "@/lib/champion-search";
 import type { ChampionInfo } from "@/lib/ddragon";
+import { formatRoleShort } from "@/lib/roles";
 import {
   DRAFT_ROLES,
   isEmptyProfile,
@@ -147,7 +148,7 @@ export function ChampionProfileTable({
                   : "border-border text-grey-mid hover:text-grey-light",
               )}
             >
-              {role.slice(0, 3)}
+              {formatRoleShort(role)}
             </button>
           ))}
         </div>

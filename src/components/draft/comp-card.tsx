@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Pencil } from "lucide-react";
 import type { ChampionInfo } from "@/lib/ddragon";
-import { compTitle, type DraftCompRow } from "@/lib/draft/types";
+import { formatRoleShort } from "@/lib/roles";
+import { COMP_SIZE, compTitle, DRAFT_ROLES, type DraftCompRow } from "@/lib/draft/types";
 import { ChampionAvatar } from "@/components/champion-avatar";
 import { DeleteCompButton } from "@/components/draft/delete-comp-button";
 import { Badge } from "@/components/ui/badge";
@@ -15,9 +16,10 @@ type Champion = ChampionInfo & { championId: number };
 /**
  * One saved comp or synergy.
  *
- * The champions render in stored order and nothing sorts them: for a comp that
- * order is the pick order off one side of a board, which is real information
- * about how the draft was meant to go. See the column comment in migration 017.
+ * The champions render in stored order and nothing sorts them: that order was
+ * chosen in the save dialog, and for a five-champion comp it's team order, so
+ * each position is labelled with its role. See the column comment in migration
+ * 017.
  *
  * **The name leads when there is one; otherwise the champions do and carry the
  * controls.** Neither kind requires a name, and a heading spelling out the
@@ -52,23 +54,37 @@ export function CompCard({
   const [notesOpen, setNotesOpen] = useState(false);
   const title = compTitle(comp, (id) => championById.get(id)?.name);
 
+  // A five-champion comp is one champion per role, and the stored order is the
+  // order someone dragged them into in the save dialog — so position is role
+  // and the card can say so. A synergy is 2-4 champions with no such mapping,
+  // and labelling those positions would be inventing information.
+  const showsRoles = comp.champion_ids.length === COMP_SIZE;
+
   const champions = (
     <div className="flex flex-wrap gap-1">
       {comp.champion_ids.map((id, i) => {
         const champion = championById.get(id);
-        // A champion Riot has since removed or renamed still has a row here.
-        // Showing the bare id beats dropping it silently and making the comp
-        // look like it has four members.
-        return champion ? (
-          <ChampionAvatar key={`${id}-${i}`} champion={champion} version={version} size="md" />
-        ) : (
-          <span
-            key={`${id}-${i}`}
-            title={`Unknown champion (${id})`}
-            className="flex h-10 w-10 items-center justify-center rounded-sm bg-bg-tertiary text-[10px] text-grey-mid"
-          >
-            ?
-          </span>
+        return (
+          <div key={`${id}-${i}`} className="flex flex-col items-center gap-0.5">
+            {champion ? (
+              <ChampionAvatar champion={champion} version={version} size="md" />
+            ) : (
+              // A champion Riot has since removed or renamed still has a row
+              // here. Showing a placeholder beats dropping it silently and
+              // making the comp look like it has four members.
+              <span
+                title={`Unknown champion (${id})`}
+                className="flex h-10 w-10 items-center justify-center rounded-sm bg-bg-tertiary text-[10px] text-grey-mid"
+              >
+                ?
+              </span>
+            )}
+            {showsRoles && (
+              <span className="text-[10px] tracking-wide text-grey-mid uppercase">
+                {formatRoleShort(DRAFT_ROLES[i] ?? null)}
+              </span>
+            )}
+          </div>
         );
       })}
     </div>

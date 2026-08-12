@@ -3,6 +3,7 @@
 import { Fragment, useState, useTransition } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ChampionInfo } from "@/lib/ddragon";
+import { formatRoleShort } from "@/lib/roles";
 import {
   DRAFT_ROLES,
   type ChampionCounterRow,
@@ -103,7 +104,7 @@ export function ChampionProfileRowView({
                     : "border-border text-grey-mid hover:text-grey-light",
                 )}
               >
-                {role.slice(0, 3)}
+                {formatRoleShort(role)}
               </button>
             ))}
           </div>

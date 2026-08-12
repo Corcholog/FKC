@@ -103,6 +103,23 @@ export function championIconUrlById(ddragonId: string, version: string): string 
   return `https://ddragon.leagueoflegends.com/cdn/${version}/img/champion/${ddragonId}.png`;
 }
 
+/**
+ * The grey "no champion" portrait, for an empty slot on the draft board.
+ *
+ * **This one is not DDragon.** DDragon has no such asset — `img/champion/-1.png`,
+ * `None.png` and `0.png` all 403 — so it comes from CommunityDragon, which is
+ * the only extra host this app talks to and exists solely for this icon. It
+ * serves `Access-Control-Allow-Origin: *`, so it works with
+ * `crossOrigin="anonymous"` and won't taint the canvas during the board's PNG
+ * export, which is the one thing that would have ruled it out.
+ *
+ * Unversioned (`latest`) because there is no patch-specific version of an empty
+ * square, and because the failure mode is a missing decoration: the slot still
+ * renders its border and label, so a 404 here costs nothing.
+ */
+export const EMPTY_CHAMPION_ICON_URL =
+  "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/-1.png";
+
 export function championIconUrl(
   championId: number,
   version: string,

@@ -458,3 +458,74 @@ tinted fill *behind* the row. The shape of the distribution — "these three, th
 tail" — lands before any number does, and a background fill costs no horizontal space,
 which matters inside a two-column grid. Pick and ban lists scale against the top row of
 their own list; presence scales against 100%, because it's a rate with a real ceiling.
+
+## 12. The draft simulator board
+
+`/draft`, built in Phase 4 of `docs/features/draft-strategy/`. Ten ban slots, ten pick
+slots, a champion grid in the middle. Where §11's scrim board *renders* a draft that
+happened, this one is a scratchpad for one that hasn't.
+
+### There is no turn machine, and that is the design
+
+A real draft is fifteen alternating actions across two ban phases. Encoding that would mean
+the board refuses clicks while someone is trying to sketch "what if they take this at R1",
+which is the entire reason to open it. Any slot is fillable at any time, in any order.
+
+The 3 + 2 gap in each ban row is the only nod to real draft structure and it is purely how
+the row is drawn — there is no phase-one/phase-two logic behind it, no ordering rule and no
+gating. There is a comment saying so where the gap is applied, because it looks like state.
+
+### Interactions
+
+Left click selects a slot; the next champion clicked in the grid lands there and the active
+slot **advances to the next empty slot on the same side and kind, wrapping**. Filling blue's
+picks is one slot click and five grid clicks rather than ten alternating ones. Wrapping
+matters because slots fill in any order: having done B3 and B4 first, advancing from B5
+should find B1 rather than give up.
+
+Right click empties one slot, and `preventDefault()` on `onContextMenu` is the whole trick —
+without it the browser menu opens *and* the slot clears, which is worse than either alone.
+Right-click is not an accessible affordance and clearing is the only destructive action
+here, so every filled slot also carries a small `×` on hover or keyboard focus.
+
+Unavailable champions are greyed in the grid, never filtered out — the same call
+`ChampionCombobox` documents, for the same reason: seeing that Ahri is taken is
+information, and an entry that vanishes reads as a bug.
+
+### Empty slots use a champion icon that isn't from DDragon
+
+`EMPTY_CHAMPION_ICON_URL` in `lib/ddragon.ts` is the grey "no champion" portrait, and it
+comes from CommunityDragon — the only host besides DDragon this app fetches images from.
+DDragon has no such asset (`img/champion/-1.png`, `None.png` and `0.png` all 403). It was
+worth the extra host because it serves `Access-Control-Allow-Origin: *`, so it survives
+`crossOrigin="anonymous"` and doesn't taint the canvas during the PNG export — which would
+have ruled it out — and because a board of grey silhouettes exports as something that looks
+like a draft, where dashed boxes export as something that looks like a form. The failure
+mode is a missing decoration: the slot still draws its border and label.
+
+### State lives in the tab, not the database
+
+One `useState<GameBoard>` and one `useState<SlotRef | null>`. No reducer, no context, no
+store (ADR-019). A saved board would be a fourth table, a CRUD surface, a list page and an
+ownership question, in exchange for state that is genuinely disposable — what's worth
+keeping off a board is a comp, a synergy or an image, and Phases 3 and 6 cover all three.
+
+`sessionStorage` covers the only real complaint, which is losing work to a misclick on the
+tab strip. **Rehydration happens during render, not in an effect.** Three options and only
+one works: `useState`'s initialiser runs on the server, where `sessionStorage` doesn't
+exist, and a board that differs between server and first client render is a hydration
+mismatch; an effect is a second render pass after paint and trips
+`react-hooks/set-state-in-effect`. Adjusting state during render is the sanctioned third —
+the same pattern `champion-profile-table.tsx` uses to resync from a changed prop. A
+`useHydrated()` built on `useSyncExternalStore` (`() => true` client, `() => false` server)
+is what makes "after hydration" a value the render can branch on. The stored JSON is
+untrusted input and goes through `isGameBoard` first; a key left by an earlier version of
+the board would otherwise crash the render rather than fail cleanly.
+
+### Performance, once, so it doesn't come up again
+
+There are ~170 champions and availability is one `Set.has` per tile, built once per render
+in a `useMemo` keyed on the board. A full re-render is ~170 hash lookups over DOM nodes that
+already exist and only change a class. There is no virtualisation, no per-tile `React.memo`,
+no debounce on the search and no index beyond that one `Set`. Every plausible culprit in
+this component is cheaper than the profiler you would need to find it.

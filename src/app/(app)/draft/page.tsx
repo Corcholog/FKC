@@ -1,11 +1,24 @@
-export default function DraftSimulatorPage() {
+import { createClient } from "@/lib/supabase/server";
+import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
+import { loadChampionProfiles } from "@/lib/draft/queries";
+import { DraftSimulator } from "@/components/draft/draft-simulator";
+
+export default async function DraftPage() {
+  const supabase = await createClient();
+  const version = await getLatestVersion();
+
+  const [championMap, profiles] = await Promise.all([
+    getChampionMap(version),
+    loadChampionProfiles(supabase),
+  ]);
+
+  // Plain arrays, not the Maps these come as: the simulator is a client
+  // component and a Map doesn't survive the boundary.
   return (
-    <div className="panel-hex flex flex-col items-center justify-center gap-2 p-12 text-center">
-      <h2 className="font-heading text-lg font-semibold text-white">Simulator</h2>
-      <p className="max-w-md text-sm text-grey-light">
-        The draft board — bans, picks, a searchable champion grid, and fearless series
-        support — lands in Phases 4 through 6.
-      </p>
-    </div>
+    <DraftSimulator
+      champions={realChampions(championMap)}
+      version={version}
+      profiles={[...profiles.values()]}
+    />
   );
 }

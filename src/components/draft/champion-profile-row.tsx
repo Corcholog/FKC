@@ -1,10 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ChampionInfo } from "@/lib/ddragon";
-import { DRAFT_ROLES, type ChampionProfileFields, type DraftTagRow } from "@/lib/draft/types";
+import {
+  DRAFT_ROLES,
+  type ChampionCounterRow,
+  type ChampionProfileFields,
+  type DraftTagRow,
+} from "@/lib/draft/types";
 import { saveChampionProfile } from "@/app/(app)/draft/actions";
 import { ChampionAvatar } from "@/components/champion-avatar";
+import { ChampionCounters } from "@/components/draft/champion-counters";
 import { TagMultiSelect } from "@/components/draft/tag-multi-select";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -19,21 +26,28 @@ type Champion = ChampionInfo & { championId: number };
 // on every keystroke would mean a round trip per letter.
 export function ChampionProfileRowView({
   champion,
+  champions,
   version,
   tags,
   profile,
   onChange,
+  counters,
 }: {
   champion: Champion;
+  /** Full roster — only needed once expanded, for the counter editor. */
+  champions: Champion[];
   version: string;
   tags: DraftTagRow[];
   profile: ChampionProfileFields | null;
   /** Optimistic — called before the save resolves, so the parent's filters react instantly. */
   onChange: (next: ChampionProfileFields) => void;
+  /** Every noted matchup, so the expanded row doesn't need its own fetch. */
+  counters: ChampionCounterRow[];
 }) {
   const [saving, startSaving] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [notesDraft, setNotesDraft] = useState(profile?.notes ?? "");
+  const [expanded, setExpanded] = useState(false);
 
   const roles = profile?.roles ?? [];
   const tagSlugs = profile?.tags ?? [];
@@ -62,58 +76,78 @@ export function ChampionProfileRowView({
   }
 
   return (
-    <tr className="border-b border-border align-top transition-colors last:border-b-0 hover:bg-bg-tertiary/40">
-      <td className="px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <ChampionAvatar champion={champion} version={version} size="sm" />
-          <span className="text-white">{champion.name}</span>
-        </div>
-      </td>
-      <td className="px-4 py-2.5">
-        <div className="flex flex-wrap gap-1">
-          {DRAFT_ROLES.map((role) => (
+    <Fragment>
+      <tr className="border-b border-border align-top transition-colors last:border-b-0 hover:bg-bg-tertiary/40">
+        <td className="px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <ChampionAvatar champion={champion} version={version} size="sm" />
+            <span className="text-white">{champion.name}</span>
+          </div>
+        </td>
+        <td className="px-4 py-2.5">
+          <div className="flex flex-wrap gap-1">
+            {DRAFT_ROLES.map((role) => (
+              <button
+                key={role}
+                type="button"
+                onClick={() => toggleRole(role)}
+                aria-pressed={roles.includes(role)}
+                className={cn(
+                  "rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase transition-colors",
+                  roles.includes(role)
+                    ? "border-gold bg-gold-muted/30 text-gold-bright"
+                    : "border-border text-grey-mid hover:text-grey-light",
+                )}
+              >
+                {role.slice(0, 3)}
+              </button>
+            ))}
+          </div>
+        </td>
+        <td className="min-w-56 px-4 py-2.5">
+          <TagMultiSelect tags={tags} kind="function" selected={tagSlugs} onChange={changeTags} max={12} />
+        </td>
+        <td className="min-w-48 px-4 py-2.5">
+          <Input
+            value={notesDraft}
+            onChange={(e) => setNotesDraft(e.target.value)}
+            onBlur={commitNotes}
+            placeholder="Notes"
+            aria-label={`Notes for ${champion.name}`}
+            className="h-8 text-sm"
+          />
+        </td>
+        <td className="px-2 py-2.5 text-center">
+          <div className="flex items-center justify-center gap-1.5">
+            {saving && (
+              <span aria-hidden className="text-[10px] text-grey-mid">
+                …
+              </span>
+            )}
+            {!saving && error && (
+              <span title={error} className="text-xs text-loss">
+                !
+              </span>
+            )}
             <button
-              key={role}
               type="button"
-              onClick={() => toggleRole(role)}
-              aria-pressed={roles.includes(role)}
-              className={cn(
-                "rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase transition-colors",
-                roles.includes(role)
-                  ? "border-gold bg-gold-muted/30 text-gold-bright"
-                  : "border-border text-grey-mid hover:text-grey-light",
-              )}
+              onClick={() => setExpanded((e) => !e)}
+              aria-expanded={expanded}
+              aria-label={expanded ? `Hide counters for ${champion.name}` : `Show counters for ${champion.name}`}
+              className="rounded-sm p-0.5 text-grey-mid transition-colors hover:text-grey-light"
             >
-              {role.slice(0, 3)}
+              {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
             </button>
-          ))}
-        </div>
-      </td>
-      <td className="min-w-56 px-4 py-2.5">
-        <TagMultiSelect tags={tags} kind="function" selected={tagSlugs} onChange={changeTags} max={12} />
-      </td>
-      <td className="min-w-48 px-4 py-2.5">
-        <Input
-          value={notesDraft}
-          onChange={(e) => setNotesDraft(e.target.value)}
-          onBlur={commitNotes}
-          placeholder="Notes"
-          aria-label={`Notes for ${champion.name}`}
-          className="h-8 text-sm"
-        />
-      </td>
-      <td className="w-8 px-2 py-2.5 text-center">
-        {saving && (
-          <span aria-hidden className="text-[10px] text-grey-mid">
-            …
-          </span>
-        )}
-        {!saving && error && (
-          <span title={error} className="text-xs text-loss">
-            !
-          </span>
-        )}
-      </td>
-    </tr>
+          </div>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="border-b border-border last:border-b-0">
+          <td colSpan={5} className="p-0">
+            <ChampionCounters champion={champion} champions={champions} version={version} allCounters={counters} />
+          </td>
+        </tr>
+      )}
+    </Fragment>
   );
 }

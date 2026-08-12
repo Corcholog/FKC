@@ -50,3 +50,23 @@ export function isEmptyProfile(fields: ChampionProfileFields): boolean {
 export const MAX_TAG_LABEL_CHARS = 40;
 export const MAX_PROFILE_NOTE_CHARS = 1000;
 export const MAX_TAGS_PER_CHAMPION = 12;
+
+export type ChampionCounterRow = {
+  id: string;
+  counter_champion_id: number;
+  target_champion_id: number;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export const MAX_COUNTER_NOTE_CHARS = 500;
+
+/** Both readings of champion_counters, built once per page from the raw rows. */
+export type CounterIndex = {
+  /** championId → the champions it counters. */
+  counters: Map<number, ChampionCounterRow[]>;
+  /** championId → the champions that counter it. */
+  counteredBy: Map<number, ChampionCounterRow[]>;
+};

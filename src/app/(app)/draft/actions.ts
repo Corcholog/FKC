@@ -7,12 +7,15 @@ import { slugify } from "@/lib/slug";
 import { loadDraftTags } from "@/lib/draft/queries";
 import {
   cleanText,
+  validateChampionCounter,
   validateChampionProfile,
   validateDraftTag,
+  type ChampionCounterInput,
   type ChampionProfileInput,
 } from "@/lib/draft/validate";
 import {
   isEmptyProfile,
+  MAX_COUNTER_NOTE_CHARS,
   MAX_PROFILE_NOTE_CHARS,
   MAX_TAG_LABEL_CHARS,
   type DraftTagKind,
@@ -185,5 +188,78 @@ export async function deleteDraftTag(id: string): Promise<DraftActionResult> {
     return {};
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not delete that tag." };
+  }
+}
+
+function revalidateCounters() {
+  revalidatePath("/draft/counters");
+  revalidatePath("/draft/champions");
+}
+
+/**
+ * Upserts on the directed pair — re-noting an existing matchup edits it rather
+ * than erroring. Checks for the existing row first, rather than a single
+ * .upsert() call, specifically so an edit never touches created_by: that
+ * column means "who wrote the original take," and a plain upsert would
+ * silently reassign it to whoever last edited the note.
+ */
+export async function saveChampionCounter(input: ChampionCounterInput): Promise<DraftActionResult> {
+  try {
+    const { supabase, user } = await requireSession();
+
+    const championMap = await championsForWrite();
+    const problem = validateChampionCounter(input, new Set(championMap.keys()));
+    if (problem) return { error: problem };
+
+    const note = cleanText(input.note, MAX_COUNTER_NOTE_CHARS);
+
+    const { data: existing } = await supabase
+      .from("champion_counters")
+      .select("id")
+      .eq("counter_champion_id", input.counterChampionId)
+      .eq("target_champion_id", input.targetChampionId)
+      .maybeSingle<{ id: string }>();
+
+    const { data, error } = existing
+      ? await supabase
+          .from("champion_counters")
+          .update({ note, updated_at: new Date().toISOString() })
+          .eq("id", existing.id)
+          .select("id")
+      : await supabase
+          .from("champion_counters")
+          .insert({
+            counter_champion_id: input.counterChampionId,
+            target_champion_id: input.targetChampionId,
+            note,
+            created_by: user.id,
+          })
+          .select("id");
+
+    if (error) {
+      // The unique-pair race: two people saving the same new matchup at once.
+      return { error: error.code === "23505" ? "That matchup is already noted." : error.message };
+    }
+    if (!data || data.length === 0) return { error: "That save was blocked. Try signing out and back in." };
+
+    revalidateCounters();
+    return {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not save that matchup." };
+  }
+}
+
+export async function deleteChampionCounter(id: string): Promise<DraftActionResult> {
+  try {
+    const { supabase } = await requireSession();
+
+    const { data, error } = await supabase.from("champion_counters").delete().eq("id", id).select("id");
+    if (error) return { error: error.message };
+    if (!data || data.length === 0) return { error: "That matchup was already removed." };
+
+    revalidateCounters();
+    return {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not delete that matchup." };
   }
 }

@@ -6,7 +6,14 @@
 // the copy that counts — server actions are reachable by direct POST, not only
 // through our own form.
 
-import { DRAFT_ROLES, DRAFT_TAG_KINDS, MAX_PROFILE_NOTE_CHARS, MAX_TAGS_PER_CHAMPION, MAX_TAG_LABEL_CHARS } from "@/lib/draft/types";
+import {
+  DRAFT_ROLES,
+  DRAFT_TAG_KINDS,
+  MAX_COUNTER_NOTE_CHARS,
+  MAX_PROFILE_NOTE_CHARS,
+  MAX_TAGS_PER_CHAMPION,
+  MAX_TAG_LABEL_CHARS,
+} from "@/lib/draft/types";
 
 export function cleanText(value: string | null | undefined, max: number): string | null {
   const trimmed = value?.trim();
@@ -59,5 +66,26 @@ export function validateDraftTag(input: DraftTagInput): string | null {
   const label = cleanText(input.label, MAX_TAG_LABEL_CHARS);
   if (!label) return "A tag needs a label.";
   if (!(DRAFT_TAG_KINDS as readonly string[]).includes(input.kind)) return "Unknown tag kind.";
+  return null;
+}
+
+export type ChampionCounterInput = {
+  counterChampionId: number;
+  targetChampionId: number;
+  note: string | null;
+};
+
+/** The first thing wrong with this matchup, or null if it's sound. */
+export function validateChampionCounter(
+  input: ChampionCounterInput,
+  validChampionIds: Set<number>,
+): string | null {
+  if (!validChampionIds.has(input.counterChampionId) || !validChampionIds.has(input.targetChampionId)) {
+    return "That champion isn't recognized.";
+  }
+  if (input.counterChampionId === input.targetChampionId) return "A champion can't counter itself.";
+  if (input.note && input.note.length > MAX_COUNTER_NOTE_CHARS) {
+    return `Notes can't be longer than ${MAX_COUNTER_NOTE_CHARS} characters.`;
+  }
   return null;
 }

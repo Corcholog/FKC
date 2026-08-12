@@ -1,10 +1,24 @@
-export default function DraftCountersPage() {
+import { createClient } from "@/lib/supabase/server";
+import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
+import { loadChampionCounters, loadChampionProfiles } from "@/lib/draft/queries";
+import { CounterMatrix } from "@/components/draft/counter-matrix";
+
+export default async function DraftCountersPage() {
+  const supabase = await createClient();
+  const version = await getLatestVersion();
+
+  const [championMap, counters, profiles] = await Promise.all([
+    getChampionMap(version),
+    loadChampionCounters(supabase),
+    loadChampionProfiles(supabase),
+  ]);
+
   return (
-    <div className="panel-hex flex flex-col items-center justify-center gap-2 p-12 text-center">
-      <h2 className="font-heading text-lg font-semibold text-white">Counters</h2>
-      <p className="max-w-md text-sm text-grey-light">
-        The champion-counters-champion matrix, with optional notes, lands in Phase 2.
-      </p>
-    </div>
+    <CounterMatrix
+      champions={realChampions(championMap)}
+      version={version}
+      counters={counters}
+      profiles={[...profiles.values()]}
+    />
   );
 }

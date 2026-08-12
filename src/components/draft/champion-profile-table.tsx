@@ -7,6 +7,7 @@ import type { ChampionInfo } from "@/lib/ddragon";
 import {
   DRAFT_ROLES,
   isEmptyProfile,
+  type ChampionCounterRow,
   type ChampionProfileFields,
   type ChampionProfileRow,
   type DraftTagRow,
@@ -38,6 +39,7 @@ export function ChampionProfileTable({
   version,
   functionTags,
   profiles,
+  counters,
 }: {
   /** realChampions(map) — alphabetical, numeric id kept. */
   champions: Champion[];
@@ -45,6 +47,8 @@ export function ChampionProfileTable({
   functionTags: DraftTagRow[];
   /** Plain array — Map doesn't survive the server/client prop boundary. */
   profiles: ChampionProfileRow[];
+  /** Every noted matchup — passed straight through to whichever row expands. */
+  counters: ChampionCounterRow[];
 }) {
   const [query, setQuery] = useState("");
   const [annotatedFilter, setAnnotatedFilter] = useState<AnnotatedFilter>("all");
@@ -178,7 +182,7 @@ export function ChampionProfileTable({
                 <th className="px-4 py-2 font-medium">Roles</th>
                 <th className="px-4 py-2 font-medium">Tags</th>
                 <th className="px-4 py-2 font-medium">Notes</th>
-                <th className="w-8 px-2 py-2" />
+                <th className="w-16 px-2 py-2" />
               </tr>
             </thead>
             <tbody>
@@ -186,10 +190,12 @@ export function ChampionProfileTable({
                 <ChampionProfileRowView
                   key={champion.championId}
                   champion={champion}
+                  champions={champions}
                   version={version}
                   tags={functionTags}
                   profile={profileMap.get(champion.championId) ?? null}
                   onChange={(next) => updateProfile(champion.championId, next)}
+                  counters={counters}
                 />
               ))}
             </tbody>

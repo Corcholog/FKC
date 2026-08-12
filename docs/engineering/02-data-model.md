@@ -399,3 +399,26 @@ both tables — anyone signed in can annotate, correct or delete anything.
 `champion_profiles.updated_by` is attribution ("last touched by Corcho"), not enforcement,
 same reasoning as `scrim_series.created_by` (§9): somebody has to be able to fix a
 teammate's tag.
+
+## 11. `champion_counters` — one directed table, three readers
+
+Migration 016. One row is `counter_champion_id` counters `target_champion_id`, with an
+optional `note`. **Directed, not symmetric** — "Renekton counters Nasus" says nothing
+about the reverse, and the interesting matchups are exactly the ones where that asymmetry
+is the point. Both directions can exist as independent rows; the `unique` constraint is on
+the ordered pair, not the unordered one.
+
+Three surfaces read the same table with no duplication: the matrix at `/draft/counters`,
+the "counters / countered by" lists on a champion's row in `/draft/champions`, and (a
+later phase) the contextual panel asking "who beats these enemy picks" —
+`target_champion_id in (...)` against `idx_champion_counters_target`.
+
+**This is opinions the team holds, not statistics.** Real matchup win rates already exist
+via `match_participants` or Lolalytics (`src/lib/lolalytics.ts`); this table is
+deliberately something else and doesn't try to reconcile with either.
+
+**`created_by` is set once, not on every edit.** Re-noting an existing pair is an
+UPDATE, and `saveChampionCounter` (`src/app/(app)/draft/actions.ts`) checks for an
+existing row first specifically so it doesn't overwrite `created_by` on that path — same
+convention as `scrim_series`, where `updateScrimSeries` never touches `created_by` either.
+The column means "who wrote the original take," not "who touched this last."

@@ -503,6 +503,41 @@ have ruled it out — and because a board of grey silhouettes exports as somethi
 like a draft, where dashed boxes export as something that looks like a form. The failure
 mode is a missing decoration: the slot still draws its border and label.
 
+### Fearless: picks carry, bans don't
+
+The board is a five-game series, one game on screen at a time. For the visible game, a
+champion is unavailable if it is **banned in this game** (either side), **picked in this
+game** (either side), or **picked in any *earlier* game** (either side). Bans do not carry
+between games; picks do.
+
+That asymmetry is the whole format, and it's the one thing on this board a person cannot
+verify by looking — which is why `unavailableInSeries` and `carriedPicks` live in
+`lib/draft/board.ts` as pure functions rather than inline in the component. Get the carry
+direction backwards and the board confidently tells you a champion is free when it isn't.
+`usedEarlierInSeries` in `scrims/draft-form-state.ts` is the same rule for the scrim entry
+form; if an organiser ever counts bans too, those are the two functions that change.
+
+**"Earlier" is `j < gameIndex`, not `j !== gameIndex`.** The second is easier to write, is
+wrong, and only shows up when someone goes back to fix game 1 after filling game 3. The
+series is played forwards but edited in any order, so the carried set is recomputed per
+switch rather than fixed per game. This is where the scrim form differs: it renders every
+game's fields at once, so its set is fixed per field.
+
+**Greyed means two different things, and the grid says which.** A champion greyed because
+someone just banned it this game is a different situation from one your mid laner played in
+game 1. Both are equally unclickable and look the same; the carried one carries a `G1` /
+`G2` badge. Only that case gets a badge — "taken" is legible from the board itself, since
+the champion is sitting in a slot two inches away, while "played in game 1" is invisible
+unless the tile says so. Hence `Map<number, UnavailableReason>` rather than a `Set`.
+
+A **Fearless toggle** sits next to the switcher, defaulted on. Not every series is fearless
+— `scrim_series.fearless` exists as a column for that reason — and off makes each game
+independent. It's threaded as an argument to `unavailableInSeries`, not a module flag.
+
+`MAX_GAMES = 5`, against the ten `lib/scrims/types.ts` allows. That limit exists because
+the `scrim_games_number` check constraint does and hand-entry shouldn't fight the database;
+nothing is written from here, and five buttons fit in a row where ten are noise.
+
 ### State lives in the tab, not the database
 
 One `useState<GameBoard>` and one `useState<SlotRef | null>`. No reducer, no context, no
@@ -511,7 +546,11 @@ ownership question, in exchange for state that is genuinely disposable — what'
 keeping off a board is a comp, a synergy or an image, and Phases 3 and 6 cover all three.
 
 `sessionStorage` covers the only real complaint, which is losing work to a misclick on the
-tab strip. **Rehydration happens during render, not in an effect.** Three options and only
+tab strip. The key is `draft-series-v1` and holds `{ series, currentGame, fearless }`. It
+was **bumped rather than migrated** from the single-board `draft-board-v1`: that payload has
+`bans`/`picks` at the top level and would read as `series[0]` being `undefined`, so the
+shape check rejects it and the tab starts empty — the right outcome for a session left open
+across a deploy. **Rehydration happens during render, not in an effect.** Three options and only
 one works: `useState`'s initialiser runs on the server, where `sessionStorage` doesn't
 exist, and a board that differs between server and first client render is a hydration
 mismatch; an effect is a second render pass after paint and trips

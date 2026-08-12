@@ -6,16 +6,20 @@ import type { ChampionProfileRow } from "@/lib/draft/types";
 import {
   clearSlot,
   emptyBoard,
+  emptySeries,
+  gameFillCounts,
   isBoardEmpty,
-  isGameBoard,
+  isSeriesBoard,
+  MAX_GAMES,
   nextEmptySlot,
   readSlot,
   setSlot,
   slotKey,
   slotLabel,
   SLOTS_PER_SIDE,
-  unavailableIds,
+  unavailableInSeries,
   type GameBoard,
+  type SeriesBoard,
   type Side,
   type SlotKind,
   type SlotRef,
@@ -23,12 +27,33 @@ import {
 import { DraftChampionGrid } from "@/components/draft/draft-champion-grid";
 import { DraftControls } from "@/components/draft/draft-controls";
 import { DraftSlot } from "@/components/draft/draft-slot";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type Champion = ChampionInfo & { championId: number };
 
 const BOARD_ELEMENT_ID = "draft-board";
-const STORAGE_KEY = "draft-board-v1";
+
+// Bumped from draft-board-v1 rather than migrated. A Phase 4 payload has
+// bans/picks at the top level and would read as series[0] being undefined; the
+// shape check rejects it and we start empty, which is the right outcome for a
+// tab someone left open across a deploy.
+const STORAGE_KEY = "draft-series-v1";
+const STALE_KEYS = ["draft-board-v1"];
+
+type StoredState = { series: SeriesBoard; currentGame: number; fearless: boolean };
+
+function isStoredState(value: unknown): value is StoredState {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Partial<StoredState>;
+  return (
+    isSeriesBoard(v.series) &&
+    typeof v.currentGame === "number" &&
+    v.currentGame >= 0 &&
+    v.currentGame < MAX_GAMES &&
+    typeof v.fearless === "boolean"
+  );
+}
 
 // Coloured literally, matching scrims/scrim-ui.tsx — this is the one place in
 // League where "blue" and "red" name a thing rather than describe it, and the
@@ -61,18 +86,20 @@ function useHydrated(): boolean {
   );
 }
 
-/** The stored board, or null if there isn't a usable one. */
-function readStoredBoard(): GameBoard | null {
+/** The stored series, or null if there isn't a usable one. */
+function readStoredState(): StoredState | null {
   try {
+    for (const key of STALE_KEYS) sessionStorage.removeItem(key);
+
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    if (isGameBoard(parsed)) return parsed;
-    // A key left by an earlier version of this board. Spreading it into state
+    if (isStoredState(parsed)) return parsed;
+    // Written by an earlier version of this component. Spreading it into state
     // would crash the render, so drop it rather than carry it.
     sessionStorage.removeItem(STORAGE_KEY);
   } catch {
-    // Unparseable, or storage disabled entirely. An empty board is fine.
+    // Unparseable, or storage disabled entirely. An empty series is fine.
   }
   return null;
 }
@@ -87,8 +114,14 @@ function readStoredBoard(): GameBoard | null {
  * the ban rows is the only nod to real draft structure and it is purely how the
  * row is drawn — see the comment where the gap is applied.
  *
- * State is one board plus one active slot. No reducer, no context, no store —
- * this codebase has none and doesn't want one (ADR-019).
+ * State is a five-game series, which game is on screen, whether fearless is on,
+ * and the active slot. No reducer, no context, no store — this codebase has
+ * none and doesn't want one (ADR-019).
+ *
+ * **One game renders at a time.** Mounting five boards and hiding four would be
+ * five champion grids and a hundred slots in the DOM for no gain, and it breaks
+ * the PNG export silently: toPng resolves the element id to whichever board
+ * matches first, which may not be the one on screen.
  */
 export function DraftSimulator({
   champions,
@@ -100,16 +133,24 @@ export function DraftSimulator({
   /** Phase 1's annotations, for the grid's role filter. */
   profiles: ChampionProfileRow[];
 }) {
-  const [board, setBoard] = useState<GameBoard>(emptyBoard);
+  const [series, setSeries] = useState<SeriesBoard>(emptySeries);
+  const [currentGame, setCurrentGame] = useState(0);
+  const [fearless, setFearless] = useState(true);
   const [active, setActive] = useState<SlotRef | null>(null);
   const [restored, setRestored] = useState(false);
   const hydrated = useHydrated();
+
+  const board = series[currentGame];
 
   const championById = useMemo(
     () => new Map(champions.map((c) => [c.championId, c])),
     [champions],
   );
-  const unavailable = useMemo(() => unavailableIds(board), [board]);
+  const unavailable = useMemo(
+    () => unavailableInSeries(series, currentGame, fearless),
+    [series, currentGame, fearless],
+  );
+  const fillCounts = useMemo(() => gameFillCounts(series), [series]);
 
   // Rehydration happens *during render*, once, rather than in an effect.
   //
@@ -123,39 +164,54 @@ export function DraftSimulator({
   // it immediately, before anything reaches the screen.
   if (hydrated && !restored) {
     setRestored(true);
-    const stored = readStoredBoard();
-    if (stored) setBoard(stored);
+    const stored = readStoredState();
+    if (stored) {
+      setSeries(stored.series);
+      setCurrentGame(stored.currentGame);
+      setFearless(stored.fearless);
+    }
   }
 
   // Guarded on `restored` so the empty first render doesn't overwrite a stored
-  // board before the read above has had a chance to run.
+  // series before the read above has had a chance to run.
   useEffect(() => {
     if (!restored) return;
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(board));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ series, currentGame, fearless }));
     } catch {
       // Private mode or a full quota. The board still works for this session.
     }
-  }, [board, restored]);
+  }, [series, currentGame, fearless, restored]);
+
+  /** Replaces the game on screen, leaving the rest of the series alone. */
+  function updateGame(change: (board: GameBoard) => GameBoard) {
+    setSeries((prev) => prev.map((game, i) => (i === currentGame ? change(game) : game)));
+  }
 
   function pick(championId: number) {
     if (!active) return;
-    setBoard((prev) => {
-      const next = setSlot(prev, active, championId);
+    const slot = active;
+    updateGame((prev) => {
+      const next = setSlot(prev, slot, championId);
       // Advance after placing, computed against the *new* board so the slot
       // just filled isn't offered back. This is what makes filling a side five
       // grid clicks rather than ten alternating ones.
-      setActive(nextEmptySlot(next, active) ?? active);
+      setActive(nextEmptySlot(next, slot) ?? slot);
       return next;
     });
   }
 
   function clearOne(slot: SlotRef) {
-    setBoard((prev) => clearSlot(prev, slot));
+    updateGame((prev) => clearSlot(prev, slot));
   }
 
-  function clearAll() {
-    setBoard(emptyBoard());
+  function clearGame() {
+    updateGame(() => emptyBoard());
+    setActive(null);
+  }
+
+  function clearSeries() {
+    setSeries(emptySeries());
     setActive(null);
   }
 
@@ -193,6 +249,57 @@ export function DraftSimulator({
       >
         <div className="flex gap-1">{slots.slice(0, 3)}</div>
         <div className="flex gap-1">{slots.slice(3)}</div>
+      </div>
+    );
+  }
+
+  function gameSwitcher() {
+    return (
+      // Not data-export-hide: which game this is belongs in the image, and the
+      // active button is the only thing that says so.
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1">
+          {Array.from({ length: MAX_GAMES }, (_, i) => (
+            <Button
+              key={i}
+              type="button"
+              size="sm"
+              variant={i === currentGame ? "default" : "outline"}
+              onClick={() => {
+                setCurrentGame(i);
+                // The old active slot belongs to the game we just left; keeping
+                // it would send the next grid click into a board nobody is
+                // looking at.
+                setActive(null);
+              }}
+              aria-pressed={i === currentGame}
+              aria-label={`Game ${i + 1}${fillCounts[i] > 0 ? `, ${fillCounts[i]} filled` : ", empty"}`}
+            >
+              G{i + 1}
+              {/* So an untouched G4 is visibly untouched from G1, without
+                  having to switch to it and back. */}
+              {fillCounts[i] > 0 && (
+                <span className="ml-1 text-[10px] tabular-nums opacity-70">{fillCounts[i]}</span>
+              )}
+            </Button>
+          ))}
+        </div>
+
+        <Button
+          type="button"
+          size="sm"
+          variant={fearless ? "default" : "outline"}
+          onClick={() => setFearless((f) => !f)}
+          aria-pressed={fearless}
+          title={
+            fearless
+              ? "Picks from earlier games are unavailable"
+              : "Every game draws from the full pool"
+          }
+          data-export-hide
+        >
+          Fearless
+        </Button>
       </div>
     );
   }
@@ -262,20 +369,21 @@ export function DraftSimulator({
             vertical space of their own — a full row for two buttons was the
             cheapest thing on the page to give back to the grid. */}
       <div className="panel-hex grid grid-cols-[1fr_auto_1fr] items-start gap-2 p-3">
-        <div />
+        <div className="flex justify-start">{gameSwitcher()}</div>
         <div className="flex min-w-0 flex-wrap items-center justify-center gap-x-6 gap-y-3">
           {banRow("blue")}
-          <span className="text-[10px] tracking-wider text-grey-mid uppercase">
-            Bans
-          </span>
+          <span className="text-[10px] tracking-wider text-grey-mid uppercase">Bans</span>
           {banRow("red")}
         </div>
         <div className="flex justify-end">
           <DraftControls
             boardElementId={BOARD_ELEMENT_ID}
-            fileName={`draft-${todayStamp()}.png`}
-            canClear={!isBoardEmpty(board)}
-            onClear={clearAll}
+            fileName={`draft-g${currentGame + 1}-${todayStamp()}.png`}
+            gameNumber={currentGame + 1}
+            canClearGame={!isBoardEmpty(board)}
+            gamesWithContent={fillCounts.filter((n) => n > 0).length}
+            onClearGame={clearGame}
+            onClearSeries={clearSeries}
           />
         </div>
       </div>

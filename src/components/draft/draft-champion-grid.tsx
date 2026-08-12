@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { suggest } from "@/lib/champion-search";
 import type { ChampionInfo } from "@/lib/ddragon";
+import type { UnavailableReason } from "@/lib/draft/board";
 import { DRAFT_ROLES, type ChampionProfileRow } from "@/lib/draft/types";
 import { ChampionAvatar } from "@/components/champion-avatar";
 import { Input } from "@/components/ui/input";
@@ -42,8 +43,12 @@ export function DraftChampionGrid({
 }: {
   champions: Champion[];
   version: string;
-  /** Already on the board — greyed and unclickable. */
-  unavailable: Set<number>;
+  /**
+   * Unplaceable champions and why. A Map rather than a Set because "greyed"
+   * means two different things once picks carry across a series, and showing
+   * one label for both would make the board lie by omission.
+   */
+  unavailable: Map<number, UnavailableReason>;
   /** Phase 1's annotations, for the role filter. Empty is fine. */
   profiles: ChampionProfileRow[];
   onPick: (championId: number) => void;
@@ -125,14 +130,22 @@ export function DraftChampionGrid({
           <p className="p-2 text-sm text-grey-mid">No champion matches that.</p>
         ) : (
           shown.map((champion) => {
-            const taken = unavailable.has(champion.championId);
+            const reason = unavailable.get(champion.championId);
+            const taken = reason !== undefined;
+            const why =
+              reason?.kind === "carried"
+                ? `${champion.name} — played in game ${reason.game}`
+                : reason
+                  ? `${champion.name} — already on this board`
+                  : champion.name;
             return (
               <button
                 key={champion.championId}
                 type="button"
                 onClick={() => !taken && onPick(champion.championId)}
                 aria-disabled={taken}
-                title={taken ? `${champion.name} — already on the board` : champion.name}
+                title={why}
+                aria-label={why}
                 // The lift and the gold are only on champions you can actually
                 // take: dressing up a tile that does nothing when clicked
                 // promises an affordance that isn't there, so this doubles as a
@@ -141,10 +154,10 @@ export function DraftChampionGrid({
                 // them, and the container's p-1 is what keeps an edge tile's
                 // glow from being clipped by the scroll box.
                 className={cn(
-                  "rounded-sm p-0.5 motion-reduce:transition-none",
+                  "relative rounded-sm p-0.5 motion-reduce:transition-none",
                   taken
                     ? "cursor-not-allowed"
-                    : "champion-tile-hover relative hover:z-10 hover:scale-110 focus-visible:z-10 focus-visible:scale-110",
+                    : "champion-tile-hover hover:z-10 hover:scale-110 focus-visible:z-10 focus-visible:scale-110",
                 )}
               >
                 <ChampionAvatar
@@ -154,6 +167,15 @@ export function DraftChampionGrid({
                   dimmed={taken}
                   className={GRID_TILE}
                 />
+                {/* Only the carried case gets a badge. "Taken" is legible from
+                    the board itself — the champion is sitting in a slot two
+                    inches away — but "your mid played this in game 1" is
+                    invisible unless the tile says so. */}
+                {reason?.kind === "carried" && (
+                  <span className="absolute right-0.5 bottom-0.5 rounded-sm bg-bg-primary/85 px-1 text-[10px] leading-tight font-medium text-grey-light">
+                    G{reason.game}
+                  </span>
+                )}
               </button>
             );
           })

@@ -109,6 +109,111 @@ export function isBoardEmpty(board: GameBoard): boolean {
   return boardChampionIds(board).length === 0;
 }
 
+// ------------------------------------------------------------
+// Fearless series
+// ------------------------------------------------------------
+// Five, not the ten lib/scrims/types.ts allows. That limit exists because the
+// scrim_games_number check constraint does and hand-entry shouldn't fight the
+// database; nothing is written from here, and no series this team plays is
+// longer than a Bo5. Five buttons fit in a row, ten are noise. A Bo7 is one
+// constant away.
+
+export const MAX_GAMES = 5;
+
+/** Index 0 is game 1. Always MAX_GAMES long; unplayed games are empty boards. */
+export type SeriesBoard = GameBoard[];
+
+export function emptySeries(): SeriesBoard {
+  return Array.from({ length: MAX_GAMES }, emptyBoard);
+}
+
+/** Every pick of one game, both sides. Bans excluded — see carriedPicks. */
+function pickedInGame(board: GameBoard): number[] {
+  return SIDES.flatMap((side) => board.picks[side].filter((id): id is number => id !== null));
+}
+
+/**
+ * Champions picked in games *before* `gameIndex`, mapped to the 1-based number
+ * of the earliest game each appeared in — so the grid can say "G1" rather than
+ * just "unavailable".
+ *
+ * **Bans deliberately do not carry.** Fearless removes champions that were
+ * *played*; one banned in game 1 and never played is back on the table in game
+ * 2, to pick or to ban again. That asymmetry is the entire format, and it's the
+ * one thing on this board a person cannot verify by looking — which is why it
+ * lives here as its own function rather than inline in a component. Same rule
+ * and same reasoning as usedEarlierInSeries in scrims/draft-form-state.ts; if
+ * an organiser ever counts bans too, these are the two functions that change.
+ *
+ * "Earlier" is `j < gameIndex`, not `j !== gameIndex`. The second is easier to
+ * write, is wrong, and only shows up when someone goes back to fix game 1 after
+ * filling game 3 — the series is played forwards but edited in any order.
+ */
+export function carriedPicks(series: SeriesBoard, gameIndex: number): Map<number, number> {
+  const carried = new Map<number, number>();
+  for (let j = 0; j < gameIndex && j < series.length; j++) {
+    for (const id of pickedInGame(series[j])) {
+      // Ascending, and first write wins, so a champion played in G1 and G2
+      // reads as G1 — the game that actually took it out of the pool.
+      if (!carried.has(id)) carried.set(id, j + 1);
+    }
+  }
+  return carried;
+}
+
+/**
+ * Why a champion can't be placed in `gameIndex`.
+ *
+ * Two states, and conflating them makes the board lie by omission: a champion
+ * greyed because someone just banned it this game is a different situation from
+ * one greyed because your mid laner played it in game 1. Both are equally
+ * unclickable; only the label differs.
+ */
+export type UnavailableReason = { kind: "taken" } | { kind: "carried"; game: number };
+
+/**
+ * Everything unavailable in `gameIndex`, with the reason for each.
+ *
+ * Composed from the single-game rule plus the carried set rather than written
+ * out, so the two halves stay separately readable — `unavailableIds` is the
+ * "this game" half and is still used on its own.
+ *
+ * `fearless` off makes every game independent. Not every series is fearless;
+ * `scrim_series.fearless` exists as a column for exactly that reason.
+ */
+export function unavailableInSeries(
+  series: SeriesBoard,
+  gameIndex: number,
+  fearless = true,
+): Map<number, UnavailableReason> {
+  const reasons = new Map<number, UnavailableReason>();
+
+  if (fearless) {
+    for (const [id, game] of carriedPicks(series, gameIndex)) {
+      reasons.set(id, { kind: "carried", game });
+    }
+  }
+  // This game's own bans and picks last, so they win the label: a champion
+  // picked in G1 *and* again in this game reads as "taken", which is the
+  // reason you can act on.
+  for (const id of unavailableIds(series[gameIndex] ?? emptyBoard())) {
+    reasons.set(id, { kind: "taken" });
+  }
+
+  return reasons;
+}
+
+/**
+ * How many slots each game has filled.
+ *
+ * Drives two things at once: the switcher's per-game badge, so an untouched G4
+ * is visibly untouched from G1 without switching to it, and whether "clear
+ * series" has anything to clear.
+ */
+export function gameFillCounts(series: SeriesBoard): number[] {
+  return series.map((board) => boardChampionIds(board).length);
+}
+
 /**
  * The next empty slot on the same side and kind, wrapping to the start, or null
  * if that row is full.
@@ -146,6 +251,10 @@ export function slotLabel(ref: SlotRef): string {
  * state would crash the render rather than fail cleanly. Checks shape and
  * length, not just presence.
  */
+export function isSeriesBoard(value: unknown): value is SeriesBoard {
+  return Array.isArray(value) && value.length === MAX_GAMES && value.every(isGameBoard);
+}
+
 export function isGameBoard(value: unknown): value is GameBoard {
   if (typeof value !== "object" || value === null) return false;
   const board = value as Partial<GameBoard>;

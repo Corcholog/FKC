@@ -1,9 +1,15 @@
 "use client";
 
 import { useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { PanelRight, Pin, PinOff, X } from "lucide-react";
+import { PanelRight, Pin, PinOff, Swords, Users, X } from "lucide-react";
 import { isBoardEmpty, SIDES, type GameBoard, type Side } from "@/lib/draft/board";
-import { boardContext, type IdLookup } from "@/lib/draft/context";
+import {
+  boardContext,
+  countersAgainst,
+  matchingComps,
+  nearSynergies,
+  type IdLookup,
+} from "@/lib/draft/context";
 import {
   CompSection,
   CounterSection,
@@ -15,6 +21,7 @@ import {
   TagSection,
   type PanelData,
 } from "@/components/draft/context-sections";
+import { ChampionAvatar } from "@/components/champion-avatar";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -139,6 +146,50 @@ export function ContextPanel({
   const mode: PanelMode = modeChoice ?? (empty ? "explore" : "contextual");
 
   const { ourPicks, theirPicks } = useMemo(() => boardContext(board, ourSide), [board, ourSide]);
+
+  /**
+   * What the collapsed rail advertises.
+   *
+   * **These are counts, not suggestions.** The panel has no engine and isn't
+   * getting one — no scoring, no ranking, no opinion about a draft. What's on
+   * the rail is the same filtered reads the sections do, reduced to "there is
+   * something in here": a saved synergy one champion short is a fact about
+   * notes you wrote, not advice. The distinction matters because the moment the
+   * rail ranks anything, every number on it becomes something to argue with
+   * rather than something to glance at.
+   *
+   * Only the answers you can still take are counted, and by distinct champion
+   * rather than by row — three notes about Ornn are one answer.
+   *
+   * This costs nothing the expanded panel doesn't already pay: the rail and the
+   * sections are never mounted at the same time, so these scans replace those
+   * rather than adding to them.
+   */
+  const hints = useMemo(() => {
+    if (empty) return null;
+    const near = nearSynergies(data.comps, ourPicks, unavailable);
+    const answers = new Set(
+      countersAgainst(data.counterIndex, theirPicks)
+        .filter((row) => !unavailable.has(row.counter_champion_id))
+        .map((row) => row.counter_champion_id),
+    ).size;
+    const comps = matchingComps(data.comps, ourPicks).length;
+    if (near.length === 0 && answers === 0 && comps === 0) return null;
+    return { near, answers, comps };
+  }, [empty, data, ourPicks, theirPicks, unavailable]);
+
+  // Same three facts as a sentence, because the rail draws them as bare numbers
+  // beside icons and that is not readable aloud.
+  const hintLabel = hints
+    ? [
+        hints.near.length > 0 &&
+          `${hints.near.length} saved ${hints.near.length === 1 ? "synergy is" : "synergies are"} one champion away`,
+        hints.answers > 0 && `${hints.answers} noted ${hints.answers === 1 ? "answer" : "answers"} still available`,
+        hints.comps > 0 && `${hints.comps} saved ${hints.comps === 1 ? "comp shares" : "comps share"} a pick`,
+      ]
+        .filter(Boolean)
+        .join(", ")
+    : "";
 
   // One object, so the our-side toggle can't reach three sections and miss the
   // fourth — the failure there is silent, and it shows the enemy's counters as
@@ -267,7 +318,7 @@ export function ContextPanel({
             "shrink-0 transition-[width] duration-200 ease-out motion-reduce:transition-none",
             expanded
               ? "w-[max(0px,calc(30rem-50vw+50%))]"
-              : "w-[max(0px,calc(3.5rem-50vw+50%))]",
+              : "w-[max(0px,calc(5rem-50vw+50%))]",
           )}
         />
         {/* data-export-hide is belt-and-braces: this sits outside the exported
@@ -298,10 +349,13 @@ export function ContextPanel({
           // own height back into the row it's measuring.
           "absolute inset-y-0 right-[calc(50%-50vw)]",
           "transition-[width] duration-200 ease-out motion-reduce:transition-none",
-          // 3.5rem collapsed rather than the 2.25rem it started at: the rail is
-          // the only thing advertising that a whole panel is over here, and at
-          // 36px it read as a scrollbar someone forgot to remove.
-          expanded ? "w-[30rem]" : "w-14",
+          // 5rem collapsed, up from the 2.25rem it started at. The rail is the
+          // only thing advertising that a whole panel lives over here, and it
+          // now says what's in it — a portrait is 24px and "⚔ 12" wants room
+          // beside it. Nearly free: the rail sits in the gutter beside the
+          // page's max-width shell, so on a wide screen widening it costs the
+          // board nothing at all. See the spacer above.
+          expanded ? "w-[30rem]" : "w-20",
         )}
       >
         {expanded ? (
@@ -338,11 +392,59 @@ export function ContextPanel({
           <button
             type="button"
             onClick={() => onOpenChange(true)}
-            aria-label="Open the draft reference panel"
+            aria-label={`Open the draft reference panel${hintLabel ? ` — ${hintLabel}` : ""}`}
             title="Draft reference — hover to open, click to pin"
-            className="flex h-full w-full flex-col items-center gap-3 py-4 text-grey-mid transition-colors hover:text-gold"
+            className="flex h-full w-full flex-col items-center justify-between gap-3 py-4 text-grey-mid transition-colors hover:text-gold"
           >
             <PanelRight className="size-5 shrink-0" />
+
+            {/* aria-hidden because the button's own label already says all of
+                this in a sentence, and a screen reader reading "24 12 3" down
+                a rail is worse than nothing. */}
+            <div aria-hidden className="flex flex-col items-center gap-2">
+              {hints && (
+                <>
+                  {/* Portraits rather than a count, for the one thing on this
+                      rail that names something: a saved synergy one champion
+                      short, and that champion is still takeable. Two, then a
+                      +n — the rest are one hover away. */}
+                  {hints.near.slice(0, 2).map(({ comp, missing }) => {
+                    const champion = data.championById.get(missing);
+                    return champion ? (
+                      <ChampionAvatar
+                        key={comp.id}
+                        champion={champion}
+                        version={data.version}
+                        size="sm"
+                        selected
+                      />
+                    ) : null;
+                  })}
+                  {hints.near.length > 2 && (
+                    <span className="text-[10px] tabular-nums text-gold">
+                      +{hints.near.length - 2}
+                    </span>
+                  )}
+
+                  {/* Zeroes are left off rather than shown. A rail of noughts
+                      reads as broken, and "nothing here" is what a bare rail
+                      already says. */}
+                  {hints.answers > 0 && (
+                    <span className="flex items-center gap-1 text-[11px] tabular-nums">
+                      <Swords className="size-3 shrink-0" />
+                      {hints.answers}
+                    </span>
+                  )}
+                  {hints.comps > 0 && (
+                    <span className="flex items-center gap-1 text-[11px] tabular-nums">
+                      <Users className="size-3 shrink-0" />
+                      {hints.comps}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+
             <span className="text-[11px] tracking-widest uppercase [writing-mode:vertical-rl]">
               Reference
             </span>

@@ -121,11 +121,19 @@ export type CompMatch = {
  * every caller needs it: a comp is only useful here if you can see which three
  * champions you already have and which two you'd still need.
  *
+ * **One shared champion is enough**, where the phase doc asked for two. Two was
+ * meant to keep the noise down and instead kept the section empty through the
+ * part of a draft where it would have been worth reading: first pick is exactly
+ * when "we have a saved comp built around this" is worth knowing, and by the
+ * time two are down the direction is usually already chosen. Overlap sorting
+ * does the noise control on its own — comps sharing three sit above comps
+ * sharing one, and the count on each row says which is which.
+ *
  * Ties keep the loader's order (`created_at desc`) — Array.prototype.sort is
  * stable, so two comps overlapping by three both stay where the query put them
  * instead of swapping between renders.
  */
-export function matchingComps(comps: DraftCompRow[], ourPicks: number[], min = 2): CompMatch[] {
+export function matchingComps(comps: DraftCompRow[], ourPicks: number[], min = 1): CompMatch[] {
   const ours = new Set(ourPicks);
   return comps
     .flatMap((comp) => {

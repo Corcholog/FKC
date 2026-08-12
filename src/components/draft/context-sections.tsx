@@ -491,7 +491,7 @@ export function CounterSection({
 }
 
 export function CompSection({ data, ourPicks, className }: ContextualProps) {
-  const matches = useMemo(() => matchingComps(data.comps, ourPicks, 2), [data.comps, ourPicks]);
+  const matches = useMemo(() => matchingComps(data.comps, ourPicks), [data.comps, ourPicks]);
 
   return (
     <Section
@@ -503,9 +503,9 @@ export function CompSection({ data, ourPicks, className }: ContextualProps) {
     >
       {matches.length === 0 ? (
         <EmptyNote href="/draft/comps" cta="Save one">
-          {ourPicks.length < 2
-            ? "Two picks on our side and matching comps show up here."
-            : "No saved comp shares two picks with ours."}
+          {ourPicks.length === 0
+            ? "Nothing on our side yet."
+            : "No saved comp contains any of our picks."}
         </EmptyNote>
       ) : (
         matches.map(({ comp, matched, missing }) => (

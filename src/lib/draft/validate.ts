@@ -7,12 +7,20 @@
 // through our own form.
 
 import {
+  compSizeRange,
+  COMP_SIZE,
+  DRAFT_COMP_KINDS,
   DRAFT_ROLES,
   DRAFT_TAG_KINDS,
+  MAX_COMP_LABEL_CHARS,
+  MAX_COMP_NOTE_CHARS,
   MAX_COUNTER_NOTE_CHARS,
   MAX_PROFILE_NOTE_CHARS,
   MAX_TAGS_PER_CHAMPION,
   MAX_TAG_LABEL_CHARS,
+  SYNERGY_MAX_SIZE,
+  SYNERGY_MIN_SIZE,
+  type DraftCompKind,
 } from "@/lib/draft/types";
 
 export function cleanText(value: string | null | undefined, max: number): string | null {
@@ -98,6 +106,66 @@ export function validateCounterGroup(
     if (row.note && row.note.length > MAX_COUNTER_NOTE_CHARS) {
       return `Notes can't be longer than ${MAX_COUNTER_NOTE_CHARS} characters.`;
     }
+  }
+
+  return null;
+}
+
+export type DraftCompInput = {
+  kind: DraftCompKind;
+  label: string;
+  /** Ordered — the pick order for a comp. Never sorted, here or anywhere. */
+  championIds: number[];
+  winConditions: string[];
+  notes: string | null;
+};
+
+/**
+ * The first thing wrong with this comp or synergy, or null if it's sound.
+ *
+ * The size rule duplicates draft_comps_size on purpose: the constraint exists
+ * to protect the data from anything that isn't this code, and this exists to
+ * produce a sentence a person can act on instead of a Postgres constraint
+ * dump. The duplicate-champion rule is *only* here — cardinality() doesn't
+ * dedupe, so the database will happily store the same champion twice, and a
+ * side of a draft cannot field one champion twice.
+ */
+export function validateDraftComp(
+  input: DraftCompInput,
+  validChampionIds: Set<number>,
+  validWinConditionSlugs: Set<string>,
+): string | null {
+  if (!(DRAFT_COMP_KINDS as readonly string[]).includes(input.kind)) return "Unknown kind.";
+
+  const label = cleanText(input.label, MAX_COMP_LABEL_CHARS);
+  if (!label) return "It needs a name.";
+  if (input.label.trim().length > MAX_COMP_LABEL_CHARS) {
+    return `The name can't be longer than ${MAX_COMP_LABEL_CHARS} characters.`;
+  }
+
+  const [min, max] = compSizeRange(input.kind);
+  if (input.championIds.length < min || input.championIds.length > max) {
+    return input.kind === "comp"
+      ? `A comp is a full side — pick ${COMP_SIZE} champions.`
+      : `A synergy holds ${SYNERGY_MIN_SIZE} to ${SYNERGY_MAX_SIZE} champions.`;
+  }
+
+  if (new Set(input.championIds).size !== input.championIds.length) {
+    return "The same champion is picked twice.";
+  }
+  for (const id of input.championIds) {
+    if (!validChampionIds.has(id)) return "That champion isn't recognized.";
+  }
+
+  if (new Set(input.winConditions).size !== input.winConditions.length) {
+    return "A win condition is listed twice.";
+  }
+  for (const slug of input.winConditions) {
+    if (!validWinConditionSlugs.has(slug)) return "That win condition doesn't exist. Add it first.";
+  }
+
+  if (input.notes && input.notes.length > MAX_COMP_NOTE_CHARS) {
+    return `Notes can't be longer than ${MAX_COMP_NOTE_CHARS} characters.`;
   }
 
   return null;

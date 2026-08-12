@@ -70,3 +70,44 @@ export type CounterIndex = {
   /** championId → the champions that counter it. */
   counteredBy: Map<number, ChampionCounterRow[]>;
 };
+
+export const DRAFT_COMP_KINDS = ["comp", "synergy"] as const;
+export type DraftCompKind = (typeof DRAFT_COMP_KINDS)[number];
+
+/**
+ * A comp is one full side of a draft; a synergy is a subset small enough to be
+ * a combo rather than a plan. That count is the entire difference between the
+ * two kinds, which is why draft_comps_size enforces it in the database as well
+ * as here.
+ */
+export const COMP_SIZE = 5;
+export const SYNERGY_MIN_SIZE = 2;
+export const SYNERGY_MAX_SIZE = 4;
+
+// Same fields, same app, same reasons as lib/scrims/validate.ts — reused
+// rather than reinvented at a slightly different number.
+export const MAX_COMP_LABEL_CHARS = 80;
+export const MAX_COMP_NOTE_CHARS = 2000;
+
+export type DraftCompRow = {
+  id: string;
+  kind: DraftCompKind;
+  label: string;
+  /** Ordered. For a comp this is the pick order — nothing sorts it. */
+  champion_ids: number[];
+  win_conditions: string[];
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export const DRAFT_COMP_KIND_LABELS: Record<DraftCompKind, string> = {
+  comp: "Composition",
+  synergy: "Synergy",
+};
+
+/** How many champions this kind takes, as `[min, max]`. */
+export function compSizeRange(kind: DraftCompKind): [number, number] {
+  return kind === "comp" ? [COMP_SIZE, COMP_SIZE] : [SYNERGY_MIN_SIZE, SYNERGY_MAX_SIZE];
+}

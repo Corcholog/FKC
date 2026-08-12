@@ -1,10 +1,25 @@
-export default function DraftCompsPage() {
+import { createClient } from "@/lib/supabase/server";
+import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
+import { loadDraftComps, loadDraftTags } from "@/lib/draft/queries";
+import { CompList } from "@/components/draft/comp-list";
+
+export default async function DraftCompsPage() {
+  const supabase = await createClient();
+  const version = await getLatestVersion();
+
+  const [championMap, comps, winConditionTags] = await Promise.all([
+    getChampionMap(version),
+    loadDraftComps(supabase, { kind: "comp" }),
+    loadDraftTags(supabase, "win_condition"),
+  ]);
+
   return (
-    <div className="panel-hex flex flex-col items-center justify-center gap-2 p-12 text-center">
-      <h2 className="font-heading text-lg font-semibold text-white">Comps</h2>
-      <p className="max-w-md text-sm text-grey-light">
-        Saved five-champion sides, with win-condition tags and notes, land in Phase 3.
-      </p>
-    </div>
+    <CompList
+      kind="comp"
+      comps={comps}
+      champions={realChampions(championMap)}
+      version={version}
+      winConditionTags={winConditionTags}
+    />
   );
 }

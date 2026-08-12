@@ -9,12 +9,16 @@ import {
   cleanText,
   validateChampionProfile,
   validateCounterGroup,
+  validateDraftComp,
   validateDraftTag,
   type ChampionProfileInput,
   type CounterGroupInput,
+  type DraftCompInput,
 } from "@/lib/draft/validate";
 import {
   isEmptyProfile,
+  MAX_COMP_LABEL_CHARS,
+  MAX_COMP_NOTE_CHARS,
   MAX_COUNTER_NOTE_CHARS,
   MAX_PROFILE_NOTE_CHARS,
   MAX_TAG_LABEL_CHARS,
@@ -146,15 +150,19 @@ export async function renameDraftTag(id: string, label: string): Promise<DraftAc
 }
 
 /**
- * Deletes a tag and strips it from every champion that carries it.
+ * Deletes a tag and strips it from everything that carries it — champion
+ * profiles for a function tag, saved comps and synergies for a win-condition
+ * one. Both, unconditionally: the two vocabularies are separate by convention
+ * (`kind`) rather than by constraint, and a slug left dangling in an array
+ * renders as a raw slug with no label, which looks like corruption.
  *
- * champion_profiles.tags is a plain array column, so the cleanup has to
- * happen in JS rather than via array_remove() in a single statement — the
- * query builder has no SQL escape hatch. This table is small enough (at most
- * ~170 rows, and only the few carrying this tag get touched) that a sequential
- * pass is the honest choice, same reasoning as fetchAllByIds' chunking: a
- * page render is a worse place for a burst of parallel writes than for a few
- * extra round trips.
+ * Both columns are plain array columns, so the cleanup happens in JS rather
+ * than via array_remove() in one statement — the query builder has no SQL
+ * escape hatch. Both tables are small enough (at most ~170 profiles, and only
+ * the rows actually carrying the slug get touched) that a sequential pass is
+ * the honest choice, same reasoning as fetchAllByIds' chunking: a page render
+ * is a worse place for a burst of parallel writes than for a few extra round
+ * trips.
  */
 export async function deleteDraftTag(id: string): Promise<DraftActionResult> {
   try {
@@ -180,11 +188,25 @@ export async function deleteDraftTag(id: string): Promise<DraftActionResult> {
         .eq("champion_id", row.champion_id);
     }
 
+    const { data: comps } = await supabase
+      .from("draft_comps")
+      .select("id, win_conditions")
+      .contains("win_conditions", [tag.slug])
+      .returns<{ id: string; win_conditions: string[] }[]>();
+
+    for (const row of comps ?? []) {
+      await supabase
+        .from("draft_comps")
+        .update({ win_conditions: row.win_conditions.filter((slug) => slug !== tag.slug) })
+        .eq("id", row.id);
+    }
+
     const { data, error } = await supabase.from("draft_tags").delete().eq("id", id).select("id");
     if (error) return { error: error.message };
     if (!data || data.length === 0) return { error: "That tag was already removed." };
 
     revalidatePath("/draft/champions");
+    revalidateDraftComps();
     return {};
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not delete that tag." };
@@ -276,5 +298,99 @@ export async function saveCounterGroup(input: CounterGroupInput): Promise<DraftA
     return {};
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not save those matchups." };
+  }
+}
+
+// Both list routes on every write, because they share a table: saving a
+// synergy shouldn't leave the comps page holding a stale count. /draft goes
+// too — the contextual panel there reads both kinds.
+function revalidateDraftComps() {
+  revalidatePath("/draft/comps");
+  revalidatePath("/draft/synergies");
+  revalidatePath("/draft");
+}
+
+export type SaveDraftCompResult = DraftActionResult & { compId?: string };
+
+/**
+ * Creates or updates one comp or synergy. `id` absent means insert, present
+ * means update in place.
+ *
+ * Written so the simulator board can call it unchanged in a later phase: it
+ * assumes nothing about where the champions came from, and takes the kind in
+ * the payload rather than inferring it from the route it was called on. From
+ * the board that will be the same call with a label typed into a small dialog
+ * and nothing else different.
+ *
+ * champion_ids goes in exactly as given. For a comp that array is the pick
+ * order off one side of a board, and sorting it for tidiness would silently
+ * destroy that.
+ */
+export async function saveDraftComp(
+  input: DraftCompInput & { id?: string },
+): Promise<SaveDraftCompResult> {
+  try {
+    const { supabase, user } = await requireSession();
+
+    const championMap = await championsForWrite();
+    const winConditionSlugs = new Set(
+      (await loadDraftTags(supabase, "win_condition")).map((t) => t.slug),
+    );
+
+    const problem = validateDraftComp(input, new Set(championMap.keys()), winConditionSlugs);
+    if (problem) return { error: problem };
+
+    const fields = {
+      kind: input.kind,
+      label: cleanText(input.label, MAX_COMP_LABEL_CHARS)!,
+      champion_ids: input.championIds,
+      win_conditions: input.winConditions,
+      notes: cleanText(input.notes, MAX_COMP_NOTE_CHARS),
+    };
+
+    // created_by on insert only, never reassigned on edit — same reasoning as
+    // scrim_series.created_by and champion_counters: it records who wrote the
+    // thing, not who last touched it.
+    const { data, error } = input.id
+      ? await supabase
+          .from("draft_comps")
+          .update({ ...fields, updated_at: new Date().toISOString() })
+          .eq("id", input.id)
+          .select("id")
+      : await supabase
+          .from("draft_comps")
+          .insert({ ...fields, created_by: user.id })
+          .select("id");
+
+    if (error) return { error: error.message };
+    // RLS refusals come back as zero rows rather than an error. On an update
+    // it can also mean the row is simply gone.
+    if (!data || data.length === 0) {
+      return {
+        error: input.id
+          ? "That no longer exists — someone may have deleted it."
+          : "That save was blocked. Try signing out and back in.",
+      };
+    }
+
+    revalidateDraftComps();
+    return { compId: (data[0] as { id: string }).id };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not save that." };
+  }
+}
+
+export async function deleteDraftComp(id: string): Promise<DraftActionResult> {
+  try {
+    const { supabase } = await requireSession();
+
+    const { data, error } = await supabase.from("draft_comps").delete().eq("id", id).select("id");
+    if (error) return { error: error.message };
+    if (!data || data.length === 0) return { error: "That was already removed." };
+
+    revalidateDraftComps();
+    return {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not delete that." };
   }
 }

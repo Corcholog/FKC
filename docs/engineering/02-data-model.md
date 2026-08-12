@@ -365,7 +365,7 @@ them.
 
 Migration 015, first of three for the draft-tools section documented in
 `docs/features/draft-strategy/`. This entry covers the two tables that phase shipped;
-`champion_counters` (016) and `draft_comps` (017) get their own entries when they land.
+`champion_counters` (016) is §11 and `draft_comps` (017) is §12.
 
 **No foreign key on `champion_profiles.champion_id`, and none is possible.** Exactly the
 `champion_tier_lists` precedent from §2: there is no champions table in this database, and
@@ -446,3 +446,45 @@ deleted. **`created_by` is only set on insert, never touched on update** — the
 what makes that possible without a second round trip, and it matters for the same reason
 `scrim_series.created_by` is never touched by `updateScrimSeries`: the column means "who
 wrote the original take," not "who touched this last."
+
+## 12. `draft_comps` — comps and synergies in one table
+
+Migration 017. A saved comp is one full side of a draft (5 champions); a saved synergy is a
+combo (2–4). **One table, discriminated by `kind`,** against a spec that asked for two.
+
+They have identical columns — label, champions, win-condition tags, notes — and differ only
+in how many champions they hold and what that count means. Two tables would have been two
+identical row types, two identical query modules, two identical forms, two save actions,
+and a contextual panel that queries both and merges the results. The discriminator costs
+one `text` column and one check constraint. If a comp ever grows a column a synergy can't
+have (per-slot roles, an `opponent_id`, a side), split it then; nothing here makes that
+harder.
+
+**`champion_ids` is ordered and nothing sorts it.** For a synergy the order is arbitrary
+and harmless. For a comp it is the pick order off one side of a board — B1 through B5 —
+which is real information about how the draft was meant to go. Sorting at save time for
+tidiness would throw that away, so neither `saveDraftComp` nor `CompCard` touches it.
+Same call as `scrim_games.ally_bans` (§9).
+
+**The size constraint uses `cardinality()`, not `array_length()`.** `array_length('{}', 1)`
+is `NULL` rather than `0`, so `array_length(champion_ids, 1) = 5` evaluates to `NULL` for an
+empty array — and a CHECK that evaluates to `NULL` *passes*. An empty comp would have gone
+straight in. `cardinality()` returns `0` and closes the hole. The migration's verify block
+has an empty-array insert specifically to prove this.
+
+**The size rule is duplicated in `validateDraftComp` on purpose.** The constraint protects
+the data from anything that isn't this code; the validator produces a sentence a person can
+act on instead of a Postgres constraint dump. The no-duplicate-champion rule is *only* in
+the validator — `cardinality()` doesn't dedupe, so the database will happily store the same
+champion twice, and one side of a draft cannot field a champion twice.
+
+Both array columns are GIN-indexed because the contextual panel asks containment questions
+(`champion_ids <@ …our picks` for "synergies we've already assembled", `&&` for partial
+matches), which btree cannot answer. `loadDraftComps` exposes those as `containedBy` /
+`hasAnyOf` / `hasAllOf` — named rather than passed through as operators, because getting
+`@>` and `<@` backwards returns plausible-looking wrong rows rather than an error.
+
+`deleteDraftTag` strips the slug from `draft_comps.win_conditions` as well as
+`champion_profiles.tags`. The two vocabularies are separate by convention (`kind`) rather
+than by constraint, so the cleanup is unconditional — a slug left dangling in an array
+renders as a raw slug with no label, which reads as corruption.

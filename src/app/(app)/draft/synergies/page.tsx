@@ -1,10 +1,26 @@
-export default function DraftSynergiesPage() {
+import { createClient } from "@/lib/supabase/server";
+import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
+import { loadDraftComps, loadDraftTags } from "@/lib/draft/queries";
+import { CompList } from "@/components/draft/comp-list";
+
+// The same component as /draft/comps with a different kind — see CompList.
+export default async function DraftSynergiesPage() {
+  const supabase = await createClient();
+  const version = await getLatestVersion();
+
+  const [championMap, comps, winConditionTags] = await Promise.all([
+    getChampionMap(version),
+    loadDraftComps(supabase, { kind: "synergy" }),
+    loadDraftTags(supabase, "win_condition"),
+  ]);
+
   return (
-    <div className="panel-hex flex flex-col items-center justify-center gap-2 p-12 text-center">
-      <h2 className="font-heading text-lg font-semibold text-white">Synergies</h2>
-      <p className="max-w-md text-sm text-grey-light">
-        Saved 2–4 champion combos, with win-condition tags and notes, land in Phase 3.
-      </p>
-    </div>
+    <CompList
+      kind="synergy"
+      comps={comps}
+      champions={realChampions(championMap)}
+      version={version}
+      winConditionTags={winConditionTags}
+    />
   );
 }

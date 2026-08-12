@@ -14,6 +14,8 @@ import type {
   ChampionCounterRow,
   ChampionProfileRow,
   CounterIndex,
+  DraftCompKind,
+  DraftCompRow,
   DraftTagKind,
   DraftTagRow,
 } from "@/lib/draft/types";
@@ -22,6 +24,8 @@ const TAG_COLUMNS = "id, slug, label, kind, created_at";
 const PROFILE_COLUMNS = "champion_id, roles, tags, notes, updated_at, updated_by";
 const COUNTER_COLUMNS =
   "id, counter_champion_id, target_champion_id, note, created_by, created_at, updated_at";
+const COMP_COLUMNS =
+  "id, kind, label, champion_ids, win_conditions, notes, created_by, created_at, updated_at";
 
 export async function loadDraftTags(
   supabase: SupabaseClient,
@@ -65,6 +69,52 @@ export async function loadChampionCounters(supabase: SupabaseClient): Promise<Ch
       .range(from, to)
       .returns<ChampionCounterRow[]>(),
   );
+}
+
+/**
+ * Saved comps and synergies, optionally filtered.
+ *
+ * One loader for both list pages and, later, the contextual panel — the
+ * options are what make a single function worth having. The array filters map
+ * to Postgres operators whose directions are easy to get backwards, and
+ * getting one backwards returns plausible-looking wrong rows rather than an
+ * error, so they're spelled out:
+ *
+ *   hasAllOf     `@>`  champion_ids contains every id given
+ *   hasAnyOf     `&&`  champion_ids and the given ids overlap
+ *   containedBy  `<@`  every champion in the row is among the ids given —
+ *                      "synergies I've already fully assembled on the board"
+ *
+ * Ordered `created_at desc, id`: a total order, so `.range()` paging can't
+ * overlap or skip. The table is small today, but the ordering discipline costs
+ * nothing here and the next person shouldn't have to work it out — see the
+ * same trap documented in lib/scrims/queries.ts:74-84.
+ */
+export async function loadDraftComps(
+  supabase: SupabaseClient,
+  options?: {
+    kind?: DraftCompKind;
+    hasAllOf?: number[];
+    hasAnyOf?: number[];
+    containedBy?: number[];
+    winConditions?: string[];
+  },
+): Promise<DraftCompRow[]> {
+  return fetchAllRows<DraftCompRow>((from, to) => {
+    let query = supabase.from("draft_comps").select(COMP_COLUMNS);
+    if (options?.kind) query = query.eq("kind", options.kind);
+    if (options?.hasAllOf?.length) query = query.contains("champion_ids", options.hasAllOf);
+    if (options?.hasAnyOf?.length) query = query.overlaps("champion_ids", options.hasAnyOf);
+    if (options?.containedBy?.length) query = query.containedBy("champion_ids", options.containedBy);
+    if (options?.winConditions?.length) {
+      query = query.overlaps("win_conditions", options.winConditions);
+    }
+    return query
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, to)
+      .returns<DraftCompRow[]>();
+  });
 }
 
 /** Both readings of the counters table, built in one pass over the raw rows. */

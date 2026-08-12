@@ -190,12 +190,11 @@ export function CompList({
           Nothing matches those filters.
         </p>
       ) : (
-        // Comps get a two-column grid: five champions, win-condition badges and
-        // notes all want the width. Synergies get a wrapping row of
-        // content-sized cards instead — in a grid every column is as wide as the
-        // widest card, so a two-champion synergy sat in a half-width panel that
-        // was mostly blank.
-        <div className={kind === "comp" ? "grid gap-3 sm:grid-cols-2" : "flex flex-wrap gap-2"}>
+        // A wrapping row of content-sized cards, both kinds. Not a grid: every
+        // column in a grid is as wide as the widest card, so a two-champion
+        // synergy sat in a half-width panel that was mostly blank, and a comp
+        // got a full column whether or not it had anything to put in one.
+        <div className="flex flex-wrap gap-3">
           {filtered.map((comp) => (
             <CompCard
               key={comp.id}
@@ -204,7 +203,6 @@ export function CompList({
               version={version}
               tagLabels={tagLabels}
               onEdit={() => setEditing({ comp })}
-              compact={kind !== "comp"}
             />
           ))}
         </div>

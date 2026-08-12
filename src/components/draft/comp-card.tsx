@@ -26,8 +26,14 @@ type Champion = ChampionInfo & { championId: number };
  * here, only on the surfaces that can't show portraits — the delete
  * confirmation, aria-labels, the search filter.
  *
- * `compact` is a separate axis: it sizes the card to its contents rather than
- * to a grid column, for synergies, which are usually two icons and nothing else.
+ * **The card is sized by its champions, not by its tags or its notes.** It's
+ * `w-fit`, so its width comes from the widest row — which should be the
+ * portraits plus the controls, the one row that genuinely can't wrap any
+ * narrower. Win conditions and notes are excluded from that calculation with
+ * `w-0 min-w-full`: width 0 contributes nothing to the parent's shrink-to-fit,
+ * and min-width 100% then fills whatever width the champions settled on. Without
+ * it a comp carrying six win conditions stretched into one long line of badges
+ * and dragged the whole card out with it; now they wrap.
  */
 export function CompCard({
   comp,
@@ -35,7 +41,6 @@ export function CompCard({
   version,
   tagLabels,
   onEdit,
-  compact = false,
 }: {
   comp: DraftCompRow;
   championById: Map<number, Champion>;
@@ -43,7 +48,6 @@ export function CompCard({
   /** slug → label, so a card never has to render a raw slug. */
   tagLabels: Map<string, string>;
   onEdit: () => void;
-  compact?: boolean;
 }) {
   const [notesOpen, setNotesOpen] = useState(false);
   const title = compTitle(comp, (id) => championById.get(id)?.name);
@@ -87,12 +91,9 @@ export function CompCard({
   );
 
   return (
-    <div
-      className={cn(
-        "panel-hex flex flex-col",
-        compact ? "w-fit max-w-72 gap-1.5 p-2.5" : "gap-2 p-3",
-      )}
-    >
+    // max-w-sm is the ceiling for the one thing that *should* be allowed to
+    // widen the card past its portraits: a long name.
+    <div className="panel-hex flex w-fit max-w-sm flex-col gap-2 p-3">
       {comp.label ? (
         <>
           <div className="flex items-start gap-2">
@@ -110,8 +111,10 @@ export function CompCard({
         </div>
       )}
 
+      {/* w-0 min-w-full: see the note on this component. These two wrap inside
+          the card's width instead of setting it. */}
       {comp.win_conditions.length > 0 && (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex w-0 min-w-full flex-wrap gap-1">
           {comp.win_conditions.map((slug) => (
             <Badge key={slug} variant="outline">
               {tagLabels.get(slug) ?? slug}
@@ -125,7 +128,7 @@ export function CompCard({
           type="button"
           onClick={() => setNotesOpen((o) => !o)}
           aria-expanded={notesOpen}
-          className="text-left text-xs text-grey-mid hover:text-grey-light"
+          className="w-0 min-w-full text-left text-xs text-grey-mid hover:text-grey-light"
         >
           <span className={cn(!notesOpen && "line-clamp-2")}>{comp.notes}</span>
         </button>

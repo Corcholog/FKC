@@ -271,18 +271,7 @@ export function ContextPanel({
           )}
         />
         {/* data-export-hide is belt-and-braces: this sits outside the exported
-            element already, and it should keep working if the layout moves.
-
-            The height is the board's height restated, not a share of the
-            viewport. A panel that outgrows the board makes the page scroll, and
-            not having to scroll to see the board is the whole point of the
-            champion grid's own clamp; a reference column that undid it whenever
-            a list ran long would be the same bug wearing a hat. So it's that
-            clamp plus the 8rem the ban panel and row gaps take: grid
-            clamp(21.5rem, 100vh-29.5rem, 36rem) + 8rem. Change one, change the
-            other — draft-champion-grid.tsx is where the numbers come from.
-            Fixed rather than capped, so the collapsed rail is a full-height
-            hover target instead of a stub; overflow lands on the scroller. */}
+            element already, and it should keep working if the layout moves. */}
         <aside
         data-export-hide
         onMouseEnter={() => setHovered(true)}
@@ -294,13 +283,20 @@ export function ContextPanel({
           if (!e.currentTarget.contains(e.relatedTarget)) setHovered(false);
         }}
         className={cn(
-          "panel-hex flex h-[clamp(29.5rem,calc(100vh-21.5rem),44rem)] flex-col overflow-hidden p-0",
+          "panel-hex flex flex-col overflow-hidden p-0",
           // Out of flow and pinned to the window's right edge. `right` is
           // measured from the flex row's padding box — the shell — so the
-          // negative gutter walks it out to the glass. top-0 is what keeps it
-          // level with the board without anyone hard-coding the height of the
-          // navbar, the heading and the tab strip above it.
-          "absolute top-0 right-[calc(50%-50vw)]",
+          // negative gutter walks it out to the glass.
+          //
+          // inset-y-0 rather than a height: the row is `items-start` and the
+          // board is the only thing in it with any height, so the row *is* the
+          // board's height and stretching to it makes the two flanks line up
+          // exactly, top and bottom, at every viewport. This used to restate
+          // the champion grid's clamp plus a guess at the ban panel, which was
+          // both short and a second copy of a number that lives elsewhere.
+          // Being out of flow is what makes it safe — the panel can't feed its
+          // own height back into the row it's measuring.
+          "absolute inset-y-0 right-[calc(50%-50vw)]",
           "transition-[width] duration-200 ease-out motion-reduce:transition-none",
           // 3.5rem collapsed rather than the 2.25rem it started at: the rail is
           // the only thing advertising that a whole panel is over here, and at

@@ -530,6 +530,21 @@ game 1. Both are equally unclickable and look the same; the carried one carries 
 the champion is sitting in a slot two inches away, while "played in game 1" is invisible
 unless the tile says so. Hence `Map<number, UnavailableReason>` rather than a `Set`.
 
+**The rule looks backwards, so editing an earlier game needs a forward check too.** Nothing
+in `unavailableInSeries` stops someone opening G1 and placing a champion G3 already picked
+— G1 only consults the games before it. The result would be the same champion in two games
+of a format whose entire premise is that it can't, with *neither* grid flagging it, because
+each is only checking backwards. `conflictsAfter` is that forward check, and placing into
+the conflict raises `PickConflictDialog` rather than being silently refused: refusing would
+mean clearing every later game by hand before fixing a typo in G1.
+
+Confirming calls `releaseChampionAfter`, which strips that one champion from later games and
+leaves those drafts otherwise intact. Clearing whole games would also resolve it and has an
+argument behind it — a fearless game drafted against a pool that has since changed is
+arguably stale — but most edits to an earlier game are fixing a typo, and losing three
+drafted games to a typo is the worse failure. Bans are stripped too, not just picks: a
+champion picked earlier is unavailable for *every* slot later, ban slots included.
+
 A **Fearless toggle** sits next to the switcher, defaulted on. Not every series is fearless
 — `scrim_series.fearless` exists as a column for that reason — and off makes each game
 independent. It's threaded as an argument to `unavailableInSeries`, not a module flag.

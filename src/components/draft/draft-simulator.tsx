@@ -5,6 +5,7 @@ import type { ChampionInfo } from "@/lib/ddragon";
 import type { ChampionProfileRow } from "@/lib/draft/types";
 import {
   clearSlot,
+  conflictsAfter,
   emptyBoard,
   emptySeries,
   gameFillCounts,
@@ -13,6 +14,7 @@ import {
   MAX_GAMES,
   nextEmptySlot,
   readSlot,
+  releaseChampionAfter,
   setSlot,
   slotKey,
   slotLabel,
@@ -27,6 +29,7 @@ import {
 import { DraftChampionGrid } from "@/components/draft/draft-champion-grid";
 import { DraftControls } from "@/components/draft/draft-controls";
 import { DraftSlot } from "@/components/draft/draft-slot";
+import { PickConflictDialog } from "@/components/draft/pick-conflict-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -137,6 +140,13 @@ export function DraftSimulator({
   const [currentGame, setCurrentGame] = useState(0);
   const [fearless, setFearless] = useState(true);
   const [active, setActive] = useState<SlotRef | null>(null);
+  // A placement waiting on confirmation, because a later game already holds
+  // this champion. Null the rest of the time.
+  const [conflict, setConflict] = useState<{
+    championId: number;
+    slot: SlotRef;
+    games: number[];
+  } | null>(null);
   const [restored, setRestored] = useState(false);
   const hydrated = useHydrated();
 
@@ -151,6 +161,7 @@ export function DraftSimulator({
     [series, currentGame, fearless],
   );
   const fillCounts = useMemo(() => gameFillCounts(series), [series]);
+  const conflictChampion = conflict ? championById.get(conflict.championId) : null;
 
   // Rehydration happens *during render*, once, rather than in an effect.
   //
@@ -188,17 +199,42 @@ export function DraftSimulator({
     setSeries((prev) => prev.map((game, i) => (i === currentGame ? change(game) : game)));
   }
 
+  /** Places a champion and walks the active slot on. `from` is the series to
+   *  build on, so the conflict path can hand in an already-cleaned one. */
+  function place(from: SeriesBoard, slot: SlotRef, championId: number) {
+    const next = setSlot(from[currentGame], slot, championId);
+    setSeries(from.map((game, i) => (i === currentGame ? next : game)));
+    // Advance against the *new* board so the slot just filled isn't offered
+    // back. This is what makes filling a side five grid clicks rather than ten
+    // alternating ones.
+    setActive(nextEmptySlot(next, slot) ?? slot);
+  }
+
   function pick(championId: number) {
     if (!active) return;
-    const slot = active;
-    updateGame((prev) => {
-      const next = setSlot(prev, slot, championId);
-      // Advance after placing, computed against the *new* board so the slot
-      // just filled isn't offered back. This is what makes filling a side five
-      // grid clicks rather than ten alternating ones.
-      setActive(nextEmptySlot(next, slot) ?? slot);
-      return next;
-    });
+
+    // The fearless rule only looks backwards, so nothing above this has
+    // stopped a champion that a *later* game already holds. Placing it anyway
+    // would put the same champion in two games of a format whose whole premise
+    // is that it can't, and neither game's grid would show a problem — each is
+    // only checking the games before it. Ask first.
+    const conflicts = fearless ? conflictsAfter(series, currentGame, championId) : [];
+    if (conflicts.length > 0) {
+      setConflict({ championId, slot: active, games: conflicts });
+      return;
+    }
+
+    place(series, active, championId);
+  }
+
+  function resolveConflict() {
+    if (!conflict) return;
+    place(
+      releaseChampionAfter(series, currentGame, conflict.championId),
+      conflict.slot,
+      conflict.championId,
+    );
+    setConflict(null);
   }
 
   function clearOne(slot: SlotRef) {
@@ -404,6 +440,18 @@ export function DraftSimulator({
         </div>
         {pickColumn("red")}
       </div>
+
+      {/* Mounted unconditionally at the tree's root, not inside a branch —
+          same trap the counters matrix fell into, where the dialog's mount
+          point lived in a branch that the state change didn't re-enter. */}
+      {conflictChampion && conflict && (
+        <PickConflictDialog
+          champion={conflictChampion}
+          games={conflict.games}
+          onConfirm={resolveConflict}
+          onCancel={() => setConflict(null)}
+        />
+      )}
     </div>
   );
 }

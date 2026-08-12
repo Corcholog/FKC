@@ -204,6 +204,58 @@ export function unavailableInSeries(
 }
 
 /**
+ * Games *after* `gameIndex` where `championId` already sits in a slot, as
+ * 1-based game numbers.
+ *
+ * The counterpart to carriedPicks, and the reason it has to exist: the fearless
+ * rule only looks backwards, so nothing stops someone opening G1 and placing a
+ * champion that G3 already picked. The board would then hold the same champion
+ * in two games of a format whose entire premise is that it can't — and neither
+ * game's grid would show a problem, because each is only checking the games
+ * before it.
+ *
+ * Bans count too, not just picks. Once a champion is picked in an earlier game
+ * it's in `unavailableInSeries` for every later one, which blocks ban slots as
+ * well as pick slots — so a later *ban* of it is the same inconsistency.
+ */
+export function conflictsAfter(
+  series: SeriesBoard,
+  gameIndex: number,
+  championId: number,
+): number[] {
+  const games: number[] = [];
+  for (let j = gameIndex + 1; j < series.length; j++) {
+    if (boardChampionIds(series[j]).includes(championId)) games.push(j + 1);
+  }
+  return games;
+}
+
+/**
+ * Removes `championId` from every slot of every game after `gameIndex`.
+ *
+ * Deliberately surgical: it takes out the one champion causing the conflict and
+ * leaves the rest of those drafts standing. Clearing whole games would also
+ * resolve it, and there's an argument for it — a fearless game drafted against
+ * a pool that has since changed is arguably stale — but most edits to an
+ * earlier game are fixing a typo, and losing three drafted games to a typo is
+ * the worse failure.
+ */
+export function releaseChampionAfter(
+  series: SeriesBoard,
+  gameIndex: number,
+  championId: number,
+): SeriesBoard {
+  return series.map((board, j) => {
+    if (j <= gameIndex) return board;
+    const strip = (row: SlotRow) => row.map((id) => (id === championId ? null : id));
+    return {
+      bans: { blue: strip(board.bans.blue), red: strip(board.bans.red) },
+      picks: { blue: strip(board.picks.blue), red: strip(board.picks.red) },
+    };
+  });
+}
+
+/**
  * How many slots each game has filled.
  *
  * Drives two things at once: the switcher's per-game badge, so an untouched G4

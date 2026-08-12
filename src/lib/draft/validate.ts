@@ -69,23 +69,36 @@ export function validateDraftTag(input: DraftTagInput): string | null {
   return null;
 }
 
-export type ChampionCounterInput = {
-  counterChampionId: number;
-  targetChampionId: number;
-  note: string | null;
+export type CounterGroupInput = {
+  /** The champion held constant — the one every row in the list relates to. */
+  fixedChampionId: number;
+  /**
+   * "counteredBy": `fixed` is the target, every row is a champion that
+   * counters it — "who's a good response to Jarvan". "counters": `fixed` is
+   * the counter, every row is a target it beats — "what does Jarvan answer
+   * well". Same table, opposite column held fixed.
+   */
+  direction: "counters" | "counteredBy";
+  rows: { championId: number; note: string | null }[];
 };
 
-/** The first thing wrong with this matchup, or null if it's sound. */
-export function validateChampionCounter(
-  input: ChampionCounterInput,
+/** The first thing wrong with this group of matchups, or null if it's sound. */
+export function validateCounterGroup(
+  input: CounterGroupInput,
   validChampionIds: Set<number>,
 ): string | null {
-  if (!validChampionIds.has(input.counterChampionId) || !validChampionIds.has(input.targetChampionId)) {
-    return "That champion isn't recognized.";
+  if (!validChampionIds.has(input.fixedChampionId)) return "That champion isn't recognized.";
+
+  if (new Set(input.rows.map((r) => r.championId)).size !== input.rows.length) {
+    return "The same champion is listed twice.";
   }
-  if (input.counterChampionId === input.targetChampionId) return "A champion can't counter itself.";
-  if (input.note && input.note.length > MAX_COUNTER_NOTE_CHARS) {
-    return `Notes can't be longer than ${MAX_COUNTER_NOTE_CHARS} characters.`;
+  for (const row of input.rows) {
+    if (!validChampionIds.has(row.championId)) return "That champion isn't recognized.";
+    if (row.championId === input.fixedChampionId) return "A champion can't counter itself.";
+    if (row.note && row.note.length > MAX_COUNTER_NOTE_CHARS) {
+      return `Notes can't be longer than ${MAX_COUNTER_NOTE_CHARS} characters.`;
+    }
   }
+
   return null;
 }

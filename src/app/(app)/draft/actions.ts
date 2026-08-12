@@ -7,11 +7,11 @@ import { slugify } from "@/lib/slug";
 import { loadDraftTags } from "@/lib/draft/queries";
 import {
   cleanText,
-  validateChampionCounter,
   validateChampionProfile,
+  validateCounterGroup,
   validateDraftTag,
-  type ChampionCounterInput,
   type ChampionProfileInput,
+  type CounterGroupInput,
 } from "@/lib/draft/validate";
 import {
   isEmptyProfile,
@@ -196,70 +196,85 @@ function revalidateCounters() {
   revalidatePath("/draft/champions");
 }
 
+type ExistingCounterRow = { id: string; counter_champion_id: number; target_champion_id: number };
+
 /**
- * Upserts on the directed pair — re-noting an existing matchup edits it rather
- * than erroring. Checks for the existing row first, rather than a single
- * .upsert() call, specifically so an edit never touches created_by: that
- * column means "who wrote the original take," and a plain upsert would
- * silently reassign it to whoever last edited the note.
+ * Replaces the full set of matchups on one side of `fixedChampionId` with
+ * `rows` in one call — "here is the complete list of who counters Jarvan
+ * now," not one pair at a time. Diffed against what's already there: rows
+ * that already existed for a champion still in the list are updated in
+ * place (preserving created_by — see below), rows for a champion newly added
+ * are inserted, and existing rows for a champion no longer in the list are
+ * deleted. A single save() from the editor covers add, edit and remove.
+ *
+ * created_by is only set on insert, never touched on update, for the same
+ * reason saveChampionProfile doesn't reassign champion_profiles.updated_by
+ * away from who actually wrote a take: the column means "who wrote the
+ * original note," not "who last touched this."
  */
-export async function saveChampionCounter(input: ChampionCounterInput): Promise<DraftActionResult> {
+export async function saveCounterGroup(input: CounterGroupInput): Promise<DraftActionResult> {
   try {
     const { supabase, user } = await requireSession();
 
     const championMap = await championsForWrite();
-    const problem = validateChampionCounter(input, new Set(championMap.keys()));
+    const problem = validateCounterGroup(input, new Set(championMap.keys()));
     if (problem) return { error: problem };
 
-    const note = cleanText(input.note, MAX_COUNTER_NOTE_CHARS);
+    const fixedColumn = input.direction === "counteredBy" ? "target_champion_id" : "counter_champion_id";
 
-    const { data: existing } = await supabase
+    const { data: existingRows, error: readError } = await supabase
       .from("champion_counters")
-      .select("id")
-      .eq("counter_champion_id", input.counterChampionId)
-      .eq("target_champion_id", input.targetChampionId)
-      .maybeSingle<{ id: string }>();
+      .select("id, counter_champion_id, target_champion_id")
+      .eq(fixedColumn, input.fixedChampionId)
+      .returns<ExistingCounterRow[]>();
+    if (readError) return { error: readError.message };
 
-    const { data, error } = existing
-      ? await supabase
-          .from("champion_counters")
-          .update({ note, updated_at: new Date().toISOString() })
-          .eq("id", existing.id)
-          .select("id")
-      : await supabase
-          .from("champion_counters")
-          .insert({
-            counter_champion_id: input.counterChampionId,
-            target_champion_id: input.targetChampionId,
+    const existingByOther = new Map(
+      (existingRows ?? []).map((row) => [
+        input.direction === "counteredBy" ? row.counter_champion_id : row.target_champion_id,
+        row,
+      ]),
+    );
+
+    const keptIds = new Set<number>();
+    for (const row of input.rows) {
+      keptIds.add(row.championId);
+      const note = cleanText(row.note, MAX_COUNTER_NOTE_CHARS);
+      const existing = existingByOther.get(row.championId);
+
+      const { error } = existing
+        ? await supabase
+            .from("champion_counters")
+            .update({ note, updated_at: new Date().toISOString() })
+            .eq("id", existing.id)
+        : await supabase.from("champion_counters").insert({
+            counter_champion_id: input.direction === "counteredBy" ? row.championId : input.fixedChampionId,
+            target_champion_id: input.direction === "counteredBy" ? input.fixedChampionId : row.championId,
             note,
             created_by: user.id,
-          })
-          .select("id");
+          });
 
-    if (error) {
-      // The unique-pair race: two people saving the same new matchup at once.
-      return { error: error.code === "23505" ? "That matchup is already noted." : error.message };
+      if (error) return { error: error.message };
     }
-    if (!data || data.length === 0) return { error: "That save was blocked. Try signing out and back in." };
+
+    const toRemove = (existingRows ?? []).filter((row) => {
+      const other = input.direction === "counteredBy" ? row.counter_champion_id : row.target_champion_id;
+      return !keptIds.has(other);
+    });
+    if (toRemove.length > 0) {
+      const { error } = await supabase
+        .from("champion_counters")
+        .delete()
+        .in(
+          "id",
+          toRemove.map((row) => row.id),
+        );
+      if (error) return { error: error.message };
+    }
 
     revalidateCounters();
     return {};
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Could not save that matchup." };
-  }
-}
-
-export async function deleteChampionCounter(id: string): Promise<DraftActionResult> {
-  try {
-    const { supabase } = await requireSession();
-
-    const { data, error } = await supabase.from("champion_counters").delete().eq("id", id).select("id");
-    if (error) return { error: error.message };
-    if (!data || data.length === 0) return { error: "That matchup was already removed." };
-
-    revalidateCounters();
-    return {};
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Could not delete that matchup." };
+    return { error: e instanceof Error ? e.message : "Could not save those matchups." };
   }
 }

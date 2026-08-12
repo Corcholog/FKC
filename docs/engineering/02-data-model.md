@@ -417,8 +417,19 @@ later phase) the contextual panel asking "who beats these enemy picks" —
 via `match_participants` or Lolalytics (`src/lib/lolalytics.ts`); this table is
 deliberately something else and doesn't try to reconcile with either.
 
-**`created_by` is set once, not on every edit.** Re-noting an existing pair is an
-UPDATE, and `saveChampionCounter` (`src/app/(app)/draft/actions.ts`) checks for an
-existing row first specifically so it doesn't overwrite `created_by` on that path — same
-convention as `scrim_series`, where `updateScrimSeries` never touches `created_by` either.
-The column means "who wrote the original take," not "who touched this last."
+**One row per pair, but the UI edits a whole side at once.** A champion typically has
+several good answers, not one — "who's a good response to Jarvan" is a list, not a single
+pick. `CounterGroupEditor` (`src/components/draft/counter-group-editor.tsx`) is keyed on
+one champion held constant (`fixed`) and one `direction` (whether `fixed` is the target or
+the counter), and edits the *entire* set of rows on that side in one save. Every entry
+point — a matrix cell, a champion's "Add" button, clicking an existing list entry — opens
+this same view rather than a single-pair form, because adding five responses and editing
+one are really the same action once "the list for this champion" is the unit of edit.
+
+`saveCounterGroup` (`src/app/(app)/draft/actions.ts`) diffs the submitted list against
+what already exists for `fixed`+`direction`: champions still present are updated in place,
+new ones are inserted, and any existing row for a champion no longer in the list is
+deleted. **`created_by` is only set on insert, never touched on update** — the diff is
+what makes that possible without a second round trip, and it matters for the same reason
+`scrim_series.created_by` is never touched by `updateScrimSeries`: the column means "who
+wrote the original take," not "who touched this last."

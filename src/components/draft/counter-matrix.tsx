@@ -5,7 +5,7 @@ import { Plus, Search } from "lucide-react";
 import type { ChampionInfo } from "@/lib/ddragon";
 import { DRAFT_ROLES, type ChampionCounterRow, type ChampionProfileRow } from "@/lib/draft/types";
 import { ChampionAvatar } from "@/components/champion-avatar";
-import { CounterEditor } from "@/components/draft/counter-editor";
+import { CounterGroupEditor } from "@/components/draft/counter-group-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -38,7 +38,11 @@ export function CounterMatrix({
 }) {
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState(ALL_ROLES);
-  const [editorTarget, setEditorTarget] = useState<{ counterId?: number; targetId?: number } | null>(null);
+  // Every entry point opens the same "good picks against X" editor: a matrix
+  // cell picks the column as X (a row/column pair is always "row counters
+  // column", so the column is the target either way); the toolbar button
+  // leaves championId unset and lets the dialog ask first.
+  const [editorTarget, setEditorTarget] = useState<{ championId?: number } | null>(null);
 
   const rolesByChampion = useMemo(() => new Map(profiles.map((p) => [p.champion_id, p.roles])), [profiles]);
 
@@ -69,10 +73,10 @@ export function CounterMatrix({
 
   // Genuinely empty — no counters at all, and no filter is narrowing an
   // otherwise non-empty axis down to nothing. This is content, not an early
-  // return: the CounterEditor mount point at the bottom of this component has
-  // to render either way, or "Add a matchup" from this state sets
-  // editorTarget and nothing happens, because the very next render hits this
-  // same branch again and never reaches the editor.
+  // return: the CounterGroupEditor mount point at the bottom of this
+  // component has to render either way, or "Add responses" from this state
+  // sets editorTarget and nothing happens, because the very next render hits
+  // this same branch again and never reaches the editor.
   const isEmpty = axis.length === 0 && roleFilter === ALL_ROLES && query === "";
 
   return (
@@ -85,7 +89,7 @@ export function CounterMatrix({
             or from a champion&apos;s row on the Champions tab.
           </p>
           <Button type="button" size="sm" className="mt-1" onClick={() => setEditorTarget({})}>
-            <Plus /> Add a matchup
+            <Plus /> Add responses to a champion
           </Button>
         </div>
       ) : (
@@ -121,13 +125,14 @@ export function CounterMatrix({
               </div>
             </div>
             <Button type="button" size="sm" onClick={() => setEditorTarget({})}>
-              <Plus /> Add a matchup
+              <Plus /> Add responses to a champion
             </Button>
           </div>
 
           <p className="text-xs text-grey-mid">
             Rows counter the columns — read <span className="text-grey-light">Renekton row → Nasus column</span> as
-            &quot;Renekton counters Nasus.&quot; Click any cell to add or edit a matchup.
+            &quot;Renekton counters Nasus.&quot; Click any cell to see or add every response noted against that
+            column&apos;s champion.
           </p>
 
           {axis.length === 0 ? (
@@ -187,9 +192,7 @@ export function CounterMatrix({
                               title={label}
                               aria-label={label}
                               aria-haspopup="dialog"
-                              onClick={() =>
-                                setEditorTarget({ counterId: row.championId, targetId: col.championId })
-                              }
+                              onClick={() => setEditorTarget({ championId: col.championId })}
                               className={cn(
                                 "flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-white/10",
                                 match ? "bg-gold-muted/40" : "bg-bg-tertiary/60",
@@ -217,13 +220,13 @@ export function CounterMatrix({
       )}
 
       {editorTarget && (
-        <CounterEditor
-          key={`${editorTarget.counterId ?? "new"}-${editorTarget.targetId ?? "new"}`}
+        <CounterGroupEditor
+          key={editorTarget.championId ?? "new"}
           champions={champions}
           version={version}
           counters={counters}
-          defaultCounterId={editorTarget.counterId}
-          defaultTargetId={editorTarget.targetId}
+          direction="counteredBy"
+          fixedChampionId={editorTarget.championId}
           onClose={() => setEditorTarget(null)}
         />
       )}

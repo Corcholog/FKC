@@ -3,12 +3,15 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { ChampionInfo } from "@/lib/ddragon";
+import { indexCounters } from "@/lib/draft/queries";
 import {
   COMP_SIZE,
   SYNERGY_MAX_SIZE,
   SYNERGY_MIN_SIZE,
+  type ChampionCounterRow,
   type ChampionProfileRow,
   type DraftCompKind,
+  type DraftCompRow,
   type DraftTagRow,
 } from "@/lib/draft/types";
 import {
@@ -36,6 +39,8 @@ import {
   type SlotKind,
   type SlotRef,
 } from "@/lib/draft/board";
+import { ContextPanel } from "@/components/draft/context-panel";
+import type { PanelData } from "@/components/draft/context-sections";
 import { DraftChampionGrid } from "@/components/draft/draft-champion-grid";
 import { DraftControls } from "@/components/draft/draft-controls";
 import { DraftSlot } from "@/components/draft/draft-slot";
@@ -142,13 +147,22 @@ export function DraftSimulator({
   version,
   profiles,
   winConditionTags,
+  functionTags,
+  counters,
+  comps,
 }: {
   champions: Champion[];
   version: string;
-  /** Phase 1's annotations, for the grid's role filter. */
+  /** Phase 1's annotations, for the grid's role filter and the panel. */
   profiles: ChampionProfileRow[];
   /** Phase 1's win-condition vocabulary, for the save dialog. */
   winConditionTags: DraftTagRow[];
+  /** Phase 1's function tags — labels for the panel's tag histogram. */
+  functionTags: DraftTagRow[];
+  /** Phase 2's matchups, unfiltered. See the note atop lib/draft/context.ts. */
+  counters: ChampionCounterRow[];
+  /** Phase 3's saved comps *and* synergies, unfiltered. Same note. */
+  comps: DraftCompRow[];
 }) {
   const [series, setSeries] = useState<SeriesBoard>(emptySeries);
   const [currentGame, setCurrentGame] = useState(0);
@@ -170,6 +184,9 @@ export function DraftSimulator({
     null,
   );
   const [restored, setRestored] = useState(false);
+  // Closed by default: the board is what someone came here for, and a panel
+  // that opens itself takes a third of the width before anyone asked.
+  const [contextOpen, setContextOpen] = useState(false);
   const hydrated = useHydrated();
 
   const board = series[currentGame];
@@ -187,6 +204,27 @@ export function DraftSimulator({
   const rolesByChampion = useMemo(
     () => new Map(profiles.map((p) => [p.champion_id, p.roles])),
     [profiles],
+  );
+
+  // Everything the reference panel reads, assembled once. The indexes and Maps
+  // rebuild only when the server hands down new rows — not on every board click,
+  // which is what would otherwise make a panel over four tables feel heavier
+  // than the board it sits beside.
+  const panelData = useMemo<PanelData>(
+    () => ({
+      champions,
+      championById,
+      version,
+      profiles: new Map(profiles.map((p) => [p.champion_id, p])),
+      counters,
+      counterIndex: indexCounters(counters),
+      comps,
+      // Both kinds in one lookup: comps carry win-condition slugs and profiles
+      // carry function slugs, and no surface in the panel should have to know
+      // which vocabulary a slug came from to render its label.
+      tagLabels: new Map([...functionTags, ...winConditionTags].map((t) => [t.slug, t.label])),
+    }),
+    [champions, championById, version, profiles, counters, comps, functionTags, winConditionTags],
   );
 
   // Rehydration happens *during render*, once, rather than in an effect.
@@ -477,136 +515,154 @@ export function DraftSimulator({
     );
   }
 
+  // Everything inside BOARD_ELEMENT_ID is what the PNG captures — which is now
+  // everything, controls included, so each piece of chrome has to opt out for
+  // itself with data-export-hide rather than by sitting outside.
+  //
+  // The attribute has to be spelled kebab-case: the DOM lowercases attribute
+  // names, so data-exportHide arrives as data-exporthide and reads back as
+  // dataset.exporthide — which download-png-button's filter, checking
+  // dataset.exportHide, never sees. It would have exported every bit of chrome
+  // silently, and React's "spell it lowercase" warning is the only thing that
+  // says so.
+  //
+  // The reference panel is the one thing sitting *outside* that id rather than
+  // opting out of it: docked, it's a column beside the board, not chrome on top
+  // of it, and there's no sense in which it belongs in a picture of a draft.
   return (
-    // Everything inside this id is what the PNG captures — which is now
-    // everything, controls included, so each piece of chrome has to opt out
-    // for itself with data-export-hide rather than by sitting outside.
-    //
-    // The attribute has to be spelled kebab-case: the DOM lowercases attribute
-    // names, so data-exportHide arrives as data-exporthide and reads back as
-    // dataset.exporthide — which download-png-button's filter, checking
-    // dataset.exportHide, never sees. It would have exported every bit of
-    // chrome silently, and React's "spell it lowercase" warning is the only
-    // thing that says so.
-    <div id={BOARD_ELEMENT_ID} className="flex flex-col gap-3">
-      {/* Centred, not spread. justify-between pinned the two sides to
-            opposite edges of a max-w-7xl panel with a canyon of nothing in
-            between — §11's scrim board learned the same lesson and capped
-            itself for the same reason: a face-off reads as a face-off when the
-            two sides are near each other.
+    // items-start, not the default stretch: the panel sizes itself to the
+    // board, and a flex child stretched to the row's height would fight that.
+    <div className="flex items-start gap-3">
+      <div id={BOARD_ELEMENT_ID} className="flex min-w-0 flex-1 flex-col gap-3">
+        {/* Centred, not spread. justify-between pinned the two sides to
+              opposite edges of a max-w-7xl panel with a canyon of nothing in
+              between — §11's scrim board learned the same lesson and capped
+              itself for the same reason: a face-off reads as a face-off when the
+              two sides are near each other.
 
-            Three columns rather than a flex row with the controls appended:
-            the empty first column mirrors the controls' width, so the bans stay
-            centred on the panel instead of being pushed left by them. The
-            controls ride along in this panel's corner because they needed no
-            vertical space of their own — a full row for two buttons was the
-            cheapest thing on the page to give back to the grid. */}
-      <div className="panel-hex grid grid-cols-[1fr_auto_1fr] items-start gap-2 p-3">
-        <div className="flex justify-start">{gameSwitcher()}</div>
-        <div className="flex min-w-0 flex-wrap items-center justify-center gap-x-6 gap-y-3">
-          {banRow("blue")}
-          <span className="text-[10px] tracking-wider text-grey-mid uppercase">Bans</span>
-          {banRow("red")}
-        </div>
-        <div className="flex justify-end">
-          <DraftControls
-            boardElementId={BOARD_ELEMENT_ID}
-            fileName={`draft-g${currentGame + 1}-${todayStamp()}.png`}
-            gameNumber={currentGame + 1}
-            canClearGame={!isBoardEmpty(board)}
-            gamesWithContent={fillCounts.filter((n) => n > 0).length}
-            onClearGame={clearGame}
-            onClearSeries={clearSeries}
-            canSaveComp={compSources.length > 0}
-            canSaveSynergy={synergySides.length > 0}
-            onSaveComp={() => setSaving({ kind: "comp", sources: compSources })}
-            onSaveSynergy={() => {
-              setActive(null);
-              setPicked([]);
-              setSelecting(true);
-            }}
-          />
-        </div>
-      </div>
-
-      {selecting && (
-        <div
-          className="panel-hex flex flex-wrap items-center justify-between gap-2 p-2"
-          data-export-hide
-        >
-          <p className="text-xs text-grey-light">
-            {picked.length === 0 ? (
-              <>Pick two to four champions from one side.</>
-            ) : (
-              <>
-                <span className="tabular-nums text-white">{picked.length}</span> selected
-                {picked.length < SYNERGY_MIN_SIZE && " — one more at least"}
-              </>
-            )}
-          </p>
-          <div className="flex items-center gap-1">
-            <Button type="button" size="sm" variant="outline" onClick={exitSelection}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={confirmSelection}
-              disabled={picked.length < SYNERGY_MIN_SIZE}
-            >
-              Save synergy
-            </Button>
+              Three columns rather than a flex row with the controls appended:
+              the empty first column mirrors the controls' width, so the bans stay
+              centred on the panel instead of being pushed left by them. The
+              controls ride along in this panel's corner because they needed no
+              vertical space of their own — a full row for two buttons was the
+              cheapest thing on the page to give back to the grid. */}
+        <div className="panel-hex grid grid-cols-[1fr_auto_1fr] items-start gap-2 p-3">
+          <div className="flex justify-start">{gameSwitcher()}</div>
+          <div className="flex min-w-0 flex-wrap items-center justify-center gap-x-6 gap-y-3">
+            {banRow("blue")}
+            <span className="text-[10px] tracking-wider text-grey-mid uppercase">Bans</span>
+            {banRow("red")}
+          </div>
+          <div className="flex justify-end">
+            <DraftControls
+              boardElementId={BOARD_ELEMENT_ID}
+              fileName={`draft-g${currentGame + 1}-${todayStamp()}.png`}
+              gameNumber={currentGame + 1}
+              canClearGame={!isBoardEmpty(board)}
+              gamesWithContent={fillCounts.filter((n) => n > 0).length}
+              onClearGame={clearGame}
+              onClearSeries={clearSeries}
+              canSaveComp={compSources.length > 0}
+              canSaveSynergy={synergySides.length > 0}
+              onSaveComp={() => setSaving({ kind: "comp", sources: compSources })}
+              onSaveSynergy={() => {
+                setActive(null);
+                setPicked([]);
+                setSelecting(true);
+              }}
+              contextOpen={contextOpen}
+              onToggleContext={() => setContextOpen((o) => !o)}
+            />
           </div>
         </div>
-      )}
 
-      {/* No md:items-start — the default stretch is what lets the pick
-            columns match the grid's height. */}
-      <div className="flex flex-col gap-3 md:flex-row">
-        {pickColumn("blue")}
-        <div className="min-w-0 flex-1">
-          <DraftChampionGrid
-            champions={champions}
-            version={version}
-            unavailable={unavailable}
-            profiles={profiles}
-            onPick={pick}
-            activeSlotLabel={active ? slotLabel(active) : null}
-            inert={selecting}
-          />
+        {selecting && (
+          <div
+            className="panel-hex flex flex-wrap items-center justify-between gap-2 p-2"
+            data-export-hide
+          >
+            <p className="text-xs text-grey-light">
+              {picked.length === 0 ? (
+                <>Pick two to four champions from one side.</>
+              ) : (
+                <>
+                  <span className="tabular-nums text-white">{picked.length}</span> selected
+                  {picked.length < SYNERGY_MIN_SIZE && " — one more at least"}
+                </>
+              )}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button type="button" size="sm" variant="outline" onClick={exitSelection}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={confirmSelection}
+                disabled={picked.length < SYNERGY_MIN_SIZE}
+              >
+                Save synergy
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* No md:items-start — the default stretch is what lets the pick
+              columns match the grid's height. */}
+        <div className="flex flex-col gap-3 md:flex-row">
+          {pickColumn("blue")}
+          <div className="min-w-0 flex-1">
+            <DraftChampionGrid
+              champions={champions}
+              version={version}
+              unavailable={unavailable}
+              profiles={profiles}
+              onPick={pick}
+              activeSlotLabel={active ? slotLabel(active) : null}
+              inert={selecting}
+            />
+          </div>
+          {pickColumn("red")}
         </div>
-        {pickColumn("red")}
+
+        {/* Mounted unconditionally at the tree's root, not inside a branch —
+            same trap the counters matrix fell into, where the dialog's mount
+            point lived in a branch that the state change didn't re-enter. */}
+        {conflictChampion && conflict && (
+          <PickConflictDialog
+            champion={conflictChampion}
+            games={conflict.games}
+            onConfirm={resolveConflict}
+            onCancel={() => setConflict(null)}
+          />
+        )}
+
+        {saving && (
+          <SaveCompDialog
+            kind={saving.kind}
+            sources={saving.sources}
+            championById={championById}
+            version={version}
+            winConditionTags={winConditionTags}
+            rolesByChampion={rolesByChampion}
+            onClose={() => {
+              setSaving(null);
+              // Only the synergy path was in a mode. Leaving it here rather than
+              // in the dialog keeps the dialog ignorant of where its champions
+              // came from.
+              if (selecting) exitSelection();
+            }}
+          />
+        )}
       </div>
 
-      {/* Mounted unconditionally at the tree's root, not inside a branch —
-          same trap the counters matrix fell into, where the dialog's mount
-          point lived in a branch that the state change didn't re-enter. */}
-      {conflictChampion && conflict && (
-        <PickConflictDialog
-          champion={conflictChampion}
-          games={conflict.games}
-          onConfirm={resolveConflict}
-          onCancel={() => setConflict(null)}
-        />
-      )}
-
-      {saving && (
-        <SaveCompDialog
-          kind={saving.kind}
-          sources={saving.sources}
-          championById={championById}
-          version={version}
-          winConditionTags={winConditionTags}
-          rolesByChampion={rolesByChampion}
-          onClose={() => {
-            setSaving(null);
-            // Only the synergy path was in a mode. Leaving it here rather than
-            // in the dialog keeps the dialog ignorant of where its champions
-            // came from.
-            if (selecting) exitSelection();
-          }}
-        />
-      )}
+      <ContextPanel
+        open={contextOpen}
+        onOpenChange={setContextOpen}
+        board={board}
+        unavailable={unavailable}
+        data={panelData}
+      />
     </div>
   );
 }

@@ -32,7 +32,7 @@ src/app/
     ├── draft/                Section with its own layout + tab strip, see docs/features/
     │   │                     draft-strategy/ for the phased build-out
     │   ├── layout.tsx        Heading, tabs — wraps everything under it
-    │   ├── page.tsx          /draft                   Simulator (placeholder until Phase 4)
+    │   ├── page.tsx          /draft                   Board + reference panel (Phases 4-7)
     │   ├── champions/        /draft/champions         Lane roles + function tags (Phase 1)
     │   ├── comps/            /draft/comps             Saved five-champion sides (Phase 3)
     │   ├── synergies/        /draft/synergies         Saved 2-4 champion combos (Phase 3)
@@ -626,3 +626,105 @@ in a `useMemo` keyed on the board. A full re-render is ~170 hash lookups over DO
 already exist and only change a class. There is no virtualisation, no per-tile `React.memo`,
 no debounce on the search and no index beyond that one `Set`. Every plausible culprit in
 this component is cheaper than the profiler you would need to find it.
+
+---
+
+## 13. The draft reference panel
+
+`components/draft/context-panel.tsx`, built in Phase 7. A collapsible column beside the
+board with two modes over the same four tables: **Contextual** filters champions, counters,
+comps and synergies against whatever is on the visible game; **Explore** shows them
+unfiltered with a search box each, for looking something up mid-draft. It is closed by
+default — the board is what someone came for, and a panel that opens itself takes a third of
+the width before anyone asked.
+
+### There is no engine
+
+No scoring, no ranking, no suggestions, no notion of a good draft. A scoring function would
+need weights nobody here could justify, would be confidently wrong against a specific
+opponent, and would turn the panel's output into something to argue with rather than
+something to read. Filtered reads have exactly one failure mode — a row that should have
+matched didn't — and that one is debuggable. If a future version wants suggestions, that is
+a new feature with a new name.
+
+It is also **read-only**. Every row links to its home page and that is the whole affordance.
+Editing from here would mean a second write surface into every one of those tables, each
+with its own validation and its own optimistic update against a board that is *also*
+changing, for a surface you glance at rather than work in.
+
+### It loads all four tables, unfiltered
+
+`/draft/page.tsx` runs five loads and passes `loadDraftComps` no options at all, which looks
+like an oversight. It isn't, and the reasoning is at the top of `lib/draft/context.ts` for
+the next person who sees it. The board changes on every click; a server round trip per click
+would make the panel feel broken. The whole dataset is ~170 profiles, a few dozen tags, some
+hundreds of counters and maybe a hundred comps — less than one page of `/insights` already
+pulls, and the same trade ADR-015 and ADR-024 document for every stats page in the app. The
+options on `loadDraftComps` exist for the list pages, which fetch one kind for one route.
+
+### The filters, and the two that are easy to get wrong
+
+All of them live in `lib/draft/context.ts`, pure on the same terms as `board.ts`.
+
+**`nearSynergies` filters against the series-aware unavailable set**, not this game's board.
+A saved combo where all but one champion is already picked is the single most actionable
+thing the panel can show — and suggesting a champion your jungler played in game 1 is
+exactly the mistake the fearless rule exists to prevent. That failure would be a confident,
+specific, wrong suggestion rather than an obviously empty section, which is why the filter is
+in the function rather than left to the caller.
+
+**Both counter lists read `counteredBy`**, which looks like one of them is a copy-paste slip.
+A row says `counter_champion_id` beats `target_champion_id`, so "what answers this champion"
+is always a lookup on the target side; only whose picks you look up differs. *Answers* is
+`target ∈ their picks`, *Watch out* is `target ∈ our picks`. Getting it backwards shows the
+enemy's answers as yours, silently and plausibly. The same trap applies to the our-side
+toggle: it has to reach all four sections, so it travels as one object rather than four
+props.
+
+### Docked or overlaid, decided in JS
+
+At ≥1280px the panel is a column in the board's flex row; below that it is `ui/sheet.tsx`
+with `side="right"`. **The phase doc called for a CSS breakpoint and it can't be one**:
+rendering both mount points and hiding one with `xl:hidden` leaves a base-ui Dialog mounted
+and open at desktop widths, still trapping focus and locking scroll behind a popup nobody can
+see. So `useDocked()` is a `useSyncExternalStore` over `matchMedia`, whose server snapshot is
+`false` — the first render is always the Sheet branch, and nothing flips visibly because the
+panel starts closed and a closed Sheet renders nothing.
+
+The sheet sets `initialFocus` to itself for the same reason the navbar's menu does: Explore
+opens with a search box at the top, and autofocusing it pops the keyboard the moment the
+panel appears.
+
+**The docked panel's height is the board's height restated**, not a share of the viewport:
+`clamp(29.5rem, 100vh - 21.5rem, 44rem)`, which is the champion grid's own clamp plus the
+8rem the ban panel and row gaps take. A reference column that outgrows the board would make
+the page scroll, undoing the constraint that grid clamp exists to satisfy. Change one, change
+the other. Overflow lands on the scroller inside.
+
+The panel sits *outside* `BOARD_ELEMENT_ID` rather than opting out with `data-export-hide` —
+docked, it's a column beside the board, not chrome on top of it, and there is no sense in
+which it belongs in a picture of the draft. It carries the attribute anyway, so the export
+keeps working if the layout moves.
+
+### Mode defaults to Explore on an empty board
+
+Contextual with nothing placed is four empty sections and no way to tell that's expected. So
+the mode is derived: `modeChoice ?? (boardEmpty ? "explore" : "contextual")`, where
+`modeChoice` is null until the user presses one of the two buttons and stays filled after.
+Derived rather than synced in an effect, so there is no render where the mode is stale. If
+someone does choose Contextual on an empty board they get one message and a button back to
+Explore, not four empty states.
+
+Every empty state names what is missing and links to the page that fills it. "Nothing yet"
+four times tells nobody anything; *"No saved synergy matches these picks"* and *"No answers
+noted against Renekton, Nasus"* point at different tables.
+
+### Not a `dense` CompCard
+
+The phase doc suggested adding a `dense` prop to `CompCard` rather than a second card. The
+panel's `CompRow` is a separate component instead: `CompCard` is a card with edit and delete
+controls, a notes toggle and a name-leads-or-champions-lead rule, while the panel row is a
+read-only line that has to grey the champions you don't have and ring the one you'd need.
+Sharing them would mean `dense` plus an optional `onEdit` plus a per-champion emphasis
+callback on a component whose job is none of that. They share `ChampionAvatar` and `Badge`,
+which is the part that would actually drift.

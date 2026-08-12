@@ -202,7 +202,14 @@ export function DraftSimulator({
         >
           {SIDE_COPY[side].label}
         </h3>
-        <div className="flex flex-row flex-wrap gap-1 md:flex-col">{renderRow(side, "pick")}</div>
+        {/* From md up the flanks stretch to the grid's height (the row's
+            align-items defaults to stretch) and justify-between spreads the
+            five slots across it, so a side reads as one column rather than a
+            short stack floating beside a tall panel. Below md they're a
+            wrapping row above and below the grid instead. */}
+        <div className="flex flex-row flex-wrap gap-1 md:flex-1 md:flex-col md:justify-between">
+          {renderRow(side, "pick")}
+        </div>
       </div>
     );
   }
@@ -231,7 +238,9 @@ export function DraftSimulator({
           {banRow("red")}
         </div>
 
-        <div className="flex flex-col gap-3 md:flex-row md:items-start">
+        {/* No md:items-start — the default stretch is what lets the pick
+            columns match the grid's height. */}
+        <div className="flex flex-col gap-3 md:flex-row">
           {pickColumn("blue")}
           <div className="min-w-0 flex-1">
             <DraftChampionGrid

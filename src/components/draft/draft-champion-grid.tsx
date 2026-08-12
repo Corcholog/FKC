@@ -96,7 +96,11 @@ export function DraftChampionGrid({
         )}
       </div>
 
-      <div className="flex max-h-[26rem] flex-wrap content-start gap-1 overflow-y-auto">
+      {/* A fixed height, not a max: with max-h the panel shrank as you typed
+          and the whole row — pick flanks included — resized on every keystroke.
+          content-start keeps the tiles at the top, so a narrow filter leaves
+          blank space below rather than centring three champions in a void. */}
+      <div className="flex h-[26rem] flex-wrap content-start gap-1 overflow-y-auto">
         {shown.length === 0 ? (
           <p className="p-2 text-sm text-grey-mid">No champion matches that.</p>
         ) : (

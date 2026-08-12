@@ -100,7 +100,7 @@ export function DraftChampionGrid({
           and the whole row — pick flanks included — resized on every keystroke.
           content-start keeps the tiles at the top, so a narrow filter leaves
           blank space below rather than centring three champions in a void. */}
-      <div className="flex h-[26rem] flex-wrap content-start gap-1 overflow-y-auto">
+      <div className="flex h-[26rem] flex-wrap content-start gap-1 overflow-y-auto p-1">
         {shown.length === 0 ? (
           <p className="p-2 text-sm text-grey-mid">No champion matches that.</p>
         ) : (
@@ -113,9 +113,17 @@ export function DraftChampionGrid({
                 onClick={() => !taken && onPick(champion.championId)}
                 aria-disabled={taken}
                 title={taken ? `${champion.name} — already on the board` : champion.name}
+                // The zoom is only on champions you can actually take: growing
+                // one that does nothing when clicked promises an affordance
+                // that isn't there. relative + z-10 so the lifted tile sits
+                // over its neighbours instead of under them, and the
+                // container's p-1 is what keeps an edge tile from being
+                // clipped by the scroll box.
                 className={cn(
-                  "rounded-sm p-0.5 transition-colors",
-                  taken ? "cursor-not-allowed" : "hover:bg-bg-tertiary/60",
+                  "rounded-sm p-0.5 transition-transform duration-100 motion-reduce:transition-none",
+                  taken
+                    ? "cursor-not-allowed"
+                    : "relative hover:z-10 hover:scale-110 focus-visible:z-10 focus-visible:scale-110",
                 )}
               >
                 <ChampionAvatar

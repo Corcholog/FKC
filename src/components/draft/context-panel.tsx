@@ -28,6 +28,22 @@ import { cn } from "@/lib/utils";
 
 export type PanelMode = "contextual" | "explore";
 
+/**
+ * One named figure on the collapsed rail.
+ *
+ * The label sits above its value rather than beside it: at 6rem there isn't
+ * room for "Counters 12" on a line, and stacking keeps every group the same
+ * shape whether its value is a number or two champion portraits.
+ */
+function RailGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <span className="text-[9px] leading-none tracking-wide text-grey-mid uppercase">{label}</span>
+      {children}
+    </div>
+  );
+}
+
 const SIDE_LABEL: Record<Side, string> = { blue: "Blue", red: "Red" };
 
 // Where the panel stops overlaying the board and docks beside it. Tailwind's
@@ -318,7 +334,7 @@ export function ContextPanel({
             "shrink-0 transition-[width] duration-200 ease-out motion-reduce:transition-none",
             expanded
               ? "w-[max(0px,calc(30rem-50vw+50%))]"
-              : "w-[max(0px,calc(5rem-50vw+50%))]",
+              : "w-[max(0px,calc(6rem-50vw+50%))]",
           )}
         />
         {/* data-export-hide is belt-and-braces: this sits outside the exported
@@ -349,13 +365,14 @@ export function ContextPanel({
           // own height back into the row it's measuring.
           "absolute inset-y-0 right-[calc(50%-50vw)]",
           "transition-[width] duration-200 ease-out motion-reduce:transition-none",
-          // 5rem collapsed, up from the 2.25rem it started at. The rail is the
+          // 6rem collapsed, up from the 2.25rem it started at. The rail is the
           // only thing advertising that a whole panel lives over here, and it
-          // now says what's in it — a portrait is 24px and "⚔ 12" wants room
-          // beside it. Nearly free: the rail sits in the gutter beside the
-          // page's max-width shell, so on a wide screen widening it costs the
-          // board nothing at all. See the spacer above.
-          expanded ? "w-[30rem]" : "w-20",
+          // now names what's in it — "Synergies" over two portraits needs the
+          // room, and truncating the word would undo the point of having it.
+          // Nearly free: the rail sits in the gutter beside the page's
+          // max-width shell, so on a wide screen widening it costs the board
+          // nothing at all. See the spacer above.
+          expanded ? "w-[30rem]" : "w-24",
         )}
       >
         {expanded ? (
@@ -398,48 +415,62 @@ export function ContextPanel({
           >
             <PanelRight className="size-5 shrink-0" />
 
-            {/* aria-hidden because the button's own label already says all of
-                this in a sentence, and a screen reader reading "24 12 3" down
-                a rail is worse than nothing. */}
-            <div aria-hidden className="flex flex-col items-center gap-2">
+            {/* Each group is named, because a sword and two people stacked down
+                a 6rem rail are a puzzle rather than a summary — you'd have to
+                open the panel to learn what the icons meant, which is the exact
+                trip the rail exists to save. The words are the section names
+                you'll see once it opens, so the rail teaches its own panel.
+
+                aria-hidden because the button's own label already says all of
+                this in a sentence, and a screen reader reading "Synergies 2
+                Counters 12" down a rail is worse than one clause. */}
+            <div aria-hidden className="flex flex-col items-center gap-3">
               {hints && (
                 <>
                   {/* Portraits rather than a count, for the one thing on this
                       rail that names something: a saved synergy one champion
                       short, and that champion is still takeable. Two, then a
                       +n — the rest are one hover away. */}
-                  {hints.near.slice(0, 2).map(({ comp, missing }) => {
-                    const champion = data.championById.get(missing);
-                    return champion ? (
-                      <ChampionAvatar
-                        key={comp.id}
-                        champion={champion}
-                        version={data.version}
-                        size="sm"
-                        selected
-                      />
-                    ) : null;
-                  })}
-                  {hints.near.length > 2 && (
-                    <span className="text-[10px] tabular-nums text-gold">
-                      +{hints.near.length - 2}
-                    </span>
+                  {hints.near.length > 0 && (
+                    <RailGroup label="Synergies">
+                      {hints.near.slice(0, 2).map(({ comp, missing }) => {
+                        const champion = data.championById.get(missing);
+                        return champion ? (
+                          <ChampionAvatar
+                            key={comp.id}
+                            champion={champion}
+                            version={data.version}
+                            size="sm"
+                            selected
+                          />
+                        ) : null;
+                      })}
+                      {hints.near.length > 2 && (
+                        <span className="text-[10px] tabular-nums text-gold">
+                          +{hints.near.length - 2}
+                        </span>
+                      )}
+                    </RailGroup>
                   )}
 
                   {/* Zeroes are left off rather than shown. A rail of noughts
                       reads as broken, and "nothing here" is what a bare rail
                       already says. */}
                   {hints.answers > 0 && (
-                    <span className="flex items-center gap-1 text-[11px] tabular-nums">
-                      <Swords className="size-3 shrink-0" />
-                      {hints.answers}
-                    </span>
+                    <RailGroup label="Counters">
+                      <span className="flex items-center gap-1 text-xs tabular-nums">
+                        <Swords className="size-3 shrink-0" />
+                        {hints.answers}
+                      </span>
+                    </RailGroup>
                   )}
                   {hints.comps > 0 && (
-                    <span className="flex items-center gap-1 text-[11px] tabular-nums">
-                      <Users className="size-3 shrink-0" />
-                      {hints.comps}
-                    </span>
+                    <RailGroup label="Comps">
+                      <span className="flex items-center gap-1 text-xs tabular-nums">
+                        <Users className="size-3 shrink-0" />
+                        {hints.comps}
+                      </span>
+                    </RailGroup>
                   )}
                 </>
               )}

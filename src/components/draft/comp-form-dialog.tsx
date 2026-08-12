@@ -39,15 +39,17 @@ import {
 type Champion = ChampionInfo & { championId: number };
 
 const COPY: Record<DraftCompKind, { noun: string; placeholder: string; hint: string }> = {
+  // The placeholder stays evocative rather than saying "(optional)" — the hint
+  // below the title carries that, and an example is more use in the field.
   comp: {
     noun: "comp",
     placeholder: "vs UBA",
-    hint: "One full side of a draft, in pick order.",
+    hint: "One full side of a draft, in pick order. A name is optional.",
   },
   synergy: {
     noun: "synergy",
-    placeholder: "Name (optional)",
-    hint: "Two to four champions that work together. The champions are enough — a name is optional.",
+    placeholder: "Wombo Orianna",
+    hint: "Two to four champions that work together. A name is optional.",
   },
 };
 

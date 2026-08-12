@@ -78,9 +78,6 @@ export type BuildResult =
 export function buildCompPayload(state: CompFormState, kind: DraftCompKind): BuildResult {
   const shape = DRAFT_COMP_SHAPE[kind];
   const label = state.label.trim();
-  if (shape.requiresLabel && !label) {
-    return { ok: false, error: "Give it a name first — which draft was this?" };
-  }
 
   const [min, max] = compSizeRange(kind);
   if (state.slots.length < min || state.slots.length > max) {

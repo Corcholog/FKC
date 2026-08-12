@@ -109,26 +109,22 @@ export const DRAFT_COMP_KIND_LABELS: Record<DraftCompKind, string> = {
 };
 
 /**
- * What each kind actually carries, beyond its size.
+ * What each kind carries, beyond its size.
  *
- * A comp is a plan: it's one full side of a draft, it needs a name saying which
- * draft ("vs UBA"), and it's worth tagging with what it's trying to win on. A
- * synergy is a combo — two to four champions that work together — and there are
- * a lot of them. Demanding a name and a win condition for each would be
- * friction on the one kind meant to be cheap to write down, so neither is
- * asked for. The champions are the identity.
+ * A comp is a plan — one full side of a draft — so it's worth tagging with what
+ * it's trying to win on. A synergy is a combo, there are a lot of them, and
+ * tagging every one is work nobody was going to do.
  *
- * `requiresLabel` is mirrored by draft_comps_label in the database.
- * `winConditions` deliberately is not: it's a product call about what the form
- * asks for, not a fact about the data, so it lives in validateDraftComp alone
- * and nothing has to migrate if it changes.
+ * Neither kind requires a name: the champions are the identity, and a name is
+ * worth having when someone has one in mind and friction when they don't. So
+ * this isn't in the database at all — no constraint, and `label` is simply
+ * nullable. `winConditions` is likewise a product call about what a form asks
+ * for rather than a fact about the data, so it lives in validateDraftComp and
+ * nothing has to migrate if it changes.
  */
-export const DRAFT_COMP_SHAPE: Record<
-  DraftCompKind,
-  { requiresLabel: boolean; winConditions: boolean }
-> = {
-  comp: { requiresLabel: true, winConditions: true },
-  synergy: { requiresLabel: false, winConditions: false },
+export const DRAFT_COMP_SHAPE: Record<DraftCompKind, { winConditions: boolean }> = {
+  comp: { winConditions: true },
+  synergy: { winConditions: false },
 };
 
 /** How many champions this kind takes, as `[min, max]`. */
@@ -137,10 +133,13 @@ export function compSizeRange(kind: DraftCompKind): [number, number] {
 }
 
 /**
- * What to call this row on screen. Falls back to the champions themselves for
- * an unnamed synergy — "Ornn + Yasuo" is what the thing is, and every surface
- * that shows a title (card heading, delete confirmation, aria-label) needs
+ * What to call this row on screen. Falls back to the champions themselves when
+ * it's unnamed — "Ornn + Yasuo" is what the thing is, and every surface that
+ * needs a title (delete confirmation, aria-label, the search filter) needs
  * *something* rather than each inventing its own placeholder.
+ *
+ * The card is the exception: it shows the portraits already, so it renders a
+ * heading only when there is a real one. See CompCard.
  */
 export function compTitle(
   comp: Pick<DraftCompRow, "label" | "champion_ids">,

@@ -140,8 +140,8 @@ export function validateDraftComp(
   if (!(DRAFT_COMP_KINDS as readonly string[]).includes(input.kind)) return "Unknown kind.";
   const shape = DRAFT_COMP_SHAPE[input.kind];
 
-  const label = cleanText(input.label, MAX_COMP_LABEL_CHARS);
-  if (shape.requiresLabel && !label) return "A comp needs a name — which draft was this?";
+  // No name is required on either kind — the champions identify the row, and
+  // cleanText turns a blank one into null so "" is never stored.
   if ((input.label?.trim().length ?? 0) > MAX_COMP_LABEL_CHARS) {
     return `The name can't be longer than ${MAX_COMP_LABEL_CHARS} characters.`;
   }

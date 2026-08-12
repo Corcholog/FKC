@@ -460,22 +460,25 @@ one `text` column and one check constraint. If a comp ever grows a column a syne
 have (per-slot roles, an `opponent_id`, a side), split it then; nothing here makes that
 harder.
 
-**The two kinds ask for different amounts of work, and that asymmetry is deliberate.** A
-comp is a plan — one full side of a draft — so it must be named (`draft_comps_label`:
-`kind <> 'comp' or label is not null and btrim(label) <> ''`), and it carries win-condition
-tags. A synergy is a combo, there are a lot of them, and the champions already say what it
-is; requiring a name and a win condition for each would be friction on exactly the kind
-meant to be cheap to write down. So `label` is nullable and the synergy form doesn't render
-win conditions at all. `DRAFT_COMP_SHAPE` in `src/lib/draft/types.ts` is the single place
-that says which kind carries what.
+**`label` is nullable and nothing requires one.** The champions identify the row — "Ornn +
+Yasuo", or five portraits in pick order — so a name is worth having when someone has one in
+mind ("vs UBA") and pure friction when they don't. There is no constraint on it; unnamed
+rows store `NULL`, and `cleanText` in the action turns a blank field into `NULL` so `''` is
+never stored. Two representations of "no name" is the usual way this rots.
 
-Note the split: `requiresLabel` is mirrored by a constraint because it's a fact about the
-data, while `winConditions` lives only in `validateDraftComp` because it's a product call
-about what a form asks for — if synergies ever want them, nothing migrates. Unnamed rows
-store `NULL`, never `''`; two representations of "no name" is the usual way this goes
-wrong, and the constraint rejects blanks rather than tolerating both. `compTitle()` gives
-every surface that needs a heading — card, delete confirmation, search — the label or, for
-an unnamed synergy, its champions joined ("Ornn + Yasuo").
+**Win conditions are comps-only, and that lives in the validator rather than the schema.** A
+comp is a plan and worth tagging with what it's trying to win on; a synergy is a combo and
+there are enough of them that tagging each is work nobody does. `DRAFT_COMP_SHAPE` in
+`src/lib/draft/types.ts` is the single place saying so, and it's deliberately not a
+constraint — it's a product call about what a form asks for, not a fact about the data, so
+if synergies ever want them nothing migrates.
+
+`compTitle()` supplies a name to the surfaces that can't show portraits: the delete
+confirmation, aria-labels, and the search filter (which matches the derived title, so
+typing "ornn" finds an unnamed Ornn+Yasuo row — filtering `label` alone would silently
+match nothing for most rows). `CompCard` deliberately does *not* use it: it shows the
+portraits already, so a heading spelling them out would be two rows saying one thing. The
+card's rule is that a real name leads and the champions carry the controls otherwise.
 
 **`champion_ids` is ordered and nothing sorts it.** For a synergy the order is arbitrary
 and harmless. For a comp it is the pick order off one side of a board — B1 through B5 —

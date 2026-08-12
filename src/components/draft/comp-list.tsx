@@ -80,9 +80,9 @@ export function CompList({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return comps.filter((comp) => {
-      // Matches the *displayed* title, which for an unnamed synergy is its
-      // champions. Searching comp.label alone would silently return nothing for
-      // most synergies, since most of them won't have one.
+      // Matches compTitle, which falls back to the champions when there's no
+      // name. Searching comp.label alone would silently return nothing for
+      // every unnamed row, and neither kind requires a name.
       if (q && !compTitle(comp, (id) => championById.get(id)?.name).toLowerCase().includes(q)) {
         return false;
       }
@@ -133,7 +133,7 @@ export function CompList({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={shape.requiresLabel ? "Search by name" : "Search"}
+            placeholder="Search"
             className="w-56 pl-8"
           />
         </div>

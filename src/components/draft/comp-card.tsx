@@ -19,12 +19,15 @@ type Champion = ChampionInfo & { championId: number };
  * order is the pick order off one side of a board, which is real information
  * about how the draft was meant to go. See the column comment in migration 017.
  *
- * `compact` is for synergies. A comp leads with its name, because "vs UBA" is
- * what identifies it and the five champions are the detail. A synergy is two to
- * four icons and usually no name at all — leading with a heading meant a row of
- * text restating the portraits directly beneath it, inside a half-width card
- * that was mostly empty. Compact puts the champions first and on the same line
- * as the controls, and lets the card be as wide as its contents need.
+ * **The name leads when there is one; otherwise the champions do and carry the
+ * controls.** Neither kind requires a name, and a heading spelling out the
+ * portraits directly beneath it ("Ornn + Yasuo", above Ornn and Yasuo) is two
+ * rows saying one thing. So compTitle's fallback is deliberately *not* used
+ * here, only on the surfaces that can't show portraits — the delete
+ * confirmation, aria-labels, the search filter.
+ *
+ * `compact` is a separate axis: it sizes the card to its contents rather than
+ * to a grid column, for synergies, which are usually two icons and nothing else.
  */
 export function CompCard({
   comp,
@@ -90,32 +93,22 @@ export function CompCard({
         compact ? "w-fit max-w-72 gap-1.5 p-2.5" : "gap-2 p-3",
       )}
     >
-      {compact ? (
+      {comp.label ? (
+        <>
+          <div className="flex items-start gap-2">
+            <h3 className="font-heading flex-1 truncate text-sm font-semibold text-white">
+              {comp.label}
+            </h3>
+            {controls}
+          </div>
+          {champions}
+        </>
+      ) : (
         <div className="flex items-center gap-2">
           {champions}
           <div className="flex shrink-0 items-center">{controls}</div>
         </div>
-      ) : (
-        <div className="flex items-start gap-2">
-          <h3
-            className={cn(
-              "font-heading flex-1 truncate text-sm font-semibold",
-              comp.label ? "text-white" : "text-grey-mid",
-            )}
-          >
-            {title}
-          </h3>
-          {controls}
-        </div>
       )}
-
-      {/* Only when it was actually typed. A derived title here would just be
-          the icons above, spelled out. */}
-      {compact && comp.label && (
-        <p className="truncate text-xs font-medium text-white">{comp.label}</p>
-      )}
-
-      {!compact && champions}
 
       {comp.win_conditions.length > 0 && (
         <div className="flex flex-wrap gap-1">

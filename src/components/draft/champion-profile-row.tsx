@@ -80,13 +80,19 @@ export function ChampionProfileRowView({
     <Fragment>
       <tr className="border-b border-border align-top transition-colors last:border-b-0 hover:bg-bg-tertiary/40">
         <td className="px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <ChampionAvatar champion={champion} version={version} size="sm" />
+          {/* The portrait and the name are the thing you scan this table by —
+              everything else in a row is only meaningful once you've found the
+              champion. They're a step up from the rest of the table's text for
+              that reason, and the row doesn't get taller for it: the notes
+              field is h-8 inside py-2.5, so a 40px portrait still fits inside
+              the height the row already had. */}
+          <div className="flex items-center gap-2.5">
+            <ChampionAvatar champion={champion} version={version} size="md" />
             {/* The column is sized for the longest name, so this never
                 actually truncates — it's here so a future champion with a
                 longer one degrades to an ellipsis rather than wrapping and
                 making this row taller than its neighbours. */}
-            <span className="truncate text-white">{champion.name}</span>
+            <span className="truncate text-base font-medium text-white">{champion.name}</span>
           </div>
         </td>
         <td className="px-4 py-2.5">

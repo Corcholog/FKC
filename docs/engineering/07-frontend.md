@@ -29,6 +29,14 @@ src/app/
     ├── notes/                No page.tsx, so no route — just the note CRUD server
     │   ├── actions.ts        actions and their form-state type, shared by every
     │   └── form-state.ts     surface that renders a match row.
+    ├── draft/                Section with its own layout + tab strip, see docs/features/
+    │   │                     draft-strategy/ for the phased build-out
+    │   ├── layout.tsx        Heading, tabs — wraps everything under it
+    │   ├── page.tsx          /draft                   Simulator (placeholder until Phase 4)
+    │   ├── champions/        /draft/champions         Lane roles + function tags (Phase 1)
+    │   ├── comps/            /draft/comps             Saved five-champion sides (Phase 3)
+    │   ├── synergies/        /draft/synergies         Saved 2-4 champion combos (Phase 3)
+    │   └── counters/         /draft/counters          The counter matrix (Phase 2)
     ├── settings/             Roster CRUD, Riot key, AI context, logins
     └── account/page.tsx      Password change
 ```
@@ -41,20 +49,28 @@ the navbar.
 data fetching, no loading state management. Client components exist only where
 interactivity genuinely requires them.
 
-### The navbar has seven slots, and Scrims cost nothing to add
+### The navbar has eight slots now, and each new section costs one
 
-`NAV_ITEMS` in `components/navbar.tsx` collapses into a sheet at `lg`, and it was already
-tight at seven. Adding Scrims as an eighth would have made that worse, so **Settings moved
-out** of the array and into the right-hand cluster as a gear icon next to `/account` —
-which is where it already sat visually. It's an admin page, not a browsing destination, and
-it's the one link nobody needs a label to find. Below `sm`, where the whole right-hand
-cluster hides, the sheet footer carries Settings alongside account and sign-out, exactly as
-it already did for those two.
+`NAV_ITEMS` in `components/navbar.tsx` was seven links, tight even before Draft: adding
+Scrims meant **Settings moved out** of the array into the right-hand cluster as a gear icon
+next to `/account` — which is where it already sat visually. It's an admin page, not a
+browsing destination, and it's the one link nobody needs a label to find. Below `sm`, where
+the whole right-hand cluster hides, the sheet footer carries Settings alongside account and
+sign-out, exactly as it already did for those two.
 
-Scrim sub-pages are **tabs under one nav slot**, not four more of them. The tab strip lives
-in `scrims/layout.tsx` so each tab stays a server component with its own query; only the
-strip itself (`components/scrims/scrim-tabs.tsx`) is a client component, because only it
-needs `usePathname`.
+Draft is the eighth link, and it's the one that actually broke the budget: seven links plus
+the matchup search, Sync, the gear, the account link and Sign out were already close to
+1024px of content at a 1024px breakpoint. Rather than reorganize the row again, the
+collapse itself moved — `lg:flex` → `xl:flex` on the link row, the matchup search and the
+sheet trigger. Below `xl`, all eight links live in the sheet; there was no more room to buy
+back at `lg` without cutting something.
+
+Both Scrims' and Draft's sub-pages are **tabs under one nav slot**, not four or five more
+of them. The tab strip lives in the section's own `layout.tsx` so each tab stays a server
+component with its own query; only the strip itself (`components/scrims/scrim-tabs.tsx`,
+`components/draft/draft-tabs.tsx`) is a client component, because only it needs
+`usePathname`. Draft's shell is `max-w-7xl` rather than scrims' `max-w-6xl` — the simulator
+built in Phase 4 needs the width.
 
 ### Active state is prefix-matched
 

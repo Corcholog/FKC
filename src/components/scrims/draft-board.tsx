@@ -10,7 +10,7 @@ import {
   type ScrimRole,
 } from "@/lib/scrims/types";
 import type { ScrimNoteThread } from "@/lib/scrims/notes";
-import { ChampionIcon } from "@/components/scrims/champion-icon";
+import { ChampionIcon } from "@/components/champion-icon";
 import { ScrimGameNotes } from "@/components/scrims/scrim-game-notes";
 import { MetaChip, ResultBadge, SideBadge } from "@/components/scrims/scrim-ui";
 import { cn } from "@/lib/utils";

@@ -11,6 +11,7 @@ import {
   LineChart,
   ListOrdered,
   Shield,
+  Network,
   Settings,
   Menu,
   Loader2,
@@ -28,7 +29,13 @@ import { cn } from "@/lib/utils";
 // Browsing destinations only. Settings is deliberately not here: it's the admin
 // page, not somewhere you go to look at something, and it already sits visually
 // with /account on the right. Keeping it out is what left room for Scrims
-// without making this row tighter than it already is at the lg breakpoint.
+// without making this row tighter than it already is.
+//
+// Draft is the eighth slot. Seven links plus the matchup search, Sync, the
+// settings gear, the account link and Sign out were already tight at 1024px —
+// adding an eighth without more room would have been the row's actual breaking
+// point, not just a squeeze — so the collapse below moved from lg to xl at the
+// same time. Below xl, all eight links live in the sheet, same as before.
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/team", label: "Team", icon: Users },
@@ -37,6 +44,7 @@ const NAV_ITEMS = [
   { href: "/tierlists", label: "Tier Lists", icon: ListOrdered },
   { href: "/insights", label: "Insights", icon: LineChart },
   { href: "/scrims", label: "Scrims", icon: Shield },
+  { href: "/draft", label: "Draft", icon: Network },
 ];
 
 /**
@@ -162,7 +170,7 @@ export function Navbar({
 
           {/* The matchup fields need room, so the links collapse into the sheet
               one breakpoint later than they used to. */}
-          <nav className="hidden items-center gap-1 lg:flex">
+          <nav className="hidden items-center gap-1 xl:flex">
             {NAV_ITEMS.map((item) => (
               <NavLink
                 key={item.href}
@@ -180,7 +188,7 @@ export function Navbar({
             champions={champions}
             version={ddragonVersion}
             defaultLane={mainLane}
-            className="hidden lg:flex"
+            className="hidden xl:flex"
           />
 
           <Button
@@ -244,7 +252,7 @@ export function Navbar({
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger
               render={<Button variant="ghost" size="icon-sm" aria-label="Open menu" />}
-              className="lg:hidden"
+              className="xl:hidden"
             >
               <Menu className="h-5 w-5" />
             </SheetTrigger>

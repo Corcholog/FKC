@@ -273,7 +273,12 @@ export function ContextPanel({
         className={cn(
           "panel-hex relative flex h-[clamp(29.5rem,calc(100vh-21.5rem),44rem)] shrink-0 flex-col overflow-hidden p-0",
           "transition-[width] duration-200 ease-out motion-reduce:transition-none",
-          expanded ? "w-[30rem]" : "w-9",
+          // 3.5rem collapsed rather than the 2.25rem it started at: the rail is
+          // the only thing advertising that a whole panel is over here, and at
+          // 36px it read as a scrollbar someone forgot to remove. It grows
+          // leftward — the right edge stays put against the board's own — so
+          // widening it costs the board 20px and moves nothing else.
+          expanded ? "w-[30rem]" : "w-14",
         )}
       >
         {expanded ? (
@@ -312,10 +317,10 @@ export function ContextPanel({
             onClick={() => onOpenChange(true)}
             aria-label="Open the draft reference panel"
             title="Draft reference — hover to open, click to pin"
-            className="flex h-full w-full flex-col items-center gap-2 py-3 text-grey-mid transition-colors hover:text-gold"
+            className="flex h-full w-full flex-col items-center gap-3 py-4 text-grey-mid transition-colors hover:text-gold"
           >
-            <PanelRight className="size-4 shrink-0" />
-            <span className="text-[10px] tracking-widest uppercase [writing-mode:vertical-rl]">
+            <PanelRight className="size-5 shrink-0" />
+            <span className="text-[11px] tracking-widest uppercase [writing-mode:vertical-rl]">
               Reference
             </span>
           </button>

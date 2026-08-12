@@ -168,6 +168,30 @@ export function countersFacing(index: CounterIndex, ourPicks: number[]): Champio
   return ourPicks.flatMap((id) => index.counteredBy.get(id) ?? []);
 }
 
+/**
+ * The same rows, with the ones you can still act on first.
+ *
+ * A list of answers is only worth reading top-down if the top of it is
+ * takeable. Six noted responses to their Nasus are worth nothing if the first
+ * four are banned or already played, and scanning past them is work the panel
+ * can do instead.
+ *
+ * Sorting rather than filtering, deliberately: "we had an answer to this and
+ * it's gone" is real information about the draft you're in, and a row that
+ * silently vanishes reads as a bug in the notes rather than a fact about the
+ * board. Stable, so rows keep their per-target grouping inside each bucket.
+ */
+export function availableFirst(
+  rows: ChampionCounterRow[],
+  unavailable: IdLookup,
+): ChampionCounterRow[] {
+  return [...rows].sort(
+    (a, b) =>
+      Number(unavailable.has(a.counter_champion_id)) -
+      Number(unavailable.has(b.counter_champion_id)),
+  );
+}
+
 // ------------------------------------------------------------
 // Tags
 // ------------------------------------------------------------

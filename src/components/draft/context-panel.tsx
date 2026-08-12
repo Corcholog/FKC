@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { X } from "lucide-react";
+import { PanelRight, Pin, PinOff, X } from "lucide-react";
 import { isBoardEmpty, SIDES, type GameBoard, type Side } from "@/lib/draft/board";
 import { boardContext, type IdLookup } from "@/lib/draft/context";
 import {
@@ -111,7 +111,23 @@ export function ContextPanel({
   // fills it in and it stays filled — see the note where `mode` is derived.
   const [modeChoice, setModeChoice] = useState<PanelMode | null>(null);
   const [ourSide, setOurSide] = useState<Side>("blue");
+  const [hovered, setHovered] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Docked, the panel is a rail that opens under the cursor and shoves the board
+   * left, rather than a thing you open and close. `open` is therefore a *pin*,
+   * not a visibility flag: hover peeks, the pin keeps it.
+   *
+   * Two states rather than one because either alone is wrong. Hover-only closes
+   * the panel the instant you reach for a champion, which is precisely when you
+   * were reading it. Click-only makes a glance cost two clicks and leaves the
+   * board permanently narrower for people who only wanted to check one thing.
+   *
+   * (In the sheet below xl there's no room to shove anything, so `open` means
+   * what it says and hover plays no part.)
+   */
+  const expanded = open || hovered;
 
   const empty = isBoardEmpty(board);
 
@@ -129,14 +145,25 @@ export function ContextPanel({
   // yours.
   const contextual = { data, ourPicks, theirPicks, unavailable, ourSide };
 
+  // Two columns once the container is wide enough, not once the *viewport* is:
+  // the same sections render at 30rem docked and at a phone's width in the
+  // sheet, and a viewport breakpoint would put two columns in a 24rem sheet the
+  // moment the phone behind it turned landscape.
+  const grid = "grid gap-2 p-2 @md:grid-cols-2";
+
   const sections =
     mode === "explore" ? (
-      <>
+      // Left as a plain 2x2 — each Explore section is a search box over one
+      // table and none of them reads against another, so there's no pairing to
+      // preserve the way Contextual has. Two columns rather than four stacked
+      // blocks only because the panel is wide enough now that one column of
+      // 30rem-wide rows would be mostly whitespace.
+      <div className={grid}>
         <ExploreSynergies data={data} />
         <ExploreCounters data={data} />
         <ExploreComps data={data} />
         <ExploreChampions data={data} />
-      </>
+      </div>
     ) : empty ? (
       // One message rather than four empty states. Only reachable by choosing
       // Contextual on an empty board, since that's not the default.
@@ -149,29 +176,26 @@ export function ContextPanel({
         </Button>
       </div>
     ) : (
-      <>
+      // Synergies and counters share the top row because they're the two reads
+      // you make *at* the same moment — "what do we already have" against "what
+      // answers what they took" — and comparing them costs a scroll if they're
+      // stacked. Comps and tags span the full width below: a comp row is five
+      // portraits plus badges and a tag histogram is a bar chart, and both are
+      // wider things than a column.
+      <div className={grid}>
         <SynergySection {...contextual} />
         <CounterSection {...contextual} />
-        <CompSection {...contextual} />
-        <TagSection {...contextual} />
-      </>
+        <CompSection {...contextual} className="@md:col-span-2" />
+        <TagSection {...contextual} className="@md:col-span-2" />
+      </div>
     );
 
-  function header(title: React.ReactNode) {
+  function header(title: React.ReactNode, trailing: React.ReactNode) {
     return (
       <div className="flex shrink-0 flex-col gap-2 border-b border-border p-3">
         <div className="flex items-center justify-between gap-2">
           {title}
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-            aria-label="Close the reference panel"
-            className="text-grey-mid hover:text-grey-light"
-          >
-            <X />
-          </Button>
+          {trailing}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -217,10 +241,11 @@ export function ContextPanel({
     );
   }
 
-  const scroller = <div className="min-h-0 flex-1 overflow-y-auto">{sections}</div>;
+  const scroller = (
+    <div className="scrollbar-panel @container min-h-0 flex-1 overflow-y-auto">{sections}</div>
+  );
 
   if (docked) {
-    if (!open) return null;
     return (
       // data-export-hide is belt-and-braces: this sits outside the exported
       // element already, and it should keep working if the board's layout moves.
@@ -233,13 +258,68 @@ export function ContextPanel({
       // is that clamp plus the 8rem the ban panel and the row gaps take:
       // grid clamp(21.5rem, 100vh-29.5rem, 36rem) + 8rem. Change one, change
       // the other — see draft-champion-grid.tsx for where the numbers come from.
-      // Overflow lands on the scroller inside instead.
+      // Fixed rather than capped, so the collapsed rail is a full-height hover
+      // target instead of a 40px stub; overflow lands on the scroller inside.
       <aside
         data-export-hide
-        className="panel-hex flex max-h-[clamp(29.5rem,calc(100vh-21.5rem),44rem)] w-80 shrink-0 flex-col overflow-hidden p-0"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onFocusCapture={() => setHovered(true)}
+        onBlurCapture={(e) => {
+          // Only when focus has actually left the panel — moving between two
+          // controls inside it fires a blur with the next one as relatedTarget.
+          if (!e.currentTarget.contains(e.relatedTarget)) setHovered(false);
+        }}
+        className={cn(
+          "panel-hex relative flex h-[clamp(29.5rem,calc(100vh-21.5rem),44rem)] shrink-0 flex-col overflow-hidden p-0",
+          "transition-[width] duration-200 ease-out motion-reduce:transition-none",
+          expanded ? "w-[30rem]" : "w-9",
+        )}
       >
-        {header(<h2 className="font-heading text-sm font-semibold text-white">Draft reference</h2>)}
-        {scroller}
+        {expanded ? (
+          // Fixed at the expanded width so the content doesn't reflow while the
+          // aside animates — the board beside it is already reflowing, and two
+          // things relaying out at once for 200ms reads as a stutter. The aside
+          // clips it instead.
+          <div className="flex min-h-0 w-[30rem] flex-1 flex-col">
+            {header(
+              <h2 className="font-heading text-sm font-semibold text-white">Draft reference</h2>,
+              <Button
+                type="button"
+                size="icon-sm"
+                variant={open ? "default" : "ghost"}
+                onClick={() => onOpenChange(!open)}
+                aria-pressed={open}
+                aria-label={open ? "Unpin the reference panel" : "Keep the reference panel open"}
+                title={
+                  open
+                    ? "Unpin — the panel goes back to opening on hover"
+                    : "Pin it open, so it stays while you draft"
+                }
+                className={cn(!open && "text-grey-mid hover:text-grey-light")}
+              >
+                {open ? <PinOff /> : <Pin />}
+              </Button>,
+            )}
+            {scroller}
+          </div>
+        ) : (
+          // The rail. Hovering anywhere on it opens the panel; clicking pins it,
+          // because hover alone means the panel closes the moment you go back to
+          // the board, and reading a list while drafting wants both on screen.
+          <button
+            type="button"
+            onClick={() => onOpenChange(true)}
+            aria-label="Open the draft reference panel"
+            title="Draft reference — hover to open, click to pin"
+            className="flex h-full w-full flex-col items-center gap-2 py-3 text-grey-mid transition-colors hover:text-gold"
+          >
+            <PanelRight className="size-4 shrink-0" />
+            <span className="text-[10px] tracking-widest uppercase [writing-mode:vertical-rl]">
+              Reference
+            </span>
+          </button>
+        )}
       </aside>
     );
   }
@@ -258,7 +338,19 @@ export function ContextPanel({
         data-export-hide
         className="gap-0 bg-bg-secondary p-0"
       >
-        {header(<SheetTitle className="text-sm font-semibold">Draft reference</SheetTitle>)}
+        {header(
+          <SheetTitle className="text-sm font-semibold">Draft reference</SheetTitle>,
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            aria-label="Close the reference panel"
+            className="text-grey-mid hover:text-grey-light"
+          >
+            <X />
+          </Button>,
+        )}
         {scroller}
       </SheetContent>
     </Sheet>

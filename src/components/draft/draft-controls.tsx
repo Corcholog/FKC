@@ -123,15 +123,24 @@ export function DraftControls({
   return (
     <div className="flex items-center gap-1" data-export-hide>
       {/* First, and the only toggle in this row rather than an action: it's the
-          one control here you press *before* drafting rather than after. */}
+          one control here you press *before* drafting rather than after.
+
+          It pins rather than opens — the panel is a rail that opens under the
+          cursor on its own, so the thing left to ask for is that it *stay*
+          open. Below xl there is no rail and no room to open one, and this is
+          the only way to the panel at all. */}
       <Button
         type="button"
         size="icon-sm"
         variant={contextOpen ? "default" : "outline"}
         onClick={onToggleContext}
         aria-pressed={contextOpen}
-        aria-label="Draft reference panel"
-        title="Champions, counters, comps and synergies against this board"
+        aria-label="Pin the draft reference panel"
+        title={
+          contextOpen
+            ? "Unpin the reference panel"
+            : "Keep the reference panel open — champions, counters, comps and synergies against this board"
+        }
       >
         <PanelRight />
       </Button>

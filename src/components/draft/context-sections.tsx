@@ -10,6 +10,7 @@ import type { Side } from "@/lib/draft/board";
 import {
   annotatedCount,
   assembledSynergies,
+  availableFirst,
   countersAgainst,
   countersFacing,
   matchingComps,
@@ -69,12 +70,17 @@ export type PanelData = {
  * mis-aimed click and the board they were reading against is off-screen. The
  * section header gets you to the same page and nothing on the panel moves under
  * the cursor.
+ *
+ * A bordered box rather than a divider between stacked blocks, because the
+ * sections are laid out in a grid now and a shared `border-t` only reads as a
+ * divider in one column. `className` is how a caller spans one across the grid.
  */
 function Section({
   title,
   count,
   href,
   linkLabel,
+  className,
   children,
 }: {
   title: string;
@@ -82,12 +88,19 @@ function Section({
   count?: number;
   href: string;
   linkLabel: string;
+  /** Grid placement from the panel — `col-span-*`, nothing else. */
+  className?: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(true);
 
   return (
-    <section className="border-t border-border first:border-t-0">
+    <section
+      className={cn(
+        "h-fit rounded-sm border border-border bg-bg-primary/30",
+        className,
+      )}
+    >
       <div className="flex items-center gap-1 px-3 py-2">
         <button
           type="button"
@@ -234,36 +247,66 @@ function CompRow({
 }
 
 /**
- * One noted matchup, read as "this champion beats that one".
+ * One noted matchup. Which champion leads depends on the question being asked.
  *
- * `gone` greys the answer: a counter that is banned, already picked or used
- * earlier in the series is a fact about a draft nobody can have. Both counter
- * lists use it — an answer you can't take and a threat that can't materialise
- * are the same non-event.
+ * **Contextual leads with the counter** ("Ornn vs Jarvan"): you already know
+ * what they picked — it's on the board two inches away — and the row exists to
+ * name the champion you could take about it. The answer is the new information,
+ * so it goes first.
+ *
+ * **Explore leads with the target** ("Jarvan — answered by Ornn"): nothing is on
+ * the board, the search is by the champion you want beaten, and a list sorted by
+ * the wrong end of each pair is a list you have to read twice. Same rows, same
+ * table, opposite question.
+ *
+ * `gone` always greys the *counter*, whichever end it's rendered at: a counter
+ * that is banned, already picked or used earlier in the series is a fact about a
+ * draft nobody can have. Both contextual lists use it — an answer you can't take
+ * and a threat that can't materialise are the same non-event.
  */
 function CounterRow({
   row,
   data,
   gone,
+  lead = "counter",
 }: {
   row: ChampionCounterRow;
   data: PanelData;
   gone: boolean;
+  lead?: "counter" | "target";
 }) {
-  const answer = data.championById.get(row.counter_champion_id);
+  const counter = data.championById.get(row.counter_champion_id);
   const target = data.championById.get(row.target_champion_id);
-  if (!answer || !target) return null;
+  if (!counter || !target) return null;
+
+  const leads = lead === "counter" ? counter : target;
+  const trails = lead === "counter" ? target : counter;
+  // The strike-through follows the counter, not the position, so a greyed row in
+  // Explore still marks the champion that can't be taken.
+  const leadGone = gone && lead === "counter";
+  const trailGone = gone && lead === "target";
 
   return (
     <div className="flex items-start gap-2 rounded-sm px-1.5 py-1">
-      <ChampionAvatar champion={answer} version={data.version} size="sm" dimmed={gone} />
+      <ChampionAvatar champion={leads} version={data.version} size="sm" dimmed={leadGone} />
       <div className="min-w-0 flex-1">
         <p className="flex items-baseline gap-1 text-xs">
-          <span className={cn("truncate", gone ? "text-grey-mid line-through" : "text-grey-light")}>
-            {answer.name}
+          <span
+            className={cn("truncate", leadGone ? "text-grey-mid line-through" : "text-grey-light")}
+          >
+            {leads.name}
           </span>
-          <span className="shrink-0 text-[10px] text-grey-mid">vs</span>
-          <span className="truncate text-[11px] text-grey-mid">{target.name}</span>
+          <span className="shrink-0 text-[10px] text-grey-mid">
+            {lead === "counter" ? "vs" : "←"}
+          </span>
+          <span
+            className={cn(
+              "truncate text-[11px]",
+              trailGone ? "text-grey-mid line-through" : "text-grey-mid",
+            )}
+          >
+            {trails.name}
+          </span>
         </p>
         {row.note && <p className="line-clamp-2 text-[11px] text-grey-mid">{row.note}</p>}
       </div>
@@ -313,6 +356,8 @@ function compMatches(comp: DraftCompRow, query: string, data: PanelData): boolea
 
 type ContextualProps = {
   data: PanelData;
+  /** Grid placement from the panel — `col-span-*`, nothing else. */
+  className?: string;
   ourPicks: number[];
   theirPicks: number[];
   /** Series-aware — this game's board plus every pick carried from an earlier game. */
@@ -320,7 +365,7 @@ type ContextualProps = {
   ourSide: Side;
 };
 
-export function SynergySection({ data, ourPicks, unavailable }: ContextualProps) {
+export function SynergySection({ data, ourPicks, unavailable, className }: ContextualProps) {
   const complete = useMemo(() => assembledSynergies(data.comps, ourPicks), [data.comps, ourPicks]);
   const near = useMemo(
     () => nearSynergies(data.comps, ourPicks, unavailable),
@@ -333,6 +378,7 @@ export function SynergySection({ data, ourPicks, unavailable }: ContextualProps)
       count={complete.length + near.length}
       href="/draft/synergies"
       linkLabel="Open saved synergies"
+      className={className}
     >
       {complete.length === 0 && near.length === 0 ? (
         <EmptyNote href="/draft/synergies" cta="Save one">
@@ -375,22 +421,35 @@ export function SynergySection({ data, ourPicks, unavailable }: ContextualProps)
   );
 }
 
-export function CounterSection({ data, ourPicks, theirPicks, unavailable }: ContextualProps) {
+export function CounterSection({
+  data,
+  ourPicks,
+  theirPicks,
+  unavailable,
+  className,
+}: ContextualProps) {
+  // Takeable answers first — see availableFirst. Both lists get it: a threat
+  // that's already banned is as dead as an answer that is.
   const answers = useMemo(
-    () => countersAgainst(data.counterIndex, theirPicks),
-    [data.counterIndex, theirPicks],
+    () => availableFirst(countersAgainst(data.counterIndex, theirPicks), unavailable),
+    [data.counterIndex, theirPicks, unavailable],
   );
   const threats = useMemo(
-    () => countersFacing(data.counterIndex, ourPicks),
-    [data.counterIndex, ourPicks],
+    () => availableFirst(countersFacing(data.counterIndex, ourPicks), unavailable),
+    [data.counterIndex, ourPicks, unavailable],
   );
+  const live = answers.filter((row) => !unavailable.has(row.counter_champion_id)).length;
 
   return (
     <Section
       title="Counters"
-      count={answers.length + threats.length}
+      // The count that matters is how many answers you can still take, not how
+      // many rows exist — a section reading "9" over nine struck-through names
+      // is worse than no number.
+      count={live}
       href="/draft/counters"
       linkLabel="Open noted matchups"
+      className={className}
     >
       <SubHead>Answers</SubHead>
       {answers.length === 0 ? (
@@ -431,7 +490,7 @@ export function CounterSection({ data, ourPicks, theirPicks, unavailable }: Cont
   );
 }
 
-export function CompSection({ data, ourPicks }: ContextualProps) {
+export function CompSection({ data, ourPicks, className }: ContextualProps) {
   const matches = useMemo(() => matchingComps(data.comps, ourPicks, 2), [data.comps, ourPicks]);
 
   return (
@@ -440,6 +499,7 @@ export function CompSection({ data, ourPicks }: ContextualProps) {
       count={matches.length}
       href="/draft/comps"
       linkLabel="Open saved compositions"
+      className={className}
     >
       {matches.length === 0 ? (
         <EmptyNote href="/draft/comps" cta="Save one">
@@ -515,20 +575,37 @@ function TagHistogram({
   );
 }
 
-export function TagSection({ data, ourPicks, theirPicks, ourSide }: ContextualProps) {
+export function TagSection({ data, ourPicks, theirPicks, ourSide, className }: ContextualProps) {
   // Toned by side rather than by ours/theirs, matching the board's own gradients
   // — blue is blue whichever team you're on.
   const ourTone = ourSide === "blue" ? "cyan" : "loss";
 
   return (
-    <Section title="Champion tags" href="/draft/champions" linkLabel="Open champion annotations">
-      <TagHistogram data={data} picks={ourPicks} tone={ourTone} label="Ours" />
-      <TagHistogram
-        data={data}
-        picks={theirPicks}
-        tone={ourTone === "cyan" ? "loss" : "cyan"}
-        label="Theirs"
-      />
+    <Section
+      title="Champion tags"
+      href="/draft/champions"
+      linkLabel="Open champion annotations"
+      className={className}
+    >
+      {/* Side by side once there's room. The whole point of this section is the
+          comparison — "we have three Engage and they have none" — and two
+          histograms stacked a scroll apart is the one layout that doesn't make
+          it. A container query, not a breakpoint: this section spans the panel's
+          full width in the docked layout and a phone's width in the sheet, and
+          the viewport can't tell those apart. */}
+      <div className="@md:grid-cols-2 grid gap-x-4 gap-y-1.5">
+        <div className="flex flex-col gap-1.5">
+          <TagHistogram data={data} picks={ourPicks} tone={ourTone} label="Ours" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <TagHistogram
+            data={data}
+            picks={theirPicks}
+            tone={ourTone === "cyan" ? "loss" : "cyan"}
+            label="Theirs"
+          />
+        </div>
+      </div>
       {data.profiles.size === 0 && (
         <EmptyNote href="/draft/champions" cta="Tag some champions">
           Nothing is annotated yet.
@@ -631,7 +708,9 @@ export function ExploreCounters({ data }: { data: PanelData }) {
           {query ? "Nothing matches that." : "No matchups noted yet."}
         </EmptyNote>
       ) : (
-        shown.map((row) => <CounterRow key={row.id} row={row} data={data} gone={false} />)
+        shown.map((row) => (
+          <CounterRow key={row.id} row={row} data={data} gone={false} lead="target" />
+        ))
       )}
     </Section>
   );

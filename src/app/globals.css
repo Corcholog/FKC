@@ -230,6 +230,44 @@ body {
   .hex-clip {
     clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0% 50%);
   }
+
+  /* A scrollbar that belongs to this app rather than to Windows.
+
+     The champion picker and the draft reference panel are the two places in the
+     app with a permanently visible scroll track sitting inside a dark panel, and
+     the platform default is a light-grey slab that reads as a rendering error
+     next to #10151d. Both properties are set because they cover different
+     browsers and neither is enough alone: `scrollbar-width`/`scrollbar-color`
+     are the standard ones Firefox honours, `::-webkit-scrollbar` is what Chrome
+     and Safari actually use. Chrome supports both and the standard one wins,
+     which is why the widths agree — 8px is `thin` on Chromium.
+
+     The thumb is bg-tertiary rather than gold: it's chrome for a surface whose
+     content is the point, and a gold scrollbar next to gold hover states would
+     compete with the thing you're reaching for. It warms toward gold on hover,
+     which is the only moment it's the thing being reached for. */
+  .scrollbar-panel {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-bg-tertiary) transparent;
+  }
+  .scrollbar-panel::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-panel::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-panel::-webkit-scrollbar-thumb {
+    background: var(--color-bg-tertiary);
+    border-radius: 4px;
+    border: 1px solid color-mix(in oklch, var(--color-border) 80%, transparent);
+  }
+  .scrollbar-panel::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--color-gold) 35%, var(--color-bg-tertiary));
+  }
+  .scrollbar-panel::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 @layer base {

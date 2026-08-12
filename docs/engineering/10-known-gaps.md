@@ -17,12 +17,22 @@ a permanently red CI is indistinguishable from no CI. Clear those, then tighten 
 What makes this particularly worth fixing is that **the codebase is already shaped for
 it.** Every module in `src/lib/*-stats.ts`, plus `rank.ts`, `sessions.ts`, `streaks.ts`,
 `duo-stats.ts`, `matchups.ts` and `time-stats.ts`, is pure: plain rows in, plain aggregates
-out, zero I/O. They can be tested with no mocks, no database, and no framework harness.
+out, zero I/O. `src/lib/draft/board.ts` and `src/lib/draft/context.ts` were written to the
+same rule and say so in their headers — no React, no Supabase, nothing async.
 
-The highest-value tests, roughly in order:
+The highest-value tests, roughly in order. **The draft ones lead** because they are the
+pieces of this codebase that go *silently* wrong rather than visibly broken: a fearless rule
+that carries the wrong set still renders a board, and a counter lookup read from the wrong
+end still renders a list of plausible champions.
 
 | Target | What it pins down |
 |---|---|
+| `unavailableInSeries` | Bans don't carry between games, picks do, and "earlier" is `j < gameIndex` rather than `j !== gameIndex` |
+| `conflictsAfter` / `releaseChampionAfter` | The forward half of the same rule, and that releasing strips one champion rather than clearing whole games |
+| `assembledSynergies` / `nearSynergies` | Containment direction, and that a missing champion who is unavailable excludes the row entirely |
+| `countersAgainst` / `countersFacing` | That both read `counteredBy` and only the pick list differs — backwards, this shows the enemy's answers as yours |
+| `validateDraftComp` | Cardinality per kind, and the no-duplicate-champion rule the check constraint can't express |
+| `indexCounters` | Both directions built in one pass, with no row counted twice |
 | `ladderPoints` / `formatLadderPoints` round-trip | The apex-tier branch and the unranked-is-null rule |
 | `SlidingWindowLimiter` (fake timers) | The chained-acquire race and the `notifyRateLimited` pause |
 | `computeStreak` | The signed-accumulator flip, and that it sorts its own input |
@@ -152,6 +162,22 @@ fix, not yet done.
 **No security headers.** `next.config.ts` sets `images.remotePatterns` and nothing else —
 no CSP, `X-Frame-Options` or `Referrer-Policy`, and `poweredByHeader` is left on.
 
+**`/draft/counters` has no pagination.** It renders one card per champion the team has noted
+answers *to*, and the underlying loader pages properly, so the page grows with the notes. The
+combobox and role filter are what keep it usable; past a few hundred annotated champions
+neither is enough. `/draft/champions` has the same shape but a fixed ceiling — there are only
+~170 champions.
+
+**The reference panel's two-column layout rests on an unenforced numeric coupling.** The
+sections switch to two columns at a container query of `@md` (28rem), which works only
+because the docked panel is `w-[30rem]` and the sheet below `xl` is `max-w-sm` (24rem). Narrow
+the panel past 28rem and the layout silently collapses to one column; widen the sheet past it
+and a phone gets two. Three numbers in two files with nothing tying them together.
+
+**`TagMultiSelect` is the app's only multi-select and isn't a general primitive.** It assumes
+a `{ slug, label }` shape and a `DraftTagKind`, and it's wired to the tag creation action. The
+next thing that needs multi-select will either bend it or write a second one.
+
 **No `Suspense` or `next/dynamic` anywhere.** Every route uses `loading.tsx`, so the whole
 page is withheld until the slowest query resolves rather than streaming in parts. recharts
 and `@dnd-kit` are statically imported into client bundles.
@@ -203,7 +229,12 @@ In the order it would actually hurt:
    can cover, even with perfect resumption. Fix: a production API key, or fan out across
    multiple invocations with a work-queue table.
 2. **JavaScript aggregation.** `/insights` selects the entire participant table. At 50
-   players it's hundreds of thousands of rows into memory on every page view.
+   players it's hundreds of thousands of rows into memory on every page view. `/draft` makes
+   the same trade on purpose for the reference panel — six unfiltered loads, filtered in the
+   browser, because the board changes on every click and a round trip per click would make
+   the panel feel broken (see the header of `src/lib/draft/context.ts`). It's a far smaller
+   dataset than `/insights` and it breaks later, but it breaks the same way, and
+   `loadDraftComps` already takes the filter options that would fix it.
 3. **The single-row sync lock.** Fine for one job; wrong the moment work is sharded across
    parallel invocations.
 4. **The Gemini per-day quota.** Capped at roster + 1 per day and usually well under it

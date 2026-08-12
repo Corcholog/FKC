@@ -753,3 +753,104 @@ The reader is defensive because actions are reachable by direct POST:
 Deleting a note cascades recursively, so `descendantCount` is the whole subtree rather than the
 direct children — the confirm dialog names that number. The alternative is answers orphaned
 under a question nobody can read.
+
+---
+
+## ADR-031 — Champion annotations are an overlay on Data Dragon, not a champions table
+
+**Context.** The draft tools need per-champion metadata the game doesn't supply: which lanes
+this team plays a champion in, what it's *for* (engage, poke, wave clear), and a note. The
+app has never had a champions table. Names, icons and the numeric id space come from Data
+Dragon at request time (`src/lib/ddragon.ts`, 24h cache with an uncached retry on failure),
+and `champion_tier_lists`, `scrim_picks` and `scrim_games.ally_bans` already store bare
+`integer` ids with no foreign key.
+
+The alternative — a `champions` table seeded from DDragon — is the obvious relational
+answer and would have made every id a real reference. It also acquires a synchronisation
+job: Riot ships a champion every few months, renames them occasionally (Renata Glasc), and
+DDragon's list carries 60 game-mode variants that share display names with their base
+champion. A seeded table is a copy that can be wrong, and the failure is silent.
+
+**Decision.** `champion_profiles` holds only what DDragon cannot supply — `roles`, `tags`,
+`notes` — keyed by the DDragon numeric key, with no foreign key and no name column. Rows are
+sparse: `isEmptyProfile` is shared by the client and the action, so clearing a profile's last
+field deletes the row rather than leaving an empty one. Every write validates the id against
+`new Set(championMap.keys())` server-side, since a server action is reachable by direct POST
+and not only through our own form.
+
+**Consequences.** Nothing goes stale at patch time and nothing needs backfilling when Riot
+ships a champion — the roster is whatever DDragon served this request. A champion Riot later
+removes keeps its row and renders as a placeholder rather than vanishing.
+
+The cost is that referential integrity for champion ids lives in application code on four
+tables now instead of three, and one more place has to remember `new Set(championMap.keys())`.
+That's the same bet this codebase already made twice, and it hasn't lost it. The second cost
+is subtler: `champion_profiles.tags` stores `draft_tags.slug` strings rather than ids, so
+renaming a tag's *label* is free but changing its slug would orphan every reference. The tag
+manager doesn't offer slug editing, which is the whole reason that's safe.
+
+---
+
+## ADR-032 — Comps and synergies share one table with a `kind` discriminator
+
+**Context.** The feature spec asked for two tables. A comp is one full side of a draft — five
+champions — and a synergy is a combo of two to four. They have identical columns: label,
+champion ids, win-condition tags, notes. The only difference is how many champions they hold
+and what that count means.
+
+**Decision.** One `draft_comps` table, `kind text check in ('comp','synergy')`, with
+`draft_comps_size` tying cardinality to kind. Two list pages, one row type, one query module,
+one form component, one save action.
+
+The constraint uses `cardinality()`, not `array_length()`. `array_length('{}', 1)` is NULL,
+a CHECK evaluating to NULL *passes*, and an empty comp would have slipped straight through.
+
+**Consequences.** The seam where duplication would have hurt most is the one that never
+existed: `loadDraftComps(supabase)` hands the reference panel every row of both kinds in one
+call, and the panel's sections split on `kind` themselves. The board's two save buttons go
+through one action. Phase 6 and Phase 7 both got cheaper because Phase 3 made this call.
+
+Two costs, both real. The check constraint has two branches that have to be read carefully,
+and its error message is a Postgres constraint dump — which is why `validateDraftComp`
+duplicates the rule in prose, and also carries the no-duplicate-champion rule the constraint
+can't express at all (`cardinality` doesn't dedupe, so the database will happily store the
+same champion twice on one side).
+
+And the day a comp needs a column a synergy can't have — per-slot roles, an `opponent_id`, a
+side — this becomes a split. Nothing here makes that harder: the discriminator is one column,
+the size rule is one constraint, and both list pages already query by `kind`. Split it then,
+not in anticipation.
+
+---
+
+## ADR-033 — The simulator board is client state; only its outputs are persisted
+
+**Context.** The board holds up to five games of ten bans and ten picks. Persisting it means
+a fourth table, CRUD, a list page, and an ownership question nobody asked — five people share
+one login-per-player app and any of them might open a board.
+
+**Decision.** The board lives in React state, mirrored to `sessionStorage` (`draft-series-v1`)
+so in-app navigation doesn't lose it, and gone when the tab closes. What persists is what the
+team asked to persist: a comp, a synergy, or a PNG.
+
+All of the board's rules live in `src/lib/draft/board.ts` as pure functions over plain objects
+— what's in a slot, what can still be placed, what "earlier in the series" means — which is
+what keeps the component a layout concern rather than a state machine.
+
+**Consequences.** There is no draft state to migrate, version or garbage-collect, and the
+board is genuinely disposable, which is what makes "any slot, any order" safe to offer. The
+storage key was *bumped* rather than migrated when the single board became a series: a Phase 4
+payload has `bans`/`picks` at the top level and would read as `series[0]` being undefined, so
+`isStoredState` rejects it and the tab starts empty — the right outcome for a tab left open
+across a deploy.
+
+Rehydration happens **during render**, not in an effect. It can't go in `useState`'s
+initialiser, which also runs on the server where `sessionStorage` doesn't exist, and an effect
+trips `react-hooks/set-state-in-effect` — correctly, since that's a second pass after paint.
+`useHydrated()` (a `useSyncExternalStore` whose server snapshot is `false`) plus adjusting
+state during render is the sanctioned third option.
+
+The cost is that a draft can't be shared or reopened tomorrow. If that turns out to matter,
+the fix is a `draft_boards` table serialising the existing `SeriesBoard` type — `board.ts` was
+written to make that straightforward, and `isSeriesBoard` is already the validator such a
+table would need.

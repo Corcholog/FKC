@@ -69,8 +69,15 @@ Both Scrims' and Draft's sub-pages are **tabs under one nav slot**, not four or 
 of them. The tab strip lives in the section's own `layout.tsx` so each tab stays a server
 component with its own query; only the strip itself (`components/scrims/scrim-tabs.tsx`,
 `components/draft/draft-tabs.tsx`) is a client component, because only it needs
-`usePathname`. Draft's shell is `max-w-7xl` rather than scrims' `max-w-6xl` — the simulator
-built in Phase 4 needs the width.
+`usePathname`. Draft's shell is `max-w-[96rem]` against scrims' `max-w-6xl` — the simulator
+puts five pick slots either side of a champion grid, and §13's reference panel wants a
+column beside all of it. Below 96rem that cap is a no-op, so the only screens it changes are
+the ones that had the room going spare.
+
+Neither strip scrolls. They were `overflow-x-auto`, which computes the *other* axis from
+`visible` to `auto` — and the active tab's underline sits at `-bottom-px`, one pixel of
+vertical overflow, which was enough to put a scrollbar on a strip of five short links and to
+clip the underline that caused it. They wrap instead.
 
 ### Active state is prefix-matched
 
@@ -631,12 +638,25 @@ this component is cheaper than the profiler you would need to find it.
 
 ## 13. The draft reference panel
 
-`components/draft/context-panel.tsx`, built in Phase 7. A collapsible column beside the
-board with two modes over the same four tables: **Contextual** filters champions, counters,
-comps and synergies against whatever is on the visible game; **Explore** shows them
-unfiltered with a search box each, for looking something up mid-draft. It is closed by
-default — the board is what someone came for, and a panel that opens itself takes a third of
-the width before anyone asked.
+`components/draft/context-panel.tsx`, built in Phase 7. A rail down the right of the board
+that opens under the cursor and pushes the board left, with two modes over the same four
+tables: **Contextual** filters champions, counters, comps and synergies against whatever is
+on the visible game; **Explore** shows them unfiltered with a search box each, for looking
+something up mid-draft.
+
+**Hover opens it; the pin keeps it.** `open` is therefore a pin, not a visibility flag —
+`expanded = open || hovered`. Either alone is wrong: hover-only closes the panel the instant
+you reach for a champion, which is precisely when you were reading it, and click-only makes
+a glance cost two clicks and leaves the board permanently narrower for someone who wanted to
+check one thing. Below `xl` there's no room to push anything, so `open` means what it says
+and hover plays no part.
+
+**The collapsed rail advertises what's inside it** — the portraits of champions that would
+complete a saved synergy, how many noted answers against their picks are still takeable, how
+many saved comps share a pick, each under the section name you'll see when it opens. These
+are counts, not suggestions; see the next heading for why that distinction is load-bearing.
+It costs nothing: the rail and the sections are never mounted at the same time, so those
+scans replace the sections' rather than adding to them.
 
 ### There is no engine
 
@@ -681,6 +701,24 @@ enemy's answers as yours, silently and plausibly. The same trap applies to the o
 toggle: it has to reach all four sections, so it travels as one object rather than four
 props.
 
+**Which end of a matchup leads depends on the question.** Contextual reads "Ornn vs Jarvan" —
+the target is already on the board two inches away, so the answer is the new information.
+Explore reads "Jarvan ← Ornn", because nothing is on the board there, the search is by the
+champion you want beaten, and leading with the answer makes the list read backwards. Same
+rows, same table, opposite question; `CounterRow` takes a `lead` prop and the strike-through
+follows the *counter* whichever end it's drawn at.
+
+**Contextual sorts takeable answers first**, and the section's count is how many of those
+there are rather than how many rows exist — a header reading "9" over nine struck-through
+names is worse than no number. Sorted, not filtered: "we had an answer to this and it's gone"
+is real information about the draft you're in, and a row that silently vanishes reads as a bug
+in the notes.
+
+**A comp matches on one shared pick, not two.** Two was the phase doc's number and it kept the
+section empty through exactly the part of a draft where it was worth reading — first pick is
+when "we have a saved comp built around this" is useful, and by the time two are down the
+direction is usually chosen. Overlap sorting does the noise control instead.
+
 ### Docked or overlaid, decided in JS
 
 At ≥1280px the panel is a column in the board's flex row; below that it is `ui/sheet.tsx`
@@ -695,11 +733,32 @@ The sheet sets `initialFocus` to itself for the same reason the navbar's menu do
 opens with a search box at the top, and autofocusing it pops the keyboard the moment the
 panel appears.
 
-**The docked panel's height is the board's height restated**, not a share of the viewport:
-`clamp(29.5rem, 100vh - 21.5rem, 44rem)`, which is the champion grid's own clamp plus the
-8rem the ban panel and row gaps take. A reference column that outgrows the board would make
-the page scroll, undoing the constraint that grid clamp exists to satisfy. Change one, change
-the other. Overflow lands on the scroller inside.
+**Docked, it's out of flow, so it can reach the window edge.** The page lives in a centred
+`max-w-[96rem]` shell and the panel doesn't: it's `absolute inset-y-0 right-[calc(50%-50vw)]`
+against the simulator row, where the negative gutter walks it out to the glass. What pushes
+the board is a separate in-flow spacer sized to the **overlap** rather than to the panel —
+`max(0px, 30rem - 50vw + 50%)` — so the panel only costs the board whatever it can't fit in
+the gutter beside the shell. On a wide screen a collapsed rail is free and the board keeps its
+full width; open, it takes the couple of hundred pixels it can't find.
+
+That is also why `body` carries `overflow-x: clip`: `50vw` counts the classic scrollbar and
+half the shell's width doesn't, so the bleed can land a few pixels past the glass. `clip`
+rather than `hidden`, which would make body a scroll container and break every sticky in the
+app.
+
+**Its height needs no number at all.** `inset-y-0` — the row is `items-start` and the board is
+the only thing in it with any height, so the row *is* the board's height and stretching to it
+lines the two flanks up exactly at every viewport. This used to restate the champion grid's
+clamp plus a guess at the ban panel, which was both short and a second copy of a number living
+in `draft-champion-grid.tsx`. Being out of flow is what makes it safe: the panel can't feed
+its own height back into the row it's measuring.
+
+**The sections lay out in a grid, driven by container queries rather than breakpoints.**
+Contextual puts synergies and counters on the top row — the two reads you make at the same
+moment — with compositions and champion tags spanning below. Explore is a plain 2×2. The
+switch is `@md` (28rem) on the scroller, not a viewport breakpoint, because the same sections
+render at 30rem docked and at a phone's width in the sheet and the viewport can't tell those
+apart. That three-number coupling is unenforced — see §6 of [10](10-known-gaps.md).
 
 The panel sits *outside* `BOARD_ELEMENT_ID` rather than opting out with `data-export-hide` —
 docked, it's a column beside the board, not chrome on top of it, and there is no sense in

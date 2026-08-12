@@ -61,6 +61,11 @@ export function DraftSlot({
         )}
       >
         {champion ? (
+          // Picks are the focal point and bans are context, so they're a size
+          // apart rather than uniform. Both were tried a step larger and both
+          // came back down: five xl picks make a flank taller than any laptop
+          // viewport, and the whole board has to fit without scrolling to be
+          // worth opening mid-draft.
           <ChampionAvatar
             champion={champion}
             version={version}
@@ -78,6 +83,8 @@ export function DraftSlot({
             alt=""
             crossOrigin="anonymous"
             draggable={false}
+            // Kept in step with the ChampionAvatar sizes above, or a slot
+            // changes size the moment it's filled.
             className={cn(
               "shrink-0 rounded-sm bg-bg-tertiary object-cover opacity-40 select-none",
               isBan ? "h-10 w-10" : "h-14 w-14",
@@ -86,7 +93,8 @@ export function DraftSlot({
         )}
         <span
           className={cn(
-            "max-w-14 truncate text-[10px] leading-tight",
+            "truncate text-[10px] leading-tight",
+            isBan ? "max-w-10" : "max-w-14",
             champion ? "text-grey-light" : "text-grey-mid",
           )}
         >

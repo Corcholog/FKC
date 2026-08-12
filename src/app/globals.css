@@ -199,6 +199,26 @@ body {
     background: var(--color-bg-tertiary);
   }
 
+  /* Champion tile hover on the draft board's picker — the same gold accent and
+     glow a.panel-hex:hover uses, at tile scale, so reaching for a champion
+     feels like the rest of the app rather than like a different one.
+
+     One box-shadow does both jobs: the 0-blur first layer is the border, the
+     second is the glow. A real border would change the tile's box and reflow
+     the whole row on hover, which is the thing this is supposed to feel like
+     the opposite of. */
+  .champion-tile-hover {
+    transition:
+      box-shadow 120ms ease,
+      transform 120ms ease;
+  }
+  .champion-tile-hover:hover,
+  .champion-tile-hover:focus-visible {
+    box-shadow:
+      0 0 0 2px var(--color-gold),
+      0 0 14px -2px color-mix(in oklch, var(--color-gold) 55%, transparent);
+  }
+
   /* Angular corner-cut for hero panels (dashboard stats, player header, team
      cards) — the signature hextech panel shape, used selectively rather than
      on every dense list row. */

@@ -192,7 +192,23 @@ export function DraftSimulator({
 
   function pickColumn(side: Side) {
     return (
-      <div className="flex flex-col gap-1">
+      // A side-coloured wash fading toward the grid. Blue and red are the one
+      // place in League where a colour names a thing rather than decorates it
+      // — scrims/scrim-ui.tsx makes the same call — and it's what stops the two
+      // flanks reading as identical grey columns in an exported PNG.
+      //
+      // Kept at 15%: gold is this app's interaction colour (the active ring,
+      // the tile glow) and a saturated panel behind a gold ring goes muddy.
+      // Picks only, never the bans row — those are already desaturated and
+      // struck through, and colour behind them is noise.
+      <div
+        className={cn(
+          "flex flex-col gap-1 rounded-sm px-2 py-1",
+          side === "blue"
+            ? "bg-linear-to-r from-cyan/15 to-transparent"
+            : "bg-linear-to-l from-loss/15 to-transparent",
+        )}
+      >
         <h3
           className={cn(
             "text-[10px] font-medium tracking-wide uppercase",

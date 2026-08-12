@@ -12,6 +12,13 @@ import { cn } from "@/lib/utils";
 type Champion = ChampionInfo & { championId: number };
 const ALL_ROLES = "__all__";
 
+// 64px, between ChampionAvatar's lg (56) and xl (80). Overridden rather than
+// added to that component's scale because lg is pinned to the tier list's
+// TILE_PX and xl costs too much here: this is a picker, and every step up trades
+// away champions visible at once. A modest bump keeps ~70 on screen; xl would
+// have shown fewer than 50.
+const GRID_TILE = "h-16 w-16";
+
 /**
  * The centre grid: every champion, all the time.
  *
@@ -96,11 +103,23 @@ export function DraftChampionGrid({
         )}
       </div>
 
-      {/* A fixed height, not a max: with max-h the panel shrank as you typed
-          and the whole row — pick flanks included — resized on every keystroke.
-          content-start keeps the tiles at the top, so a narrow filter leaves
-          blank space below rather than centring three champions in a void. */}
-      <div className="flex h-[26rem] flex-wrap content-start gap-1 overflow-y-auto p-1">
+      {/* Height is fixed for a given viewport but derived from it, because two
+          things depend on this number and they pull opposite ways.
+
+          Fixed rather than max-h: with max-h the panel shrank as you typed and
+          the whole row — pick flanks included — resized on every keystroke.
+          content-start keeps tiles at the top, so a narrow filter leaves blank
+          space below rather than centring three champions in a void.
+
+          Derived from the viewport rather than a constant: the board is only
+          worth opening mid-draft if it fits on screen without scrolling, and
+          the tile area is the one part that can absorb the difference. 32.5rem
+          is the rest of the page — navbar, the section heading and tabs, the
+          ban row, the controls, this panel's own chrome. The floor is what five
+          pick slots need beside it; below that the flanks would overflow
+          instead of spacing out, so a short viewport scrolls a little rather
+          than squashing the board. */}
+      <div className="flex h-[clamp(21.5rem,calc(100vh-32.5rem),34rem)] flex-wrap content-start gap-1 overflow-y-auto p-1">
         {shown.length === 0 ? (
           <p className="p-2 text-sm text-grey-mid">No champion matches that.</p>
         ) : (
@@ -113,17 +132,18 @@ export function DraftChampionGrid({
                 onClick={() => !taken && onPick(champion.championId)}
                 aria-disabled={taken}
                 title={taken ? `${champion.name} — already on the board` : champion.name}
-                // The zoom is only on champions you can actually take: growing
-                // one that does nothing when clicked promises an affordance
-                // that isn't there. relative + z-10 so the lifted tile sits
-                // over its neighbours instead of under them, and the
-                // container's p-1 is what keeps an edge tile from being
-                // clipped by the scroll box.
+                // The lift and the gold are only on champions you can actually
+                // take: dressing up a tile that does nothing when clicked
+                // promises an affordance that isn't there, so this doubles as a
+                // second signal for what's still available. relative + z-10 so
+                // the lifted tile sits over its neighbours instead of under
+                // them, and the container's p-1 is what keeps an edge tile's
+                // glow from being clipped by the scroll box.
                 className={cn(
-                  "rounded-sm p-0.5 transition-transform duration-100 motion-reduce:transition-none",
+                  "rounded-sm p-0.5 motion-reduce:transition-none",
                   taken
                     ? "cursor-not-allowed"
-                    : "relative hover:z-10 hover:scale-110 focus-visible:z-10 focus-visible:scale-110",
+                    : "champion-tile-hover relative hover:z-10 hover:scale-110 focus-visible:z-10 focus-visible:scale-110",
                 )}
               >
                 <ChampionAvatar
@@ -131,6 +151,7 @@ export function DraftChampionGrid({
                   version={version}
                   size="lg"
                   dimmed={taken}
+                  className={GRID_TILE}
                 />
               </button>
             );

@@ -139,9 +139,25 @@ export function DraftChampionGrid({
           The floor is what five pick slots need beside it; below that the
           flanks would overflow instead of spacing out, so a short viewport
           scrolls a little rather than squashing the board. */}
-      <div className="flex h-[clamp(21.5rem,calc(100vh-29.5rem),36rem)] flex-wrap content-start gap-1 overflow-y-auto p-1">
+
+      {/* A grid with auto-fill columns, not a wrapping flex row. Flex packs
+          tiles from the left and dumps every leftover pixel in one gutter
+          against the scrollbar — which was routinely most of a tile wide, so it
+          read as a missing column rather than as margin. `auto-fill` with a
+          `1fr` max spreads that same slack evenly across the columns instead,
+          and justify-items-center parks each 64px tile in the middle of its
+          track. Nothing is centred as a block, so the left edge still lines up
+          with the search field above it.
+
+          4.25rem is the tile plus its p-0.5 on both sides; the track can only
+          ever be wider, never narrower, so the tiles never overlap. */}
+      <div className="scrollbar-panel grid h-[clamp(21.5rem,calc(100vh-29.5rem),36rem)] grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] content-start justify-items-center gap-1 overflow-y-auto p-1">
         {shown.length === 0 ? (
-          <p className="p-2 text-sm text-grey-mid">No champion matches that.</p>
+          // col-span-full and justify-self-start: as a plain grid item this
+          // sentence would be squeezed into one 4.25rem track and centred there.
+          <p className="col-span-full justify-self-start p-2 text-sm text-grey-mid">
+            No champion matches that.
+          </p>
         ) : (
           shown.map((champion) => {
             const reason = unavailable.get(champion.championId);

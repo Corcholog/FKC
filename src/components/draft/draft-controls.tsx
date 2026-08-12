@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eraser, Link2, Trash2, Users } from "lucide-react";
+import { Eraser, Link2, PanelRight, Trash2, Users } from "lucide-react";
 import { DownloadPngButton } from "@/components/tierlist/download-png-button";
 import { Button } from "@/components/ui/button";
 import {
@@ -99,6 +99,8 @@ export function DraftControls({
   canSaveSynergy,
   onSaveComp,
   onSaveSynergy,
+  contextOpen,
+  onToggleContext,
 }: {
   boardElementId: string;
   fileName: string;
@@ -114,9 +116,35 @@ export function DraftControls({
   canSaveSynergy: boolean;
   onSaveComp: () => void;
   onSaveSynergy: () => void;
+  /** The reference panel is showing. */
+  contextOpen: boolean;
+  onToggleContext: () => void;
 }) {
   return (
     <div className="flex items-center gap-1" data-export-hide>
+      {/* First, and the only toggle in this row rather than an action: it's the
+          one control here you press *before* drafting rather than after.
+
+          It pins rather than opens — the panel is a rail that opens under the
+          cursor on its own, so the thing left to ask for is that it *stay*
+          open. Below xl there is no rail and no room to open one, and this is
+          the only way to the panel at all. */}
+      <Button
+        type="button"
+        size="icon-sm"
+        variant={contextOpen ? "default" : "outline"}
+        onClick={onToggleContext}
+        aria-pressed={contextOpen}
+        aria-label="Pin the draft reference panel"
+        title={
+          contextOpen
+            ? "Unpin the reference panel"
+            : "Keep the reference panel open — champions, counters, comps and synergies against this board"
+        }
+      >
+        <PanelRight />
+      </Button>
+
       {/* The saves read as primary against the clears and the export, because
           they're the reason to have drafted anything here. Disabled states say
           what's missing rather than just refusing — a greyed button with no

@@ -20,7 +20,13 @@ export function ScrimTabs() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex gap-1 overflow-x-auto border-b border-border">
+    // flex-wrap rather than overflow-x-auto. Setting overflow on one axis
+    // computes the other from `visible` to `auto`, and the active tab's
+    // underline sits at -bottom-px — one pixel of vertical overflow, which
+    // was enough to put a scrollbar on a strip of five short links and to
+    // clip the underline it came from. Six tabs wrap on a phone; nothing
+    // scrolls anywhere else.
+    <nav className="flex flex-wrap gap-1 border-b border-border">
       {TABS.map((tab) => {
         // Exact for the index, prefix for the rest — /scrims/opponents/uba has
         // to keep Opponents lit. /scrims/new and /scrims/[id] match none of

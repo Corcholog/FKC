@@ -410,8 +410,12 @@ the ordered pair, not the unordered one.
 
 Three surfaces read the same table with no duplication: the answers list at
 `/draft/counters`, the "counters / countered by" lists on a champion's row in
-`/draft/champions`, and (a later phase) the contextual panel asking "who beats these enemy
-picks" — `target_champion_id in (...)` against `idx_champion_counters_target`.
+`/draft/champions`, and the reference panel on `/draft`, which asks it twice — "who beats
+these enemy picks" and "what beats ours". Both of those are lookups on
+`target_champion_id`; only whose picks go in differs, which is a trap worth knowing about
+and is documented at the counter functions in `src/lib/draft/context.ts`. The panel filters
+in the browser over the whole table rather than querying per click, so
+`idx_champion_counters_target` serves the two page-level readers, not it.
 
 **This is opinions the team holds, not statistics.** Real matchup win rates already exist
 via `match_participants` or Lolalytics (`src/lib/lolalytics.ts`); this table is
@@ -455,8 +459,10 @@ combo (2–4). **One table, discriminated by `kind`,** against a spec that asked
 They have identical columns — label, champions, win-condition tags, notes — and differ only
 in how many champions they hold and what that count means. Two tables would have been two
 identical row types, two identical query modules, two identical forms, two save actions,
-and a contextual panel that queries both and merges the results. The discriminator costs
-one `text` column and one check constraint. If a comp ever grows a column a synergy can't
+and a reference panel that queries both and merges the results — which is precisely what it
+does *not* have to do: `loadDraftComps(supabase)` with no options hands `/draft` every row
+of both kinds in one call, and the panel's sections split on `kind` themselves. The
+discriminator costs one `text` column and one check constraint. If a comp ever grows a column a synergy can't
 have (per-slot roles, an `opponent_id`, a side), split it then; nothing here makes that
 harder.
 

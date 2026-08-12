@@ -32,7 +32,7 @@ src/app/
     ├── draft/                Section with its own layout + tab strip, see docs/features/
     │   │                     draft-strategy/ for the phased build-out
     │   ├── layout.tsx        Heading, tabs — wraps everything under it
-    │   ├── page.tsx          /draft                   Simulator (placeholder until Phase 4)
+    │   ├── page.tsx          /draft                   Board + reference panel (Phases 4-7)
     │   ├── champions/        /draft/champions         Lane roles + function tags (Phase 1)
     │   ├── comps/            /draft/comps             Saved five-champion sides (Phase 3)
     │   ├── synergies/        /draft/synergies         Saved 2-4 champion combos (Phase 3)
@@ -69,8 +69,15 @@ Both Scrims' and Draft's sub-pages are **tabs under one nav slot**, not four or 
 of them. The tab strip lives in the section's own `layout.tsx` so each tab stays a server
 component with its own query; only the strip itself (`components/scrims/scrim-tabs.tsx`,
 `components/draft/draft-tabs.tsx`) is a client component, because only it needs
-`usePathname`. Draft's shell is `max-w-7xl` rather than scrims' `max-w-6xl` — the simulator
-built in Phase 4 needs the width.
+`usePathname`. Draft's shell is `max-w-[96rem]` against scrims' `max-w-6xl` — the simulator
+puts five pick slots either side of a champion grid, and §13's reference panel wants a
+column beside all of it. Below 96rem that cap is a no-op, so the only screens it changes are
+the ones that had the room going spare.
+
+Neither strip scrolls. They were `overflow-x-auto`, which computes the *other* axis from
+`visible` to `auto` — and the active tab's underline sits at `-bottom-px`, one pixel of
+vertical overflow, which was enough to put a scrollbar on a strip of five short links and to
+clip the underline that caused it. They wrap instead.
 
 ### Active state is prefix-matched
 
@@ -626,3 +633,157 @@ in a `useMemo` keyed on the board. A full re-render is ~170 hash lookups over DO
 already exist and only change a class. There is no virtualisation, no per-tile `React.memo`,
 no debounce on the search and no index beyond that one `Set`. Every plausible culprit in
 this component is cheaper than the profiler you would need to find it.
+
+---
+
+## 13. The draft reference panel
+
+`components/draft/context-panel.tsx`, built in Phase 7. A rail down the right of the board
+that opens under the cursor and pushes the board left, with two modes over the same four
+tables: **Contextual** filters champions, counters, comps and synergies against whatever is
+on the visible game; **Explore** shows them unfiltered with a search box each, for looking
+something up mid-draft.
+
+**Hover opens it; the pin keeps it.** `open` is therefore a pin, not a visibility flag —
+`expanded = open || hovered`. Either alone is wrong: hover-only closes the panel the instant
+you reach for a champion, which is precisely when you were reading it, and click-only makes
+a glance cost two clicks and leaves the board permanently narrower for someone who wanted to
+check one thing. Below `xl` there's no room to push anything, so `open` means what it says
+and hover plays no part.
+
+**The collapsed rail advertises what's inside it** — the portraits of champions that would
+complete a saved synergy, how many noted answers against their picks are still takeable, how
+many saved comps share a pick, each under the section name you'll see when it opens. These
+are counts, not suggestions; see the next heading for why that distinction is load-bearing.
+It costs nothing: the rail and the sections are never mounted at the same time, so those
+scans replace the sections' rather than adding to them.
+
+### There is no engine
+
+No scoring, no ranking, no suggestions, no notion of a good draft. A scoring function would
+need weights nobody here could justify, would be confidently wrong against a specific
+opponent, and would turn the panel's output into something to argue with rather than
+something to read. Filtered reads have exactly one failure mode — a row that should have
+matched didn't — and that one is debuggable. If a future version wants suggestions, that is
+a new feature with a new name.
+
+It is also **read-only**. Every row links to its home page and that is the whole affordance.
+Editing from here would mean a second write surface into every one of those tables, each
+with its own validation and its own optimistic update against a board that is *also*
+changing, for a surface you glance at rather than work in.
+
+### It loads all four tables, unfiltered
+
+`/draft/page.tsx` runs five loads and passes `loadDraftComps` no options at all, which looks
+like an oversight. It isn't, and the reasoning is at the top of `lib/draft/context.ts` for
+the next person who sees it. The board changes on every click; a server round trip per click
+would make the panel feel broken. The whole dataset is ~170 profiles, a few dozen tags, some
+hundreds of counters and maybe a hundred comps — less than one page of `/insights` already
+pulls, and the same trade ADR-015 and ADR-024 document for every stats page in the app. The
+options on `loadDraftComps` exist for the list pages, which fetch one kind for one route.
+
+### The filters, and the two that are easy to get wrong
+
+All of them live in `lib/draft/context.ts`, pure on the same terms as `board.ts`.
+
+**`nearSynergies` filters against the series-aware unavailable set**, not this game's board.
+A saved combo where all but one champion is already picked is the single most actionable
+thing the panel can show — and suggesting a champion your jungler played in game 1 is
+exactly the mistake the fearless rule exists to prevent. That failure would be a confident,
+specific, wrong suggestion rather than an obviously empty section, which is why the filter is
+in the function rather than left to the caller.
+
+**Both counter lists read `counteredBy`**, which looks like one of them is a copy-paste slip.
+A row says `counter_champion_id` beats `target_champion_id`, so "what answers this champion"
+is always a lookup on the target side; only whose picks you look up differs. *Answers* is
+`target ∈ their picks`, *Watch out* is `target ∈ our picks`. Getting it backwards shows the
+enemy's answers as yours, silently and plausibly. The same trap applies to the our-side
+toggle: it has to reach all four sections, so it travels as one object rather than four
+props.
+
+**Which end of a matchup leads depends on the question.** Contextual reads "Ornn vs Jarvan" —
+the target is already on the board two inches away, so the answer is the new information.
+Explore reads "Jarvan ← Ornn", because nothing is on the board there, the search is by the
+champion you want beaten, and leading with the answer makes the list read backwards. Same
+rows, same table, opposite question; `CounterRow` takes a `lead` prop and the strike-through
+follows the *counter* whichever end it's drawn at.
+
+**Contextual sorts takeable answers first**, and the section's count is how many of those
+there are rather than how many rows exist — a header reading "9" over nine struck-through
+names is worse than no number. Sorted, not filtered: "we had an answer to this and it's gone"
+is real information about the draft you're in, and a row that silently vanishes reads as a bug
+in the notes.
+
+**A comp matches on one shared pick, not two.** Two was the phase doc's number and it kept the
+section empty through exactly the part of a draft where it was worth reading — first pick is
+when "we have a saved comp built around this" is useful, and by the time two are down the
+direction is usually chosen. Overlap sorting does the noise control instead.
+
+### Docked or overlaid, decided in JS
+
+At ≥1280px the panel is a column in the board's flex row; below that it is `ui/sheet.tsx`
+with `side="right"`. **The phase doc called for a CSS breakpoint and it can't be one**:
+rendering both mount points and hiding one with `xl:hidden` leaves a base-ui Dialog mounted
+and open at desktop widths, still trapping focus and locking scroll behind a popup nobody can
+see. So `useDocked()` is a `useSyncExternalStore` over `matchMedia`, whose server snapshot is
+`false` — the first render is always the Sheet branch, and nothing flips visibly because the
+panel starts closed and a closed Sheet renders nothing.
+
+The sheet sets `initialFocus` to itself for the same reason the navbar's menu does: Explore
+opens with a search box at the top, and autofocusing it pops the keyboard the moment the
+panel appears.
+
+**Docked, it's out of flow, so it can reach the window edge.** The page lives in a centred
+`max-w-[96rem]` shell and the panel doesn't: it's `absolute inset-y-0 right-[calc(50%-50vw)]`
+against the simulator row, where the negative gutter walks it out to the glass. What pushes
+the board is a separate in-flow spacer sized to the **overlap** rather than to the panel —
+`max(0px, 30rem - 50vw + 50%)` — so the panel only costs the board whatever it can't fit in
+the gutter beside the shell. On a wide screen a collapsed rail is free and the board keeps its
+full width; open, it takes the couple of hundred pixels it can't find.
+
+That is also why `body` carries `overflow-x: clip`: `50vw` counts the classic scrollbar and
+half the shell's width doesn't, so the bleed can land a few pixels past the glass. `clip`
+rather than `hidden`, which would make body a scroll container and break every sticky in the
+app.
+
+**Its height needs no number at all.** `inset-y-0` — the row is `items-start` and the board is
+the only thing in it with any height, so the row *is* the board's height and stretching to it
+lines the two flanks up exactly at every viewport. This used to restate the champion grid's
+clamp plus a guess at the ban panel, which was both short and a second copy of a number living
+in `draft-champion-grid.tsx`. Being out of flow is what makes it safe: the panel can't feed
+its own height back into the row it's measuring.
+
+**The sections lay out in a grid, driven by container queries rather than breakpoints.**
+Contextual puts synergies and counters on the top row — the two reads you make at the same
+moment — with compositions and champion tags spanning below. Explore is a plain 2×2. The
+switch is `@md` (28rem) on the scroller, not a viewport breakpoint, because the same sections
+render at 30rem docked and at a phone's width in the sheet and the viewport can't tell those
+apart. That three-number coupling is unenforced — see §6 of [10](10-known-gaps.md).
+
+The panel sits *outside* `BOARD_ELEMENT_ID` rather than opting out with `data-export-hide` —
+docked, it's a column beside the board, not chrome on top of it, and there is no sense in
+which it belongs in a picture of the draft. It carries the attribute anyway, so the export
+keeps working if the layout moves.
+
+### Mode defaults to Explore on an empty board
+
+Contextual with nothing placed is four empty sections and no way to tell that's expected. So
+the mode is derived: `modeChoice ?? (boardEmpty ? "explore" : "contextual")`, where
+`modeChoice` is null until the user presses one of the two buttons and stays filled after.
+Derived rather than synced in an effect, so there is no render where the mode is stale. If
+someone does choose Contextual on an empty board they get one message and a button back to
+Explore, not four empty states.
+
+Every empty state names what is missing and links to the page that fills it. "Nothing yet"
+four times tells nobody anything; *"No saved synergy matches these picks"* and *"No answers
+noted against Renekton, Nasus"* point at different tables.
+
+### Not a `dense` CompCard
+
+The phase doc suggested adding a `dense` prop to `CompCard` rather than a second card. The
+panel's `CompRow` is a separate component instead: `CompCard` is a card with edit and delete
+controls, a notes toggle and a name-leads-or-champions-lead rule, while the panel row is a
+read-only line that has to grey the champions you don't have and ring the one you'd need.
+Sharing them would mean `dense` plus an optional `onEdit` plus a per-champion emphasis
+callback on a component whose job is none of that. They share `ChampionAvatar` and `Badge`,
+which is the part that would actually drift.

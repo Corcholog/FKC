@@ -179,8 +179,10 @@ export function ChampionProfileTable({
         rows and squeezed the rest — the table visibly reflowed as you
         annotated it. Fixed widths mean tags wrap onto another line inside
         their own column instead, and nothing else moves. The champion column
-        is sized for the longest name ("Nunu & Willump"); notes is the one
-        column left unsized, so it absorbs whatever width is going.
+        is sized for the longest name ("Nunu & Willump") at the larger type it
+        renders in — 14rem covers it, and the rest is the portrait and the
+        cell's own padding. Notes is the one column left unsized, so it absorbs
+        whatever width is going.
       */}
       <div className="panel-hex overflow-x-auto">
         {filtered.length === 0 ? (
@@ -189,7 +191,7 @@ export function ChampionProfileTable({
           <table className="w-full min-w-6xl table-fixed text-sm">
             <thead>
               <tr className="border-b border-border text-left text-[10px] tracking-wider text-grey-mid uppercase">
-                <th className="w-52 px-4 py-2 font-medium">Champion</th>
+                <th className="w-64 px-4 py-2 font-medium">Champion</th>
                 <th className="w-60 px-4 py-2 font-medium">Roles</th>
                 <th className="w-80 px-4 py-2 font-medium">Tags</th>
                 <th className="px-4 py-2 font-medium">Notes</th>

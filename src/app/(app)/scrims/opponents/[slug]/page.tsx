@@ -10,7 +10,7 @@ import { countBans, aggregatePicksByRole, type ChampionBanCount } from "@/lib/sc
 import { deriveOpponentRoster, namedPickCoverage } from "@/lib/scrims/opponents";
 import { overallRecord, recordBySide } from "@/lib/scrims/team-stats";
 import { SCRIM_KIND_LABELS, SCRIM_ROLES } from "@/lib/scrims/types";
-import { ChampionIcon } from "@/components/scrims/champion-icon";
+import { ChampionIcon } from "@/components/champion-icon";
 import { BarRow, MetaChip, SeriesScore, winRateTone } from "@/components/scrims/scrim-ui";
 import { OpponentNotesForm } from "@/components/scrims/opponent-notes-form";
 import { WinrateRing } from "@/components/winrate-ring";

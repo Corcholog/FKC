@@ -11,7 +11,7 @@ import {
   type ChampionPickAgg,
 } from "@/lib/scrims/draft-stats";
 import { SCRIM_ROLES } from "@/lib/scrims/types";
-import { ChampionIcon } from "@/components/scrims/champion-icon";
+import { ChampionIcon } from "@/components/champion-icon";
 import { BarRow, winRateTone } from "@/components/scrims/scrim-ui";
 import { ScrimEmptyState } from "@/components/scrims/scrim-empty-state";
 import { cn } from "@/lib/utils";

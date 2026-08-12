@@ -23,11 +23,18 @@ export function DownloadPngButton({
   fileName,
   label = "PNG",
   variant = "outline",
+  iconOnly = false,
 }: {
   targetId: string;
   fileName: string;
   label?: string;
   variant?: "outline" | "ghost" | "secondary";
+  /**
+   * Drop the text and shrink to a square. `label` still has to be set — it
+   * becomes the accessible name and the tooltip, so an icon-only button is
+   * never an unlabelled one.
+   */
+  iconOnly?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -70,9 +77,17 @@ export function DownloadPngButton({
   }
 
   return (
-    <Button type="button" size="sm" variant={variant} onClick={download} disabled={busy}>
+    <Button
+      type="button"
+      size={iconOnly ? "icon-sm" : "sm"}
+      variant={variant}
+      onClick={download}
+      disabled={busy}
+      aria-label={iconOnly ? label : undefined}
+      title={iconOnly ? label : undefined}
+    >
       {busy ? <Loader2 className="animate-spin" /> : <Download />}
-      {label}
+      {!iconOnly && label}
     </Button>
   );
 }

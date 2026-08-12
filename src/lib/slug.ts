@@ -9,22 +9,25 @@ export function playerSlug(gameName: string, tagLine: string): string {
 const COMBINING_MARKS = new RegExp("[\\u0300-\\u036f]", "g");
 
 /**
- * Slug for a scrim opponent's /scrims/opponents/[slug] page.
- *
- * Unlike playerSlug this folds diacritics first, because these are real Spanish
- * university names typed by hand: without the NFD pass "Universidad de Córdoba"
+ * A diacritic-folding slug for free text typed by hand — real names, not
+ * identifiers a developer chose. Without the NFD pass "Universidad de Córdoba"
  * slugs to "universidad-de-c-rdoba", since the accented character isn't in
  * [a-z0-9] and becomes a separator.
  *
- * Returns "" for input with nothing sluggable in it — the caller decides what to
- * do about that rather than getting a silently empty url.
+ * Returns "" for input with nothing sluggable in it — the caller decides what
+ * to do about that rather than getting a silently empty slug.
  */
-export function opponentSlug(name: string): string {
-  return name
+export function slugify(text: string): string {
+  return text
     .normalize("NFD")
     .replace(COMBINING_MARKS, "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+/** Slug for a scrim opponent's /scrims/opponents/[slug] page. */
+export function opponentSlug(name: string): string {
+  return slugify(name);
 }

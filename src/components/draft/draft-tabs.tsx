@@ -1,0 +1,52 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+
+// Real routes rather than the Tabs component, same call as scrims/scrim-tabs.tsx:
+// each of these is a server component doing its own query, so they should be
+// linkable, refreshable and individually streamable. The tab strip is the only
+// part that needs the pathname, so it's the only client component in the section
+// shell.
+
+const TABS = [
+  { href: "/draft", label: "Simulator" },
+  { href: "/draft/champions", label: "Champions" },
+  { href: "/draft/comps", label: "Comps" },
+  { href: "/draft/synergies", label: "Synergies" },
+  { href: "/draft/counters", label: "Counters" },
+];
+
+export function DraftTabs() {
+  const pathname = usePathname();
+
+  return (
+    <nav className="flex gap-1 overflow-x-auto border-b border-border">
+      {TABS.map((tab) => {
+        // Exact for the index (the simulator), prefix for the rest — a URL a
+        // tab doesn't own should never light it.
+        const active =
+          tab.href === "/draft"
+            ? pathname === "/draft"
+            : pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+
+        return (
+          <Link
+            key={tab.href}
+            href={tab.href}
+            className={cn(
+              "relative shrink-0 px-3 py-2 text-sm font-medium transition-colors",
+              active ? "text-gold-bright" : "text-grey-light hover:text-white",
+            )}
+          >
+            {tab.label}
+            {active && (
+              <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-gold" />
+            )}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}

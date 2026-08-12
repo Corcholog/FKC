@@ -2,21 +2,14 @@
 
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { championIconUrlById } from "@/lib/ddragon";
 import type { TierChampion, TierChampionStat } from "@/lib/tierlist";
-import { cn } from "@/lib/utils";
+import { ChampionAvatar } from "@/components/champion-avatar";
 
-// Icons stay raw <img> rather than next/image, like the other small champion
-// icons in the app (player-card, matchup-search) — but here there's a second
-// reason: html-to-image walks the real DOM to build the PNG, and crossOrigin
-// has to be set on the element itself for DDragon's images to inline instead of
-// tainting the canvas.
-
-// One fixed size everywhere, not a responsive class. The PNG is captured from
-// an off-screen node, and `sm:` variants there resolve against the *viewport*,
-// so a responsive tile would export at a different size from a phone than from
-// a desktop. Must stay in step with TILE_PX in layout-constants.
-const TILE_CLASS = "h-14 w-14";
+// The PNG is captured from an off-screen node, and a responsive size class
+// there would resolve against the *viewport*, so a tile would export at a
+// different size from a phone than from a desktop. ChampionAvatar's "lg" is a
+// fixed h-14 w-14 for exactly this reason — must stay in step with TILE_PX in
+// layout-constants.ts.
 
 export function championTitle(champion: TierChampion, stat?: TierChampionStat): string {
   if (!stat || stat.games === 0) return champion.name;
@@ -33,16 +26,7 @@ export function ChampionTile({
   version: string;
   className?: string;
 }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={championIconUrlById(champion.ddragonId, version)}
-      alt={champion.name}
-      crossOrigin="anonymous"
-      draggable={false}
-      className={cn("rounded-sm bg-bg-tertiary object-cover select-none", TILE_CLASS, className)}
-    />
-  );
+  return <ChampionAvatar champion={champion} version={version} size="lg" className={className} />;
 }
 
 /**

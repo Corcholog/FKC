@@ -29,6 +29,14 @@ src/app/
     ├── notes/                No page.tsx, so no route — just the note CRUD server
     │   ├── actions.ts        actions and their form-state type, shared by every
     │   └── form-state.ts     surface that renders a match row.
+    ├── draft/                Section with its own layout + tab strip, see docs/features/
+    │   │                     draft-strategy/ for the phased build-out
+    │   ├── layout.tsx        Heading, tabs — wraps everything under it
+    │   ├── page.tsx          /draft                   Simulator (placeholder until Phase 4)
+    │   ├── champions/        /draft/champions         Lane roles + function tags (Phase 1)
+    │   ├── comps/            /draft/comps             Saved five-champion sides (Phase 3)
+    │   ├── synergies/        /draft/synergies         Saved 2-4 champion combos (Phase 3)
+    │   └── counters/         /draft/counters          Who answers whom (Phase 2)
     ├── settings/             Roster CRUD, Riot key, AI context, logins
     └── account/page.tsx      Password change
 ```
@@ -41,20 +49,28 @@ the navbar.
 data fetching, no loading state management. Client components exist only where
 interactivity genuinely requires them.
 
-### The navbar has seven slots, and Scrims cost nothing to add
+### The navbar has eight slots now, and each new section costs one
 
-`NAV_ITEMS` in `components/navbar.tsx` collapses into a sheet at `lg`, and it was already
-tight at seven. Adding Scrims as an eighth would have made that worse, so **Settings moved
-out** of the array and into the right-hand cluster as a gear icon next to `/account` —
-which is where it already sat visually. It's an admin page, not a browsing destination, and
-it's the one link nobody needs a label to find. Below `sm`, where the whole right-hand
-cluster hides, the sheet footer carries Settings alongside account and sign-out, exactly as
-it already did for those two.
+`NAV_ITEMS` in `components/navbar.tsx` was seven links, tight even before Draft: adding
+Scrims meant **Settings moved out** of the array into the right-hand cluster as a gear icon
+next to `/account` — which is where it already sat visually. It's an admin page, not a
+browsing destination, and it's the one link nobody needs a label to find. Below `sm`, where
+the whole right-hand cluster hides, the sheet footer carries Settings alongside account and
+sign-out, exactly as it already did for those two.
 
-Scrim sub-pages are **tabs under one nav slot**, not four more of them. The tab strip lives
-in `scrims/layout.tsx` so each tab stays a server component with its own query; only the
-strip itself (`components/scrims/scrim-tabs.tsx`) is a client component, because only it
-needs `usePathname`.
+Draft is the eighth link, and it's the one that actually broke the budget: seven links plus
+the matchup search, Sync, the gear, the account link and Sign out were already close to
+1024px of content at a 1024px breakpoint. Rather than reorganize the row again, the
+collapse itself moved — `lg:flex` → `xl:flex` on the link row, the matchup search and the
+sheet trigger. Below `xl`, all eight links live in the sheet; there was no more room to buy
+back at `lg` without cutting something.
+
+Both Scrims' and Draft's sub-pages are **tabs under one nav slot**, not four or five more
+of them. The tab strip lives in the section's own `layout.tsx` so each tab stays a server
+component with its own query; only the strip itself (`components/scrims/scrim-tabs.tsx`,
+`components/draft/draft-tabs.tsx`) is a client component, because only it needs
+`usePathname`. Draft's shell is `max-w-7xl` rather than scrims' `max-w-6xl` — the simulator
+built in Phase 4 needs the width.
 
 ### Active state is prefix-matched
 
@@ -442,3 +458,171 @@ tinted fill *behind* the row. The shape of the distribution — "these three, th
 tail" — lands before any number does, and a background fill costs no horizontal space,
 which matters inside a two-column grid. Pick and ban lists scale against the top row of
 their own list; presence scales against 100%, because it's a rate with a real ceiling.
+
+## 12. The draft simulator board
+
+`/draft`, built in Phase 4 of `docs/features/draft-strategy/`. Ten ban slots, ten pick
+slots, a champion grid in the middle. Where §11's scrim board *renders* a draft that
+happened, this one is a scratchpad for one that hasn't.
+
+### There is no turn machine, and that is the design
+
+A real draft is fifteen alternating actions across two ban phases. Encoding that would mean
+the board refuses clicks while someone is trying to sketch "what if they take this at R1",
+which is the entire reason to open it. Any slot is fillable at any time, in any order.
+
+The 3 + 2 gap in each ban row is the only nod to real draft structure and it is purely how
+the row is drawn — there is no phase-one/phase-two logic behind it, no ordering rule and no
+gating. There is a comment saying so where the gap is applied, because it looks like state.
+
+### Interactions
+
+Left click selects a slot; the next champion clicked in the grid lands there and the active
+slot **advances to the next empty slot on the same side and kind, wrapping**. Filling blue's
+picks is one slot click and five grid clicks rather than ten alternating ones. Wrapping
+matters because slots fill in any order: having done B3 and B4 first, advancing from B5
+should find B1 rather than give up.
+
+Right click empties one slot, and `preventDefault()` on `onContextMenu` is the whole trick —
+without it the browser menu opens *and* the slot clears, which is worse than either alone.
+Right-click is not an accessible affordance and clearing is the only destructive action
+here, so every filled slot also carries a small `×` on hover or keyboard focus.
+
+Unavailable champions are greyed in the grid, never filtered out — the same call
+`ChampionCombobox` documents, for the same reason: seeing that Ahri is taken is
+information, and an entry that vanishes reads as a bug.
+
+### Empty slots use a champion icon that isn't from DDragon
+
+`EMPTY_CHAMPION_ICON_URL` in `lib/ddragon.ts` is the grey "no champion" portrait, and it
+comes from CommunityDragon — the only host besides DDragon this app fetches images from.
+DDragon has no such asset (`img/champion/-1.png`, `None.png` and `0.png` all 403). It was
+worth the extra host because it serves `Access-Control-Allow-Origin: *`, so it survives
+`crossOrigin="anonymous"` and doesn't taint the canvas during the PNG export — which would
+have ruled it out — and because a board of grey silhouettes exports as something that looks
+like a draft, where dashed boxes export as something that looks like a form. The failure
+mode is a missing decoration: the slot still draws its border and label.
+
+### Fearless: picks carry, bans don't
+
+The board is a five-game series, one game on screen at a time. For the visible game, a
+champion is unavailable if it is **banned in this game** (either side), **picked in this
+game** (either side), or **picked in any *earlier* game** (either side). Bans do not carry
+between games; picks do.
+
+That asymmetry is the whole format, and it's the one thing on this board a person cannot
+verify by looking — which is why `unavailableInSeries` and `carriedPicks` live in
+`lib/draft/board.ts` as pure functions rather than inline in the component. Get the carry
+direction backwards and the board confidently tells you a champion is free when it isn't.
+`usedEarlierInSeries` in `scrims/draft-form-state.ts` is the same rule for the scrim entry
+form; if an organiser ever counts bans too, those are the two functions that change.
+
+**"Earlier" is `j < gameIndex`, not `j !== gameIndex`.** The second is easier to write, is
+wrong, and only shows up when someone goes back to fix game 1 after filling game 3. The
+series is played forwards but edited in any order, so the carried set is recomputed per
+switch rather than fixed per game. This is where the scrim form differs: it renders every
+game's fields at once, so its set is fixed per field.
+
+The switcher is five plain buttons. They carried a filled-slot count for a while, on the
+theory that an untouched G4 should be visible from G1 — in use it was noise, and switching
+to a game is one click.
+
+**Greyed means two different things, and the grid says which.** A champion greyed because
+someone just banned it this game is a different situation from one your mid laner played in
+game 1. Both are equally unclickable and look the same; the carried one carries a `G1` /
+`G2` badge. Only that case gets a badge — "taken" is legible from the board itself, since
+the champion is sitting in a slot two inches away, while "played in game 1" is invisible
+unless the tile says so. Hence `Map<number, UnavailableReason>` rather than a `Set`.
+
+**The rule looks backwards, so editing an earlier game needs a forward check too.** Nothing
+in `unavailableInSeries` stops someone opening G1 and placing a champion G3 already picked
+— G1 only consults the games before it. The result would be the same champion in two games
+of a format whose entire premise is that it can't, with *neither* grid flagging it, because
+each is only checking backwards. `conflictsAfter` is that forward check, and placing into
+the conflict raises `PickConflictDialog` rather than being silently refused: refusing would
+mean clearing every later game by hand before fixing a typo in G1.
+
+Confirming calls `releaseChampionAfter`, which strips that one champion from later games and
+leaves those drafts otherwise intact. Clearing whole games would also resolve it and has an
+argument behind it — a fearless game drafted against a pool that has since changed is
+arguably stale — but most edits to an earlier game are fixing a typo, and losing three
+drafted games to a typo is the worse failure. Bans are stripped too, not just picks: a
+champion picked earlier is unavailable for *every* slot later, ban slots included.
+
+A **Fearless toggle** sits next to the switcher, defaulted on. Not every series is fearless
+— `scrim_series.fearless` exists as a column for that reason — and off makes each game
+independent. It's threaded as an argument to `unavailableInSeries`, not a module flag.
+
+`MAX_GAMES = 5`, against the ten `lib/scrims/types.ts` allows. That limit exists because
+the `scrim_games_number` check constraint does and hand-entry shouldn't fight the database;
+nothing is written from here, and five buttons fit in a row where ten are noise.
+
+### State lives in the tab, not the database
+
+One `useState<GameBoard>` and one `useState<SlotRef | null>`. No reducer, no context, no
+store (ADR-019). A saved board would be a fourth table, a CRUD surface, a list page and an
+ownership question, in exchange for state that is genuinely disposable — what's worth
+keeping off a board is a comp, a synergy or an image, and Phases 3 and 6 cover all three.
+
+`sessionStorage` covers the only real complaint, which is losing work to a misclick on the
+tab strip. The key is `draft-series-v1` and holds `{ series, currentGame, fearless }`. It
+was **bumped rather than migrated** from the single-board `draft-board-v1`: that payload has
+`bans`/`picks` at the top level and would read as `series[0]` being `undefined`, so the
+shape check rejects it and the tab starts empty — the right outcome for a session left open
+across a deploy. **Rehydration happens during render, not in an effect.** Three options and only
+one works: `useState`'s initialiser runs on the server, where `sessionStorage` doesn't
+exist, and a board that differs between server and first client render is a hydration
+mismatch; an effect is a second render pass after paint and trips
+`react-hooks/set-state-in-effect`. Adjusting state during render is the sanctioned third —
+the same pattern `champion-profile-table.tsx` uses to resync from a changed prop. A
+`useHydrated()` built on `useSyncExternalStore` (`() => true` client, `() => false` server)
+is what makes "after hydration" a value the render can branch on. The stored JSON is
+untrusted input and goes through `isGameBoard` first; a key left by an earlier version of
+the board would otherwise crash the render rather than fail cleanly.
+
+### Saving off the board
+
+Two buttons write `draft_comps` rows through **Phase 3's `saveDraftComp`, unchanged** — that
+action takes its kind in the payload and assumes nothing about where the champions came
+from precisely so this could exist without a second write path into the same table. Two save
+paths into one table is the duplication the one-table decision was made to avoid.
+
+**Save composition** takes one side's five picks. With both sides full the dialog asks
+which; with one, it's preselected and the chooser doesn't render. The dialog previews the
+champions it will write — non-negotiable, because it covers the board while open, so "did I
+save blue or red" is otherwise unanswerable until you visit `/draft/comps`.
+
+That preview is also the control: `CompOrderEditor` makes it a `@dnd-kit` sortable row.
+Champions arrive in draft order, which is rarely how anyone reads a comp, so dragging them
+into TOP→SUP is what makes the saved row legible later — and for a five-champion comp each
+position is labelled with the role it implies, both here and on `CompCard` afterwards. The
+label goes gold when `champion_profiles` says that champion plays there, which is a hint
+while sorting rather than a claim about the row: a champion can be annotated for several
+roles, so nothing derives one role per slot. Position does that. See §12 of
+[02](02-data-model.md).
+
+**Save synergy** is a mode over the board rather than a dialog-first flow. Filled pick slots
+become selectable; empty slots, bans and the whole champion grid go inert. A mode that both
+selects and edits produces accidental picks, and picking a champion mid-selection would
+change the very slots being selected. **Selection is confined to one side** — the first pick
+locks the other side for the rest of the mode. A synergy spanning both teams isn't a
+synergy, and the contextual panel would later match it against your own picks and suggest a
+combo containing an enemy champion. Escape leaves the mode, but the listener detaches while
+the save dialog is open, or one keypress unwinds both and throws away the selection behind
+it — the nested-dismissal problem `ChampionCombobox` solves with `stopPropagation`.
+
+**Nothing about the board changes on save.** No clear, no navigate, no deselect. Someone who
+just saved blue is usually about to save red and keep drafting; saving is a read of the
+board, not a state transition on it. The toast carries a "View" action instead, the same
+call `OpponentNotesForm` makes by saving in place.
+
+Note that the save dialog follows `DRAFT_COMP_SHAPE`, so a synergy gets no win-condition
+field and neither kind requires a name — see §12 of [02](02-data-model.md).
+
+### Performance, once, so it doesn't come up again
+
+There are ~170 champions and availability is one `Set.has` per tile, built once per render
+in a `useMemo` keyed on the board. A full re-render is ~170 hash lookups over DOM nodes that
+already exist and only change a class. There is no virtualisation, no per-tile `React.memo`,
+no debounce on the search and no index beyond that one `Set`. Every plausible culprit in
+this component is cheaper than the profiler you would need to find it.

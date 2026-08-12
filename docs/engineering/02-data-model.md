@@ -360,3 +360,163 @@ The price is that a typo splits one person in two — fixable by editing the ser
 hundred games, which one tournament season passes. Notes are loaded the same way and only on the
 two pages that render them — every other scrim page derives aggregates, and prose feeds none of
 them.
+
+## 10. Draft strategy — `draft_tags` and `champion_profiles`
+
+Migration 015, first of three for the draft-tools section documented in
+`docs/features/draft-strategy/`. This entry covers the two tables that phase shipped;
+`champion_counters` (016) is §11 and `draft_comps` (017) is §12.
+
+**No foreign key on `champion_profiles.champion_id`, and none is possible.** Exactly the
+`champion_tier_lists` precedent from §2: there is no champions table in this database, and
+this migration doesn't create one. Names and icons come from Data Dragon at request time
+(`src/lib/ddragon.ts`); `champion_profiles` holds only what DDragon can't — lane roles and
+function tags — keyed by DDragon's numeric id, validated server-side against
+`new Set(championMap.keys())` on every write instead of by a constraint the database can't
+express.
+
+**A champion with no annotations has no row.** The page joins the full DDragon roster
+against this table and renders an empty state per champion; there is no pre-seed and no
+backfill when Riot ships a new one.
+
+**`draft_tags` is a managed vocabulary, not free text and not a constant.** Free text
+fragments across `Engage`/`engage`/`Engaje` within a week — the same problem
+`scrim_opponents` solves for team names (§9). A hardcoded array would be type-safe but
+needs a deploy to add a tag, and the vocabulary is meant to grow while prepping for a
+specific opponent. `idx_draft_tags_label_lower` is case-insensitive **per kind**, so
+`'Engage'` (function) and a hypothetical `'Engage'` (win_condition) don't collide with each
+other — they mean different things in different tables' rows.
+
+**One `kind` column serves two tables' vocabularies.** `function` tags describe a champion
+(`champion_profiles.tags`); `win_condition` tags describe what a comp or synergy is trying
+to do (`draft_comps.win_conditions`, migration 017). They're the same *kind* of thing —
+free-form, team-agreed labels — read through the same UI component
+(`TagMultiSelect`), so one table serves both rather than duplicating the CRUD, the
+uniqueness index and the rename/delete flow twice.
+
+**RLS follows `champion_tier_lists`, not `match_notes`.** `authenticated_full_access` on
+both tables — anyone signed in can annotate, correct or delete anything.
+`champion_profiles.updated_by` is attribution ("last touched by Corcho"), not enforcement,
+same reasoning as `scrim_series.created_by` (§9): somebody has to be able to fix a
+teammate's tag.
+
+## 11. `champion_counters` — one directed table, three readers
+
+Migration 016. One row is `counter_champion_id` counters `target_champion_id`, with an
+optional `note`. **Directed, not symmetric** — "Renekton counters Nasus" says nothing
+about the reverse, and the interesting matchups are exactly the ones where that asymmetry
+is the point. Both directions can exist as independent rows; the `unique` constraint is on
+the ordered pair, not the unordered one.
+
+Three surfaces read the same table with no duplication: the answers list at
+`/draft/counters`, the "counters / countered by" lists on a champion's row in
+`/draft/champions`, and (a later phase) the contextual panel asking "who beats these enemy
+picks" — `target_champion_id in (...)` against `idx_champion_counters_target`.
+
+**This is opinions the team holds, not statistics.** Real matchup win rates already exist
+via `match_participants` or Lolalytics (`src/lib/lolalytics.ts`); this table is
+deliberately something else and doesn't try to reconcile with either.
+
+**One row per pair, but the UI edits a whole side at once.** A champion typically has
+several good answers, not one — "who's a good response to Jarvan" is a list, not a single
+pick. `CounterGroupEditor` (`src/components/draft/counter-group-editor.tsx`) is keyed on
+one champion held constant (`fixed`) and one `direction` (whether `fixed` is the target or
+the counter), and edits the *entire* set of rows on that side in one save. Every entry
+point — a card on `/draft/counters`, a champion's "Add" button, clicking an existing list
+entry — opens this same view rather than a single-pair form, because adding five responses
+and editing one are really the same action once "the list for this champion" is the unit
+of edit.
+
+**Why `/draft/counters` is a list of answers and not a matrix.** It was a matrix first.
+The data gets touched at three moments: writing it down during prep, looking one champion
+up during prep, and having it surfaced by the board mid-draft (that last one is the
+contextual panel). None of them is "scan the whole relation space", which is the only
+thing a grid is good for. A grid also has to put every champion on both axes, so it stays
+~97% empty however sparse the data is, and it renders a relation as a dot whose note is
+invisible until you hover that one cell — and the note is the substance. `CounterBrowser`
+(`src/components/draft/counter-browser.tsx`) shows one card per champion being answered,
+notes included, with a `ChampionCombobox` to focus one champion. The combobox is not a
+filter over the cards on purpose: it can select a champion with *no* rows yet, which is
+precisely when "how do we answer this" is most worth asking.
+
+`saveCounterGroup` (`src/app/(app)/draft/actions.ts`) diffs the submitted list against
+what already exists for `fixed`+`direction`: champions still present are updated in place,
+new ones are inserted, and any existing row for a champion no longer in the list is
+deleted. **`created_by` is only set on insert, never touched on update** — the diff is
+what makes that possible without a second round trip, and it matters for the same reason
+`scrim_series.created_by` is never touched by `updateScrimSeries`: the column means "who
+wrote the original take," not "who touched this last."
+
+## 12. `draft_comps` — comps and synergies in one table
+
+Migration 017. A saved comp is one full side of a draft (5 champions); a saved synergy is a
+combo (2–4). **One table, discriminated by `kind`,** against a spec that asked for two.
+
+They have identical columns — label, champions, win-condition tags, notes — and differ only
+in how many champions they hold and what that count means. Two tables would have been two
+identical row types, two identical query modules, two identical forms, two save actions,
+and a contextual panel that queries both and merges the results. The discriminator costs
+one `text` column and one check constraint. If a comp ever grows a column a synergy can't
+have (per-slot roles, an `opponent_id`, a side), split it then; nothing here makes that
+harder.
+
+**`label` is nullable and nothing requires one.** The champions identify the row — "Ornn +
+Yasuo", or five portraits in pick order — so a name is worth having when someone has one in
+mind ("vs UBA") and pure friction when they don't. There is no constraint on it; unnamed
+rows store `NULL`, and `cleanText` in the action turns a blank field into `NULL` so `''` is
+never stored. Two representations of "no name" is the usual way this rots.
+
+**Win conditions are comps-only, and that lives in the validator rather than the schema.** A
+comp is a plan and worth tagging with what it's trying to win on; a synergy is a combo and
+there are enough of them that tagging each is work nobody does. `DRAFT_COMP_SHAPE` in
+`src/lib/draft/types.ts` is the single place saying so, and it's deliberately not a
+constraint — it's a product call about what a form asks for, not a fact about the data, so
+if synergies ever want them nothing migrates.
+
+`compTitle()` supplies a name to the surfaces that can't show portraits: the delete
+confirmation, aria-labels, and the search filter (which matches the derived title, so
+typing "ornn" finds an unnamed Ornn+Yasuo row — filtering `label` alone would silently
+match nothing for most rows). `CompCard` deliberately does *not* use it: it shows the
+portraits already, so a heading spelling them out would be two rows saying one thing. The
+card's rule is that a real name leads and the champions carry the controls otherwise.
+
+**`champion_ids` is ordered, the order is the author's, and nothing sorts it.** Champions
+arrive off the board in draft order and the save dialog lets them be dragged into whatever
+order the comp should read in. For a five-champion comp that's team order — top through
+support — which makes **position double as role** on every surface that renders it:
+`CompOrderEditor` labels each position while you drag, and `CompCard` labels them the same
+way afterwards. A synergy is 2–4 champions with no such mapping, so it gets no labels;
+inventing them there would be inventing information.
+
+Neither `saveDraftComp` nor `CompCard` sorts the array. An automatic sort would overwrite a
+deliberate choice, and a comp read back in an order nobody picked is worse than useless.
+Same call as `scrim_games.ally_bans` (§9).
+
+The role labels are positional, not derived from `champion_profiles` — a champion can be
+annotated for several roles, so there is no reading of the data that assigns one per slot.
+The profile roles do one smaller job: in the save dialog, a position's label goes gold when
+that champion is annotated for it, which is a hint while sorting rather than a claim about
+the row.
+
+**The size constraint uses `cardinality()`, not `array_length()`.** `array_length('{}', 1)`
+is `NULL` rather than `0`, so `array_length(champion_ids, 1) = 5` evaluates to `NULL` for an
+empty array — and a CHECK that evaluates to `NULL` *passes*. An empty comp would have gone
+straight in. `cardinality()` returns `0` and closes the hole. The migration's verify block
+has an empty-array insert specifically to prove this.
+
+**The size rule is duplicated in `validateDraftComp` on purpose.** The constraint protects
+the data from anything that isn't this code; the validator produces a sentence a person can
+act on instead of a Postgres constraint dump. The no-duplicate-champion rule is *only* in
+the validator — `cardinality()` doesn't dedupe, so the database will happily store the same
+champion twice, and one side of a draft cannot field a champion twice.
+
+Both array columns are GIN-indexed because the contextual panel asks containment questions
+(`champion_ids <@ …our picks` for "synergies we've already assembled", `&&` for partial
+matches), which btree cannot answer. `loadDraftComps` exposes those as `containedBy` /
+`hasAnyOf` / `hasAllOf` — named rather than passed through as operators, because getting
+`@>` and `<@` backwards returns plausible-looking wrong rows rather than an error.
+
+`deleteDraftTag` strips the slug from `draft_comps.win_conditions` as well as
+`champion_profiles.tags`. The two vocabularies are separate by convention (`kind`) rather
+than by constraint, so the cleanup is unconditional — a slug left dangling in an array
+renders as a raw slug with no label, which reads as corruption.

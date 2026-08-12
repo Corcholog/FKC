@@ -4,30 +4,13 @@ import { useMemo, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { Search } from "lucide-react";
 import type { TierChampion, TierChampionStat } from "@/lib/tierlist";
+import { suggest } from "@/lib/champion-search";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { POOL_ID, PoolChampion } from "@/components/tierlist/dnd-items";
 import { cn } from "@/lib/utils";
 
 type PoolFilter = "all" | "played";
-
-// Same ordering as the navbar's matchup search: prefix hits first so "sh"
-// offers Shen before Ashe, and the internal codename is searchable too
-// ("kaisa", "monkeyking").
-function suggest(champions: TierChampion[], query: string): TierChampion[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return champions;
-
-  const prefix: TierChampion[] = [];
-  const rest: TierChampion[] = [];
-  for (const champion of champions) {
-    const name = champion.name.toLowerCase();
-    const id = champion.ddragonId.toLowerCase();
-    if (name.startsWith(q) || id.startsWith(q)) prefix.push(champion);
-    else if (name.includes(q) || id.includes(q)) rest.push(champion);
-  }
-  return [...prefix, ...rest];
-}
 
 export function ChampionPool({
   champions,

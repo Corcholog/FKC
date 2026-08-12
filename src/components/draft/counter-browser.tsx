@@ -175,22 +175,27 @@ export function CounterBrowser({
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {cards.map(({ champion, rows }) => (
-                <div key={champion.championId} className="panel-hex flex flex-col gap-1 p-3">
+                <div key={champion.championId} className="panel-hex flex flex-col p-3">
+                  {/* The champion being answered has to read as a different
+                      kind of thing from the answers under it, or the card is
+                      just a list of champions where the first one happens to
+                      be the enemy. Three cues, none of them subtle on their
+                      own: a larger portrait, a white name against the list's
+                      grey, and the rule below. */}
                   <button
                     type="button"
                     onClick={() => setEditorTarget({ championId: champion.championId })}
                     aria-haspopup="dialog"
                     aria-label={`Edit answers to ${champion.name}`}
-                    className="flex items-center gap-2 rounded-sm px-1 py-1 text-left hover:bg-bg-tertiary/40"
+                    className="-mx-1 flex items-center gap-2 rounded-sm px-1 py-1 text-left hover:bg-bg-tertiary/40"
                   >
-                    <ChampionAvatar champion={champion} version={version} size="sm" />
-                    <span className="truncate text-sm font-medium text-grey-light">
-                      {champion.name}
-                    </span>
-                    <span className="ml-auto shrink-0 text-xs tabular-nums text-grey-mid">
-                      {rows.length}
+                    <ChampionAvatar champion={champion} version={version} size="md" />
+                    <span className="truncate font-medium text-white">{champion.name}</span>
+                    <span className="ml-auto shrink-0 text-[10px] tracking-wide text-grey-mid uppercase">
+                      {rows.length} {rows.length === 1 ? "answer" : "answers"}
                     </span>
                   </button>
+                  <div aria-hidden className="my-2 h-px bg-border" />
                   <CounterList
                     rows={rows}
                     championById={championById}

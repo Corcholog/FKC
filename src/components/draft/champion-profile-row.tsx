@@ -81,7 +81,11 @@ export function ChampionProfileRowView({
         <td className="px-4 py-2.5">
           <div className="flex items-center gap-2">
             <ChampionAvatar champion={champion} version={version} size="sm" />
-            <span className="text-white">{champion.name}</span>
+            {/* The column is sized for the longest name, so this never
+                actually truncates — it's here so a future champion with a
+                longer one degrades to an ellipsis rather than wrapping and
+                making this row taller than its neighbours. */}
+            <span className="truncate text-white">{champion.name}</span>
           </div>
         </td>
         <td className="px-4 py-2.5">
@@ -104,10 +108,13 @@ export function ChampionProfileRowView({
             ))}
           </div>
         </td>
-        <td className="min-w-56 px-4 py-2.5">
+        {/* No min-w on either: the header cells own every width now (see the
+            comment on the table), and a min-width here would fight table-fixed
+            for control of the column. */}
+        <td className="px-4 py-2.5">
           <TagMultiSelect tags={tags} kind="function" selected={tagSlugs} onChange={changeTags} max={12} />
         </td>
-        <td className="min-w-48 px-4 py-2.5">
+        <td className="px-4 py-2.5">
           <Input
             value={notesDraft}
             onChange={(e) => setNotesDraft(e.target.value)}

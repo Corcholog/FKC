@@ -342,7 +342,9 @@ export async function saveDraftComp(
 
     const fields = {
       kind: input.kind,
-      label: cleanText(input.label, MAX_COMP_LABEL_CHARS)!,
+      // null when unnamed, never "" — one representation of "no name", and the
+      // one draft_comps_label is written against.
+      label: cleanText(input.label, MAX_COMP_LABEL_CHARS),
       champion_ids: input.championIds,
       win_conditions: input.winConditions,
       notes: cleanText(input.notes, MAX_COMP_NOTE_CHARS),

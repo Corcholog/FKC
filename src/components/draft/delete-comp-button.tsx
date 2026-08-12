@@ -22,11 +22,12 @@ import {
 export function DeleteCompButton({
   compId,
   kind,
-  label,
+  title,
 }: {
   compId: string;
   kind: DraftCompKind;
-  label: string;
+  /** compTitle() — the label, or the champions for an unnamed synergy. */
+  title: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -55,7 +56,7 @@ export function DeleteCompButton({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={`Delete ${label}`}
+            aria-label={`Delete ${title}`}
             className="text-grey-mid hover:text-loss"
           />
         }
@@ -64,10 +65,10 @@ export function DeleteCompButton({
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete &quot;{label}&quot;?</DialogTitle>
+          <DialogTitle>Delete &quot;{title}&quot;?</DialogTitle>
           <DialogDescription>
-            {DRAFT_COMP_KIND_LABELS[kind]} gone, along with its notes and win conditions. Nothing
-            else references it, so nothing else changes.
+            {DRAFT_COMP_KIND_LABELS[kind]} gone, along with its notes. Nothing else references it,
+            so nothing else changes.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

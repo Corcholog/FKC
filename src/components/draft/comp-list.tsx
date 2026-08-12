@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 import type { ChampionInfo } from "@/lib/ddragon";
-import type { DraftCompKind, DraftCompRow, DraftTagRow } from "@/lib/draft/types";
+import {
+  compTitle,
+  DRAFT_COMP_SHAPE,
+  type DraftCompKind,
+  type DraftCompRow,
+  type DraftTagRow,
+} from "@/lib/draft/types";
 import { ChampionCombobox } from "@/components/champion-combobox";
 import { CompCard } from "@/components/draft/comp-card";
 import { CompFormDialog } from "@/components/draft/comp-form-dialog";
@@ -31,7 +37,7 @@ const COPY: Record<DraftCompKind, { title: string; noun: string; empty: string }
     title: "Synergies",
     noun: "synergy",
     empty:
-      "Nothing saved yet. Pick a few champions off a board and save them together, or add one by hand.",
+      "Nothing saved yet. Pick a few champions off a board and save them together, or add one by hand. Two champions and no name is a perfectly good synergy.",
   },
 };
 
@@ -74,14 +80,20 @@ export function CompList({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return comps.filter((comp) => {
-      if (q && !comp.label.toLowerCase().includes(q)) return false;
+      // Matches the *displayed* title, which for an unnamed synergy is its
+      // champions. Searching comp.label alone would silently return nothing for
+      // most synergies, since most of them won't have one.
+      if (q && !compTitle(comp, (id) => championById.get(id)?.name).toLowerCase().includes(q)) {
+        return false;
+      }
       if (winCon !== ALL_WINCONS && !comp.win_conditions.includes(winCon)) return false;
       if (championFilter && !comp.champion_ids.includes(championFilter.championId)) return false;
       return true;
     });
-  }, [comps, query, winCon, championFilter]);
+  }, [comps, query, winCon, championFilter, championById]);
 
   const copy = COPY[kind];
+  const shape = DRAFT_COMP_SHAPE[kind];
   const filtering = query.trim() !== "" || winCon !== ALL_WINCONS || championFilter !== null;
 
   function clearChampion() {
@@ -99,11 +111,16 @@ export function CompList({
           </span>
         </h2>
         <div className="flex items-center gap-2">
-          <TagManagerDialog
-            tags={winConditionTags}
-            kind="win_condition"
-            label="Manage win conditions"
-          />
+          {/* The win-condition vocabulary is only reachable from the kind that
+              uses it — a manage button for tags this page can't set would be
+              dead UI. */}
+          {shape.winConditions && (
+            <TagManagerDialog
+              tags={winConditionTags}
+              kind="win_condition"
+              label="Manage win conditions"
+            />
+          )}
           <Button type="button" size="sm" onClick={() => setEditing({ comp: null })}>
             <Plus /> New {copy.noun}
           </Button>
@@ -116,28 +133,32 @@ export function CompList({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name"
+            placeholder={shape.requiresLabel ? "Search by name" : "Search"}
             className="w-56 pl-8"
           />
         </div>
 
-        <Select value={winCon} onValueChange={(v) => setWinCon(v as string)}>
-          <SelectTrigger className="w-44">
-            <SelectValue>
-              {(value: string) =>
-                value === ALL_WINCONS ? "Any win condition" : (tagLabels.get(value) ?? "Any win condition")
-              }
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_WINCONS}>Any win condition</SelectItem>
-            {winConditionTags.map((tag) => (
-              <SelectItem key={tag.slug} value={tag.slug}>
-                {tag.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {shape.winConditions && (
+          <Select value={winCon} onValueChange={(v) => setWinCon(v as string)}>
+            <SelectTrigger className="w-44">
+              <SelectValue>
+                {(value: string) =>
+                  value === ALL_WINCONS
+                    ? "Any win condition"
+                    : (tagLabels.get(value) ?? "Any win condition")
+                }
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_WINCONS}>Any win condition</SelectItem>
+              {winConditionTags.map((tag) => (
+                <SelectItem key={tag.slug} value={tag.slug}>
+                  {tag.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         <ChampionCombobox
           key={filterKey}

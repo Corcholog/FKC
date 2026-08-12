@@ -10,6 +10,7 @@ import {
   compSizeRange,
   COMP_SIZE,
   DRAFT_COMP_KINDS,
+  DRAFT_COMP_SHAPE,
   DRAFT_ROLES,
   DRAFT_TAG_KINDS,
   MAX_COMP_LABEL_CHARS,
@@ -113,7 +114,8 @@ export function validateCounterGroup(
 
 export type DraftCompInput = {
   kind: DraftCompKind;
-  label: string;
+  /** Null or blank is fine for a synergy — see DRAFT_COMP_SHAPE. */
+  label: string | null;
   /** Ordered — the pick order for a comp. Never sorted, here or anywhere. */
   championIds: number[];
   winConditions: string[];
@@ -136,11 +138,20 @@ export function validateDraftComp(
   validWinConditionSlugs: Set<string>,
 ): string | null {
   if (!(DRAFT_COMP_KINDS as readonly string[]).includes(input.kind)) return "Unknown kind.";
+  const shape = DRAFT_COMP_SHAPE[input.kind];
 
   const label = cleanText(input.label, MAX_COMP_LABEL_CHARS);
-  if (!label) return "It needs a name.";
-  if (input.label.trim().length > MAX_COMP_LABEL_CHARS) {
+  if (shape.requiresLabel && !label) return "A comp needs a name — which draft was this?";
+  if ((input.label?.trim().length ?? 0) > MAX_COMP_LABEL_CHARS) {
     return `The name can't be longer than ${MAX_COMP_LABEL_CHARS} characters.`;
+  }
+
+  if (!shape.winConditions && input.winConditions.length > 0) {
+    // Unreachable from the form, which doesn't render the field for this kind.
+    // Rejecting rather than silently dropping: a direct POST that sets them is
+    // asking for something this kind doesn't do, and saying so beats storing
+    // tags no surface will ever show.
+    return "Synergies don't carry win conditions.";
   }
 
   const [min, max] = compSizeRange(input.kind);

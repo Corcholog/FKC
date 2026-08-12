@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import type { ChampionInfo } from "@/lib/ddragon";
 import {
   compSizeRange,
+  DRAFT_COMP_SHAPE,
   MAX_COMP_LABEL_CHARS,
   type DraftCompKind,
   type DraftCompRow,
@@ -45,8 +46,8 @@ const COPY: Record<DraftCompKind, { noun: string; placeholder: string; hint: str
   },
   synergy: {
     noun: "synergy",
-    placeholder: "Wombo Orianna",
-    hint: "Two to four champions that work together.",
+    placeholder: "Name (optional)",
+    hint: "Two to four champions that work together. The champions are enough — a name is optional.",
   },
 };
 
@@ -79,6 +80,7 @@ export function CompFormDialog({
 
   const [min, max] = compSizeRange(kind);
   const copy = COPY[kind];
+  const shape = DRAFT_COMP_SHAPE[kind];
   const taken = pickedIds(state);
   const championById = new Map(champions.map((c) => [c.championId, c]));
 
@@ -186,13 +188,18 @@ export function CompFormDialog({
             )}
           </div>
 
-          <TagMultiSelect
-            tags={winConditionTags}
-            kind="win_condition"
-            selected={state.winConditions}
-            onChange={(slugs) => setState((prev) => ({ ...prev, winConditions: slugs }))}
-            placeholder="Add a win condition"
-          />
+          {/* Comps only. A synergy is a combo rather than a plan, and there are
+              enough of them that tagging every one is work nobody was going to
+              do — see DRAFT_COMP_SHAPE. */}
+          {shape.winConditions && (
+            <TagMultiSelect
+              tags={winConditionTags}
+              kind="win_condition"
+              selected={state.winConditions}
+              onChange={(slugs) => setState((prev) => ({ ...prev, winConditions: slugs }))}
+              placeholder="Add a win condition"
+            />
+          )}
 
           <Textarea
             value={state.notes}

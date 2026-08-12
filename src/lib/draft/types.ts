@@ -92,7 +92,8 @@ export const MAX_COMP_NOTE_CHARS = 2000;
 export type DraftCompRow = {
   id: string;
   kind: DraftCompKind;
-  label: string;
+  /** Null when unnamed — only a comp is required to have one. */
+  label: string | null;
   /** Ordered. For a comp this is the pick order — nothing sorts it. */
   champion_ids: number[];
   win_conditions: string[];
@@ -107,7 +108,44 @@ export const DRAFT_COMP_KIND_LABELS: Record<DraftCompKind, string> = {
   synergy: "Synergy",
 };
 
+/**
+ * What each kind actually carries, beyond its size.
+ *
+ * A comp is a plan: it's one full side of a draft, it needs a name saying which
+ * draft ("vs UBA"), and it's worth tagging with what it's trying to win on. A
+ * synergy is a combo — two to four champions that work together — and there are
+ * a lot of them. Demanding a name and a win condition for each would be
+ * friction on the one kind meant to be cheap to write down, so neither is
+ * asked for. The champions are the identity.
+ *
+ * `requiresLabel` is mirrored by draft_comps_label in the database.
+ * `winConditions` deliberately is not: it's a product call about what the form
+ * asks for, not a fact about the data, so it lives in validateDraftComp alone
+ * and nothing has to migrate if it changes.
+ */
+export const DRAFT_COMP_SHAPE: Record<
+  DraftCompKind,
+  { requiresLabel: boolean; winConditions: boolean }
+> = {
+  comp: { requiresLabel: true, winConditions: true },
+  synergy: { requiresLabel: false, winConditions: false },
+};
+
 /** How many champions this kind takes, as `[min, max]`. */
 export function compSizeRange(kind: DraftCompKind): [number, number] {
   return kind === "comp" ? [COMP_SIZE, COMP_SIZE] : [SYNERGY_MIN_SIZE, SYNERGY_MAX_SIZE];
+}
+
+/**
+ * What to call this row on screen. Falls back to the champions themselves for
+ * an unnamed synergy — "Ornn + Yasuo" is what the thing is, and every surface
+ * that shows a title (card heading, delete confirmation, aria-label) needs
+ * *something* rather than each inventing its own placeholder.
+ */
+export function compTitle(
+  comp: Pick<DraftCompRow, "label" | "champion_ids">,
+  nameOf: (championId: number) => string | undefined,
+): string {
+  if (comp.label) return comp.label;
+  return comp.champion_ids.map((id) => nameOf(id) ?? `#${id}`).join(" + ");
 }

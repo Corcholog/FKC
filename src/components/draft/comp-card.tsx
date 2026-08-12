@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Pencil } from "lucide-react";
 import type { ChampionInfo } from "@/lib/ddragon";
-import type { DraftCompRow } from "@/lib/draft/types";
+import { compTitle, type DraftCompRow } from "@/lib/draft/types";
 import { ChampionAvatar } from "@/components/champion-avatar";
 import { DeleteCompButton } from "@/components/draft/delete-comp-button";
 import { Badge } from "@/components/ui/badge";
@@ -34,24 +34,33 @@ export function CompCard({
   onEdit: () => void;
 }) {
   const [notesOpen, setNotesOpen] = useState(false);
+  const title = compTitle(comp, (id) => championById.get(id)?.name);
 
   return (
     <div className="panel-hex flex flex-col gap-2 p-3">
       <div className="flex items-start gap-2">
-        <h3 className="font-heading flex-1 truncate text-sm font-semibold text-white">
-          {comp.label}
+        {/* An unnamed synergy is titled by its champions instead. Dimmer type
+            says the title was derived rather than typed, so an actual name
+            still reads as the more deliberate thing. */}
+        <h3
+          className={cn(
+            "font-heading flex-1 truncate text-sm font-semibold",
+            comp.label ? "text-white" : "text-grey-mid",
+          )}
+        >
+          {title}
         </h3>
         <Button
           type="button"
           variant="ghost"
           size="icon-xs"
           onClick={onEdit}
-          aria-label={`Edit ${comp.label}`}
+          aria-label={`Edit ${title}`}
           className="text-grey-mid hover:text-grey-light"
         >
           <Pencil className="size-3" />
         </Button>
-        <DeleteCompButton compId={comp.id} kind={comp.kind} label={comp.label} />
+        <DeleteCompButton compId={comp.id} kind={comp.kind} title={title} />
       </div>
 
       <div className="flex flex-wrap gap-1">

@@ -460,6 +460,23 @@ one `text` column and one check constraint. If a comp ever grows a column a syne
 have (per-slot roles, an `opponent_id`, a side), split it then; nothing here makes that
 harder.
 
+**The two kinds ask for different amounts of work, and that asymmetry is deliberate.** A
+comp is a plan — one full side of a draft — so it must be named (`draft_comps_label`:
+`kind <> 'comp' or label is not null and btrim(label) <> ''`), and it carries win-condition
+tags. A synergy is a combo, there are a lot of them, and the champions already say what it
+is; requiring a name and a win condition for each would be friction on exactly the kind
+meant to be cheap to write down. So `label` is nullable and the synergy form doesn't render
+win conditions at all. `DRAFT_COMP_SHAPE` in `src/lib/draft/types.ts` is the single place
+that says which kind carries what.
+
+Note the split: `requiresLabel` is mirrored by a constraint because it's a fact about the
+data, while `winConditions` lives only in `validateDraftComp` because it's a product call
+about what a form asks for — if synergies ever want them, nothing migrates. Unnamed rows
+store `NULL`, never `''`; two representations of "no name" is the usual way this goes
+wrong, and the constraint rejects blanks rather than tolerating both. `compTitle()` gives
+every surface that needs a heading — card, delete confirmation, search — the label or, for
+an unnamed synergy, its champions joined ("Ornn + Yasuo").
+
 **`champion_ids` is ordered and nothing sorts it.** For a synergy the order is arbitrary
 and harmless. For a comp it is the pick order off one side of a board — B1 through B5 —
 which is real information about how the draft was meant to go. Sorting at save time for

@@ -11,6 +11,7 @@
 
 import {
   compSizeRange,
+  DRAFT_COMP_SHAPE,
   type DraftCompKind,
   type DraftCompRow,
 } from "@/lib/draft/types";
@@ -49,7 +50,7 @@ export function seedCompForm(kind: DraftCompKind, comp?: DraftCompRow | null): C
     };
   }
   return {
-    label: comp.label,
+    label: comp.label ?? "",
     slots: comp.champion_ids.map((id) => ({ ...emptySlot(), championId: id })),
     winConditions: [...comp.win_conditions],
     notes: comp.notes ?? "",
@@ -75,8 +76,11 @@ export type BuildResult =
  * loss the size constraint exists to prevent.
  */
 export function buildCompPayload(state: CompFormState, kind: DraftCompKind): BuildResult {
+  const shape = DRAFT_COMP_SHAPE[kind];
   const label = state.label.trim();
-  if (!label) return { ok: false, error: "Give it a name first." };
+  if (shape.requiresLabel && !label) {
+    return { ok: false, error: "Give it a name first — which draft was this?" };
+  }
 
   const [min, max] = compSizeRange(kind);
   if (state.slots.length < min || state.slots.length > max) {
@@ -95,9 +99,11 @@ export function buildCompPayload(state: CompFormState, kind: DraftCompKind): Bui
     ok: true,
     payload: {
       kind,
-      label,
+      label: label || null,
       championIds,
-      winConditions: state.winConditions,
+      // The form doesn't render the field for a kind that doesn't use them, but
+      // state can survive a kind that did — drop rather than send.
+      winConditions: shape.winConditions ? state.winConditions : [],
       notes: state.notes.trim() || null,
     },
   };

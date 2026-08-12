@@ -276,6 +276,14 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+    /* The draft reference panel reaches the window's right edge from inside a
+       centred, max-width shell, which it does with `right: calc(50% - 50vw)`.
+       `50vw` counts the classic scrollbar and half the page's own width does
+       not, so on a scrolling page that lands a few pixels past the glass —
+       enough for a horizontal scrollbar over the whole app. `clip` rather than
+       `hidden`: hidden makes body a scroll container and breaks every
+       `position: sticky` in the app. */
+    overflow-x: clip;
   }
   html {
     @apply font-sans;

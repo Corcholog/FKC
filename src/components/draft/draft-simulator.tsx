@@ -532,7 +532,12 @@ export function DraftSimulator({
   return (
     // items-start, not the default stretch: the panel sizes itself to the
     // board, and a flex child stretched to the row's height would fight that.
-    <div className="flex items-start gap-3">
+    //
+    // relative because the docked reference panel positions itself against this
+    // row to escape the page's max-width and reach the window edge. It anchors
+    // on top-0 here, which is how it stays level with the board without anyone
+    // hard-coding the height of everything above it.
+    <div className="relative flex items-start gap-3">
       <div id={BOARD_ELEMENT_ID} className="flex min-w-0 flex-1 flex-col gap-3">
         {/* Centred, not spread. justify-between pinned the two sides to
               opposite edges of a max-w-7xl panel with a canyon of nothing in

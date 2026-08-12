@@ -247,20 +247,43 @@ export function ContextPanel({
 
   if (docked) {
     return (
-      // data-export-hide is belt-and-braces: this sits outside the exported
-      // element already, and it should keep working if the board's layout moves.
-      //
-      // The height is the *board's* height, restated — not a share of the
-      // viewport. A panel that outgrows the board makes the page scroll, and
-      // "don't make me scroll to see the board" is the constraint the champion
-      // grid's own clamp() exists to satisfy; a reference column that undoes it
-      // whenever a list runs long would be the same bug wearing a hat. So this
-      // is that clamp plus the 8rem the ban panel and the row gaps take:
-      // grid clamp(21.5rem, 100vh-29.5rem, 36rem) + 8rem. Change one, change
-      // the other — see draft-champion-grid.tsx for where the numbers come from.
-      // Fixed rather than capped, so the collapsed rail is a full-height hover
-      // target instead of a 40px stub; overflow lands on the scroller inside.
-      <aside
+      <>
+        {/* The panel is glued to the window's right edge, which is outside the
+            max-w-[96rem] shell everything else on this page lives in. So it's
+            positioned out of flow, and this — the only thing left in the flex
+            row — is what actually pushes the board left.
+
+            It's the *overlap*, not the panel's width: `50vw - 50%` is the gutter
+            between the shell and the window edge, and the panel only costs the
+            board whatever it can't fit in that gutter. On a 1920px screen a
+            collapsed rail fits entirely in the gutter and the board keeps its
+            full width; open, the panel needs 30rem and takes the 264px it can't
+            find. Below the shell's max width the gutter is just the page's own
+            padding and it behaves like an ordinary column. `max(0px, …)` because
+            a negative width isn't a thing. */}
+        <div
+          aria-hidden
+          className={cn(
+            "shrink-0 transition-[width] duration-200 ease-out motion-reduce:transition-none",
+            expanded
+              ? "w-[max(0px,calc(30rem-50vw+50%))]"
+              : "w-[max(0px,calc(3.5rem-50vw+50%))]",
+          )}
+        />
+        {/* data-export-hide is belt-and-braces: this sits outside the exported
+            element already, and it should keep working if the layout moves.
+
+            The height is the board's height restated, not a share of the
+            viewport. A panel that outgrows the board makes the page scroll, and
+            not having to scroll to see the board is the whole point of the
+            champion grid's own clamp; a reference column that undid it whenever
+            a list ran long would be the same bug wearing a hat. So it's that
+            clamp plus the 8rem the ban panel and row gaps take: grid
+            clamp(21.5rem, 100vh-29.5rem, 36rem) + 8rem. Change one, change the
+            other — draft-champion-grid.tsx is where the numbers come from.
+            Fixed rather than capped, so the collapsed rail is a full-height
+            hover target instead of a stub; overflow lands on the scroller. */}
+        <aside
         data-export-hide
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -271,13 +294,17 @@ export function ContextPanel({
           if (!e.currentTarget.contains(e.relatedTarget)) setHovered(false);
         }}
         className={cn(
-          "panel-hex relative flex h-[clamp(29.5rem,calc(100vh-21.5rem),44rem)] shrink-0 flex-col overflow-hidden p-0",
+          "panel-hex flex h-[clamp(29.5rem,calc(100vh-21.5rem),44rem)] flex-col overflow-hidden p-0",
+          // Out of flow and pinned to the window's right edge. `right` is
+          // measured from the flex row's padding box — the shell — so the
+          // negative gutter walks it out to the glass. top-0 is what keeps it
+          // level with the board without anyone hard-coding the height of the
+          // navbar, the heading and the tab strip above it.
+          "absolute top-0 right-[calc(50%-50vw)]",
           "transition-[width] duration-200 ease-out motion-reduce:transition-none",
           // 3.5rem collapsed rather than the 2.25rem it started at: the rail is
           // the only thing advertising that a whole panel is over here, and at
-          // 36px it read as a scrollbar someone forgot to remove. It grows
-          // leftward — the right edge stays put against the board's own — so
-          // widening it costs the board 20px and moves nothing else.
+          // 36px it read as a scrollbar someone forgot to remove.
           expanded ? "w-[30rem]" : "w-14",
         )}
       >
@@ -325,7 +352,8 @@ export function ContextPanel({
             </span>
           </button>
         )}
-      </aside>
+        </aside>
+      </>
     );
   }
 

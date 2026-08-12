@@ -210,13 +210,24 @@ export function DraftSimulator({
   return (
     <div className="flex flex-col gap-3">
       {/* Everything inside this id is what the PNG captures. Chrome within it
-          carries data-exportHide; the controls row below sits outside entirely. */}
+          carries data-export-hide; the controls row below sits outside entirely.
+
+          The attribute has to be spelled kebab-case: the DOM lowercases
+          attribute names, so data-exportHide arrives as data-exporthide and
+          reads back as dataset.exporthide — which download-png-button's filter,
+          checking dataset.exportHide, never sees. It would have exported every
+          bit of chrome silently, and React's "spell it lowercase" warning is
+          the only thing that says so. */}
       <div id={BOARD_ELEMENT_ID} className="flex flex-col gap-3">
-        <div className="panel-hex flex flex-wrap items-start justify-between gap-3 p-3">
+        {/* Centred, not spread. justify-between pinned the two sides to
+            opposite edges of a max-w-7xl panel with a canyon of nothing in
+            between — §11's scrim board learned the same lesson and capped
+            itself for the same reason: a face-off reads as a face-off when the
+            two sides are near each other. Nothing is being reserved here for
+            the fearless switcher; that lands as its own control. */}
+        <div className="panel-hex flex flex-wrap items-center justify-center gap-x-6 gap-y-3 p-3">
           {banRow("blue")}
-          <span className="self-center text-[10px] tracking-wider text-grey-mid uppercase">
-            Bans
-          </span>
+          <span className="text-[10px] tracking-wider text-grey-mid uppercase">Bans</span>
           {banRow("red")}
         </div>
 
@@ -236,7 +247,7 @@ export function DraftSimulator({
         </div>
       </div>
 
-      <div data-exportHide>
+      <div data-export-hide>
         <DraftControls
           boardElementId={BOARD_ELEMENT_ID}
           fileName={`draft-${todayStamp()}.png`}

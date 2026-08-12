@@ -17,7 +17,7 @@ type Champion = ChampionInfo & { championId: number };
  *
  * Right-click isn't an accessible affordance, and clearing is the only
  * destructive action on the board, so every filled slot also carries a small ×
- * that appears on hover or keyboard focus. It's `data-exportHide` — chrome, not
+ * that appears on hover or keyboard focus. It's `data-export-hide` — chrome, not
  * board.
  */
 export function DraftSlot({
@@ -99,7 +99,7 @@ export function DraftSlot({
           type="button"
           onClick={onClear}
           aria-label={`Clear ${label}`}
-          data-exportHide
+          data-export-hide
           className="absolute -top-1 -right-1 rounded-full border border-border bg-bg-secondary p-0.5 text-grey-mid opacity-0 transition-opacity group-hover:opacity-100 hover:text-loss focus-visible:opacity-100"
         >
           <X className="size-3" />

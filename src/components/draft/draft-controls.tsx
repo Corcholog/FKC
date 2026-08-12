@@ -17,7 +17,7 @@ import {
 
 /**
  * Clear and export. Both are chrome — the caller marks this row
- * `data-exportHide` so neither ends up in the image.
+ * `data-export-hide` so neither ends up in the image.
  *
  * Clearing goes behind a confirmation because it's one click away from twenty
  * slots of work and there is no undo. Same idiom as

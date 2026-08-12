@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
 import { loadChampionCounters, loadChampionProfiles } from "@/lib/draft/queries";
-import { CounterMatrix } from "@/components/draft/counter-matrix";
+import { CounterBrowser } from "@/components/draft/counter-browser";
 
 export default async function DraftCountersPage() {
   const supabase = await createClient();
@@ -14,7 +14,7 @@ export default async function DraftCountersPage() {
   ]);
 
   return (
-    <CounterMatrix
+    <CounterBrowser
       champions={realChampions(championMap)}
       version={version}
       counters={counters}

@@ -5,72 +5,35 @@ import { Plus } from "lucide-react";
 import type { ChampionInfo } from "@/lib/ddragon";
 import { indexCounters } from "@/lib/draft/queries";
 import type { ChampionCounterRow } from "@/lib/draft/types";
-import { ChampionAvatar } from "@/components/champion-avatar";
 import { CounterGroupEditor } from "@/components/draft/counter-group-editor";
+import { CounterList } from "@/components/draft/counter-list";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type Champion = ChampionInfo & { championId: number };
 type Direction = "counters" | "counteredBy";
 
-function CounterList({
-  rows,
-  championById,
-  version,
-  otherSideOf,
-  onOpen,
-  emptyLabel,
-}: {
-  rows: ChampionCounterRow[];
-  championById: Map<number, Champion>;
-  version: string;
-  otherSideOf: (row: ChampionCounterRow) => number;
-  onOpen: () => void;
-  emptyLabel: string;
-}) {
-  if (rows.length === 0) return <p className="text-xs text-grey-mid">{emptyLabel}</p>;
-  return (
-    <ul className="flex flex-col gap-0.5">
-      {rows.map((row) => {
-        const other = championById.get(otherSideOf(row));
-        if (!other) return null;
-        return (
-          <li key={row.id}>
-            {/* Opens the same list-for-this-champion editor as "Add" — a single
-                entry is a group of one, and editing/removing it is editing the
-                list. */}
-            <button
-              type="button"
-              onClick={onOpen}
-              className="flex w-full items-center gap-2 rounded-sm px-1 py-1 text-left hover:bg-bg-tertiary/40"
-            >
-              <ChampionAvatar champion={other} version={version} size="sm" />
-              <span className="truncate text-sm text-grey-light">{other.name}</span>
-              {row.note && <span className="truncate text-xs text-grey-mid">— {row.note}</span>}
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 /**
- * The "counters / countered by" pair of lists for one champion, expanded
- * inline under its row in the champions table. Reads champion_counters
+ * The "counters / countered by" pair of lists for one champion. Mounted in two
+ * places: inline under a row in the champions table, and as the focused view on
+ * the counters page once a champion is searched for. Reads champion_counters
  * directly rather than through a shared table-level index — the dataset is
- * small and this only runs for whichever row is actually expanded.
+ * small and this only runs for the one champion being looked at.
  */
 export function ChampionCounters({
   champion,
   champions,
   version,
   allCounters,
+  className,
 }: {
   champion: Champion;
   /** Full roster, for the editor's comboboxes. */
   champions: Champion[];
   version: string;
   allCounters: ChampionCounterRow[];
+  /** Replaces the expanded-table-row framing — see the default below. */
+  className?: string;
 }) {
   const [editorDirection, setEditorDirection] = useState<Direction | null>(null);
 
@@ -81,7 +44,12 @@ export function ChampionCounters({
   const counteredBy = index.counteredBy.get(champion.championId) ?? [];
 
   return (
-    <div className="grid gap-4 border-t border-border bg-bg-primary/40 p-3 sm:grid-cols-2">
+    <div
+      className={cn(
+        "grid gap-4 border-t border-border bg-bg-primary/40 p-3 sm:grid-cols-2",
+        className,
+      )}
+    >
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <h3 className="text-[10px] font-medium tracking-wide text-grey-mid uppercase">

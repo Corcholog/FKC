@@ -36,7 +36,7 @@ src/app/
     │   ├── champions/        /draft/champions         Lane roles + function tags (Phase 1)
     │   ├── comps/            /draft/comps             Saved five-champion sides (Phase 3)
     │   ├── synergies/        /draft/synergies         Saved 2-4 champion combos (Phase 3)
-    │   └── counters/         /draft/counters          The counter matrix (Phase 2)
+    │   └── counters/         /draft/counters          Who answers whom (Phase 2)
     ├── settings/             Roster CRUD, Riot key, AI context, logins
     └── account/page.tsx      Password change
 ```

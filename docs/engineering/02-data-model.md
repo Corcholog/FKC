@@ -408,10 +408,10 @@ about the reverse, and the interesting matchups are exactly the ones where that 
 is the point. Both directions can exist as independent rows; the `unique` constraint is on
 the ordered pair, not the unordered one.
 
-Three surfaces read the same table with no duplication: the matrix at `/draft/counters`,
-the "counters / countered by" lists on a champion's row in `/draft/champions`, and (a
-later phase) the contextual panel asking "who beats these enemy picks" —
-`target_champion_id in (...)` against `idx_champion_counters_target`.
+Three surfaces read the same table with no duplication: the answers list at
+`/draft/counters`, the "counters / countered by" lists on a champion's row in
+`/draft/champions`, and (a later phase) the contextual panel asking "who beats these enemy
+picks" — `target_champion_id in (...)` against `idx_champion_counters_target`.
 
 **This is opinions the team holds, not statistics.** Real matchup win rates already exist
 via `match_participants` or Lolalytics (`src/lib/lolalytics.ts`); this table is
@@ -422,9 +422,22 @@ several good answers, not one — "who's a good response to Jarvan" is a list, n
 pick. `CounterGroupEditor` (`src/components/draft/counter-group-editor.tsx`) is keyed on
 one champion held constant (`fixed`) and one `direction` (whether `fixed` is the target or
 the counter), and edits the *entire* set of rows on that side in one save. Every entry
-point — a matrix cell, a champion's "Add" button, clicking an existing list entry — opens
-this same view rather than a single-pair form, because adding five responses and editing
-one are really the same action once "the list for this champion" is the unit of edit.
+point — a card on `/draft/counters`, a champion's "Add" button, clicking an existing list
+entry — opens this same view rather than a single-pair form, because adding five responses
+and editing one are really the same action once "the list for this champion" is the unit
+of edit.
+
+**Why `/draft/counters` is a list of answers and not a matrix.** It was a matrix first.
+The data gets touched at three moments: writing it down during prep, looking one champion
+up during prep, and having it surfaced by the board mid-draft (that last one is the
+contextual panel). None of them is "scan the whole relation space", which is the only
+thing a grid is good for. A grid also has to put every champion on both axes, so it stays
+~97% empty however sparse the data is, and it renders a relation as a dot whose note is
+invisible until you hover that one cell — and the note is the substance. `CounterBrowser`
+(`src/components/draft/counter-browser.tsx`) shows one card per champion being answered,
+notes included, with a `ChampionCombobox` to focus one champion. The combobox is not a
+filter over the cards on purpose: it can select a champion with *no* rows yet, which is
+precisely when "how do we answer this" is most worth asking.
 
 `saveCounterGroup` (`src/app/(app)/draft/actions.ts`) diffs the submitted list against
 what already exists for `fixed`+`direction`: champions still present are updated in place,

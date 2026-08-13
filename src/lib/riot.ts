@@ -27,11 +27,61 @@ const DEFAULT_RETRY_AFTER_MS = 10_000;
 
 export class RiotApiError extends Error {
   status: number;
+  /**
+   * Riot's own error text, e.g. "Bad Request - Unknown apikey". Null when the
+   * body wasn't the usual JSON envelope.
+   *
+   * Carried separately from `message` because it's the only thing that tells
+   * two very different 400s apart — see isRiotKeyRejection below.
+   */
+  riotMessage: string | null;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, riotMessage: string | null = null) {
     super(message);
     this.status = status;
+    this.riotMessage = riotMessage;
   }
+}
+
+// Riot returns {"status":{"message":"...","status_code":N}} on error. Guarded
+// because a gateway-level failure can return HTML, and a parse error here would
+// mask the real status code.
+async function readRiotMessage(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as { status?: { message?: string } };
+    return body?.status?.message ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether an error means "the key is the problem" — the one Riot failure with a
+ * routine fix (regenerate at developer.riotgames.com, paste into Settings).
+ *
+ * 401 and 403 are unambiguous. **400 is not**, and the distinction matters more
+ * than it looks, because Riot answers every *key* problem with 401 — measured
+ * against account-v1 on 2026-08-13:
+ *
+ *   malformed key      -> 401 "Forbidden"
+ *   empty header       -> 401 "Cannot process request apikey or authorization
+ *                              header is empty"
+ *   unknown RGAPI key  -> 401 "Unknown apikey"
+ *
+ * Auth is therefore evaluated before the request is parsed, which means **a 400
+ * is proof the key authenticated.** It is a malformed request — most often
+ * "Exception decrypting <puuid>" from match-v5 against a stored puuid.
+ *
+ * The apikey check below is kept only as a narrow safety net for the 400
+ * "unknown apikey" reports in developer-relations#1054. It requires an explicit
+ * mention of the key, so it cannot swallow a decrypt failure and send someone
+ * off to refresh a key that was never the problem.
+ */
+export function isRiotKeyRejection(e: unknown): boolean {
+  if (!(e instanceof RiotApiError)) return false;
+  if (e.status === 401 || e.status === 403) return true;
+  if (e.status !== 400) return false;
+  return /api\s?key/i.test(e.riotMessage ?? "");
 }
 
 // Every Riot call goes through here, so this is the one place pacing and 429
@@ -66,7 +116,15 @@ async function riotFetch(url: string, apiKey: string) {
       );
     }
 
-    throw new RiotApiError(res.status, `Riot API request failed (${res.status}) for ${url}`);
+    // Riot's own text goes into the message as well as the field: this string
+    // is what lands in sync_state.last_error and in the Discord alert, and
+    // "(400)" alone sends whoever reads it looking in the wrong place.
+    const riotMessage = await readRiotMessage(res);
+    throw new RiotApiError(
+      res.status,
+      `Riot API request failed (${res.status}${riotMessage ? `: ${riotMessage}` : ""}) for ${url}`,
+      riotMessage,
+    );
   }
 }
 
@@ -223,11 +281,16 @@ export async function getRankedSoloEntry(puuid: string, platform: string, apiKey
 // Shared mapping from a caught RiotApiError to a message safe to show in the admin UI.
 export function describeRiotError(e: unknown, gameName: string, tagLine: string): string {
   if (e instanceof RiotApiError) {
-    if (e.status === 401 || e.status === 403) {
-      return "Riot API key is invalid or expired — update sync_state.riot_api_key in Supabase.";
+    if (isRiotKeyRejection(e)) {
+      return "Riot API key is invalid or expired — update sync_state.riot_api_key in Supabase. A key generated in the last few minutes can also be rejected until Riot propagates it.";
     }
     if (e.status === 404) {
       return `No Riot account found for ${gameName}#${tagLine}.`;
+    }
+    // A 400 that isn't about the key is a malformed request, and retrying it
+    // unchanged will fail identically — so don't suggest trying again.
+    if (e.status === 400) {
+      return `Riot rejected the request${e.riotMessage ? `: ${e.riotMessage}` : " (400)"}.`;
     }
     return `Riot API error (${e.status}). Try again in a moment.`;
   }

@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { toParticipantRow } from "@/lib/participant-row";
 import { formatRank, ladderPoints } from "@/lib/rank";
 import {
-  RiotApiError,
+  isRiotKeyRejection,
   getRankedSoloMatchIds,
   getMatchById,
   getRankedSoloEntry,
@@ -738,8 +738,12 @@ async function recordRankHistory(
 }
 
 function toSyncError(e: unknown) {
-  if (e instanceof RiotApiError && (e.status === 401 || e.status === 403)) {
-    return new RiotKeyInvalidError(e.message);
+  // Delegates to isRiotKeyRejection rather than testing statuses here, because
+  // the 400 case needs Riot's response body to decide and this is not the only
+  // caller that has to get that judgement right — /settings uses the same rule
+  // via describeRiotError.
+  if (isRiotKeyRejection(e)) {
+    return new RiotKeyInvalidError(e instanceof Error ? e.message : "Riot rejected the API key");
   }
   return e instanceof Error ? e : new Error("Unknown Riot API error");
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { PanelRight, Pin, PinOff, Swords, Users, X } from "lucide-react";
+import { PanelRight, Pin, PinOff, Users, X } from "lucide-react";
 import { isBoardEmpty, SIDES, type GameBoard, type Side } from "@/lib/draft/board";
 import {
   boardContext,
@@ -43,6 +43,21 @@ function RailGroup({ label, children }: { label: string; children: React.ReactNo
     </div>
   );
 }
+
+/**
+ * How many champion portraits a rail group shows before falling back to "+n".
+ *
+ * Shared by Synergies and Counters so the two groups keep the same shape — the
+ * rail is 6rem wide and read at a glance, and two groups showing a different
+ * number of portraits reads as one of them being the more important group.
+ *
+ * Two is a legibility limit rather than a space one: at `sm` (24px) the rail has
+ * room for more, but a stack of faces stops being something you take in at a
+ * glance and becomes a list you have to read — at which point you may as well
+ * open the panel, which is the trip this rail exists to save. Raising it is one
+ * number, and both groups follow.
+ */
+const RAIL_PORTRAITS = 2;
 
 const SIDE_LABEL: Record<Side, string> = { blue: "Blue", red: "Red" };
 
@@ -184,13 +199,20 @@ export function ContextPanel({
   const hints = useMemo(() => {
     if (empty) return null;
     const near = nearSynergies(data.comps, ourPicks, unavailable);
-    const answers = new Set(
-      countersAgainst(data.counterIndex, theirPicks)
-        .filter((row) => !unavailable.has(row.counter_champion_id))
-        .map((row) => row.counter_champion_id),
-    ).size;
+    // The ids, not just how many. The rail draws the first few as portraits, and
+    // a Set spread keeps first-seen order — which is the order *they* picked,
+    // since countersAgainst walks theirPicks. That ordering is the board's, not
+    // the panel's: it says nothing about which answer is better, which is the
+    // only kind of order this rail is allowed to imply.
+    const answers = [
+      ...new Set(
+        countersAgainst(data.counterIndex, theirPicks)
+          .filter((row) => !unavailable.has(row.counter_champion_id))
+          .map((row) => row.counter_champion_id),
+      ),
+    ];
     const comps = matchingComps(data.comps, ourPicks).length;
-    if (near.length === 0 && answers === 0 && comps === 0) return null;
+    if (near.length === 0 && answers.length === 0 && comps === 0) return null;
     return { near, answers, comps };
   }, [empty, data, ourPicks, theirPicks, unavailable]);
 
@@ -200,7 +222,8 @@ export function ContextPanel({
     ? [
         hints.near.length > 0 &&
           `${hints.near.length} saved ${hints.near.length === 1 ? "synergy is" : "synergies are"} one champion away`,
-        hints.answers > 0 && `${hints.answers} noted ${hints.answers === 1 ? "answer" : "answers"} still available`,
+        hints.answers.length > 0 &&
+          `${hints.answers.length} noted ${hints.answers.length === 1 ? "answer" : "answers"} still available`,
         hints.comps > 0 && `${hints.comps} saved ${hints.comps === 1 ? "comp shares" : "comps share"} a pick`,
       ]
         .filter(Boolean)
@@ -433,7 +456,7 @@ export function ContextPanel({
                       +n — the rest are one hover away. */}
                   {hints.near.length > 0 && (
                     <RailGroup label="Synergies">
-                      {hints.near.slice(0, 2).map(({ comp, missing }) => {
+                      {hints.near.slice(0, RAIL_PORTRAITS).map(({ comp, missing }) => {
                         const champion = data.championById.get(missing);
                         return champion ? (
                           <ChampionAvatar
@@ -445,23 +468,43 @@ export function ContextPanel({
                           />
                         ) : null;
                       })}
-                      {hints.near.length > 2 && (
+                      {hints.near.length > RAIL_PORTRAITS && (
                         <span className="text-[10px] tabular-nums text-gold">
-                          +{hints.near.length - 2}
+                          +{hints.near.length - RAIL_PORTRAITS}
                         </span>
                       )}
                     </RailGroup>
                   )}
 
-                  {/* Zeroes are left off rather than shown. A rail of noughts
-                      reads as broken, and "nothing here" is what a bare rail
-                      already says. */}
-                  {hints.answers > 0 && (
+                  {/* Portraits here for the same reason as Synergies above: a
+                      bare "12" says only that there is something to read, while
+                      a face says what it is — and the rail's whole job is to
+                      answer "do I need to open this" without opening it. These
+                      are champions still takeable that we've noted as beating
+                      something they have already picked.
+
+                      Zeroes are left off rather than shown, here and below. A
+                      rail of noughts reads as broken, and "nothing here" is
+                      what a bare rail already says. */}
+                  {hints.answers.length > 0 && (
                     <RailGroup label="Counters">
-                      <span className="flex items-center gap-1 text-xs tabular-nums">
-                        <Swords className="size-3 shrink-0" />
-                        {hints.answers}
-                      </span>
+                      {hints.answers.slice(0, RAIL_PORTRAITS).map((id) => {
+                        const champion = data.championById.get(id);
+                        return champion ? (
+                          <ChampionAvatar
+                            key={id}
+                            champion={champion}
+                            version={data.version}
+                            size="sm"
+                            selected
+                          />
+                        ) : null;
+                      })}
+                      {hints.answers.length > RAIL_PORTRAITS && (
+                        <span className="text-[10px] tabular-nums text-gold">
+                          +{hints.answers.length - RAIL_PORTRAITS}
+                        </span>
+                      )}
                     </RailGroup>
                   )}
                   {hints.comps > 0 && (

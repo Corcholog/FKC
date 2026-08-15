@@ -4,6 +4,7 @@ import { formatWinLoss, formatWinRate } from "@/lib/rank";
 import { formatPerMinute } from "@/lib/format";
 import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/ddragon";
 import { championWinRate, type ChampionAgg } from "@/lib/champion-stats";
+import { avatarTint } from "@/lib/avatar-tint";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { RankBadge } from "@/components/rank-badge";
@@ -61,18 +62,27 @@ export function PlayerCard({
   topChampions,
   version,
   championMap,
+  basePath = "",
 }: {
   player: Player;
   topChampions: ChampionAgg[];
   version: string;
   championMap: Map<number, ChampionInfo>;
+  /**
+   * "" in the private app, "/demo" in the public one — the two render the same
+   * card against different tables and differ only in where a click goes.
+   *
+   * `null` renders the card unlinked, for a surface where the player page
+   * doesn't exist yet. A card that looks clickable and 404s is worse than one
+   * that plainly isn't.
+   */
+  basePath?: string | null;
 }) {
   const color = rankTierColor(player.tier);
   const totalGames = (player.wins ?? 0) + (player.losses ?? 0);
   const winRatePct = totalGames === 0 ? 0 : Math.round(((player.wins ?? 0) / totalGames) * 100);
 
-  return (
-    <Link href={`/player/${player.slug}`}>
+  const card = (
       <Card
         style={
           {
@@ -85,7 +95,9 @@ export function PlayerCard({
         <div className="flex items-center gap-4 px-4">
           <Avatar className="h-16 w-16">
             {player.avatar_url && <AvatarImage src={player.avatar_url} alt="" />}
-            <AvatarFallback className="text-lg">{player.display_name.slice(0, 2).toUpperCase()}</AvatarFallback>
+            <AvatarFallback className="text-lg" style={avatarTint(player.display_name)}>
+              {player.display_name.slice(0, 2).toUpperCase()}
+            </AvatarFallback>
           </Avatar>
 
           <div className="min-w-0 flex-1">
@@ -117,6 +129,8 @@ export function PlayerCard({
           </div>
         )}
       </Card>
-    </Link>
   );
+
+  if (basePath === null) return card;
+  return <Link href={`${basePath}/player/${player.slug}`}>{card}</Link>;
 }

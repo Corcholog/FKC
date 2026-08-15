@@ -3,8 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { notesByParticipant } from "@/lib/match-notes";
-import { findLaneOpponent, sortByRole } from "@/lib/roles";
-import { MatchRow, type TeamComposChampion } from "@/components/match-row";
+import { privateSource } from "@/lib/data-source";
+import {
+  groupParticipantsByMatch,
+  loadMatchRowParticipants,
+  matchComposition,
+} from "@/lib/match-rows";
+import { MatchRow } from "@/components/match-row";
 import { MatchesFilter } from "@/components/matches-filter";
 import { MatchesPagination } from "@/components/matches-pagination";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -39,24 +44,6 @@ type MatchListRow = {
   riot_match_id: string;
   game_creation: string;
   game_duration_seconds: number;
-};
-
-type ParticipantRow = {
-  id: string;
-  match_id: string;
-  player_id: string | null;
-  team_id: number;
-  team_position: string | null;
-  champion_id: number;
-  champion_name: string;
-  win: boolean;
-  kills: number;
-  deaths: number;
-  assists: number;
-  damage_dealt_to_champions: number;
-  total_cs: number;
-  /** Null on games synced before migration 005. */
-  vision_score: number | null;
 };
 
 export default async function MatchesPage({
@@ -111,25 +98,12 @@ export default async function MatchesPage({
   if (page > 1 && matchList.length === 0) notFound();
 
   const matchIds = matchList.map((m) => m.id);
-  const [{ data: allParticipants }, championMap] = await Promise.all([
-    matchIds.length > 0
-      ? supabase
-          .from("match_participants")
-          .select(
-            "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs, vision_score",
-          )
-          .in("match_id", matchIds)
-          .returns<ParticipantRow[]>()
-      : Promise.resolve({ data: [] as ParticipantRow[] }),
+  const [allParticipants, championMap] = await Promise.all([
+    loadMatchRowParticipants(privateSource(supabase), matchIds),
     getChampionMap(version),
   ]);
 
-  const participantsByMatch = new Map<string, ParticipantRow[]>();
-  for (const p of allParticipants ?? []) {
-    const list = participantsByMatch.get(p.match_id) ?? [];
-    list.push(p);
-    participantsByMatch.set(p.match_id, list);
-  }
+  const participantsByMatch = groupParticipantsByMatch(allParticipants);
 
   const entries = matchList.flatMap((m) => {
     const participants = participantsByMatch.get(m.id) ?? [];
@@ -137,27 +111,12 @@ export default async function MatchesPage({
       ? participants.filter((p) => p.player_id === selectedPlayer.id)
       : participants.filter((p) => p.player_id);
 
-    return viewers.map((viewer) => {
-      const toChampion = (p: ParticipantRow): TeamComposChampion => ({
-        championId: p.champion_id,
-        championName: p.champion_name,
-        kills: p.kills,
-        isSelf: p.id === viewer.id,
-      });
-      const allies = sortByRole(participants.filter((p) => p.team_id === viewer.team_id)).map(toChampion);
-      const enemies = sortByRole(participants.filter((p) => p.team_id !== viewer.team_id)).map(toChampion);
-      const opponentParticipant = findLaneOpponent(participants, viewer);
-      const opponent = opponentParticipant ? toChampion(opponentParticipant) : null;
-
-      return {
-        match: m,
-        viewer,
-        opponent,
-        allies,
-        enemies,
-        player: playersById.get(viewer.player_id as string),
-      };
-    });
+    return viewers.map((viewer) => ({
+      match: m,
+      viewer,
+      ...matchComposition(participants, viewer),
+      player: playersById.get(viewer.player_id as string),
+    }));
   });
 
   // Notes for exactly the rows about to render. Eager rather than fetched on

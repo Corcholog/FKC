@@ -26,7 +26,7 @@ import { TiltCurve } from "@/components/charts/tilt-curve";
 import { HourHeatmap } from "@/components/charts/hour-heatmap";
 import { DuoMatrix } from "@/components/insights/duo-matrix";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionCard } from "@/components/section-card";
 
 type PlayerRow = {
   id: string;
@@ -58,30 +58,6 @@ type InsightParticipantRow = {
   win: boolean;
   matches: { game_creation: string; game_duration_seconds: number } | null;
 };
-
-function SectionCard({
-  title,
-  caption,
-  children,
-}: {
-  title: string;
-  caption?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {children}
-        {caption && <p className="text-xs text-grey-mid">{caption}</p>}
-      </CardContent>
-    </Card>
-  );
-}
 
 export default async function InsightsPage() {
   const supabase = await createClient();

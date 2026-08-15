@@ -5,13 +5,19 @@ import { fetchAllByIds, fetchAllRows } from "@/lib/supabase/fetch-all";
 import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap, championDisplayName } from "@/lib/ddragon";
 import { notesByParticipant } from "@/lib/match-notes";
+import { privateSource } from "@/lib/data-source";
+import {
+  groupParticipantsByMatch,
+  loadMatchRowParticipants,
+  matchComposition,
+} from "@/lib/match-rows";
 import { formatWinLoss, formatWinRate, ladderPoints } from "@/lib/rank";
 import { aggregateByRole } from "@/lib/player-stats";
 import { topChampionsByPlayer } from "@/lib/champion-stats";
 import { computeStreak, formatStreak, NOTABLE_STREAK } from "@/lib/streaks";
 import { matchupsForPlayer, nemesis, type MatchupInput } from "@/lib/matchups";
 import { aggregateByTime } from "@/lib/time-stats";
-import { MatchRow, type TeamComposChampion } from "@/components/match-row";
+import { MatchRow } from "@/components/match-row";
 import { AiSummaryCard } from "@/components/ai-summary-card";
 import { RankBadge } from "@/components/rank-badge";
 import { WinrateRing } from "@/components/winrate-ring";
@@ -22,8 +28,8 @@ import { MatchupList } from "@/components/player/matchup-list";
 import { TopChampions } from "@/components/player/top-champions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { findLaneOpponent, sortByRole } from "@/lib/roles";
+import { Card, CardContent } from "@/components/ui/card";
+import { SectionCard } from "@/components/section-card";
 
 const RECENT_FORM_LIMIT = 5;
 const TOP_CHAMPION_COUNT = 5;
@@ -35,23 +41,6 @@ type MatchListRow = {
   game_duration_seconds: number;
 };
 
-type ParticipantRow = {
-  id: string;
-  match_id: string;
-  player_id: string | null;
-  team_id: number;
-  team_position: string | null;
-  champion_id: number;
-  champion_name: string;
-  win: boolean;
-  kills: number;
-  deaths: number;
-  assists: number;
-  damage_dealt_to_champions: number;
-  total_cs: number;
-  /** Null on games synced before migration 005. */
-  vision_score: number | null;
-};
 
 // Every participant of every match this player appears in — allies and enemies
 // alike. Matchup stats need the enemy rows, which nothing else reads.
@@ -189,23 +178,8 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
   // the filtered embed above only returns the one row matching player_id, not
   // all 10, so full team compositions need their own unfiltered query.
   const matchIds = matchList.map((m) => m.id);
-  const allParticipants = await fetchAllByIds<ParticipantRow>(matchIds, (chunk, from, to) =>
-    supabase
-      .from("match_participants")
-      .select(
-        "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs, vision_score",
-      )
-      .in("match_id", chunk)
-      .range(from, to)
-      .returns<ParticipantRow[]>(),
-  );
-
-  const participantsByMatch = new Map<string, ParticipantRow[]>();
-  for (const p of allParticipants) {
-    const list = participantsByMatch.get(p.match_id) ?? [];
-    list.push(p);
-    participantsByMatch.set(p.match_id, list);
-  }
+  const allParticipants = await loadMatchRowParticipants(privateSource(supabase), matchIds);
+  const participantsByMatch = groupParticipantsByMatch(allParticipants);
 
   // Notes for exactly the recent-form rows about to render. Eager rather than
   // fetched on expand, so a collapsed row can show its note count.
@@ -277,80 +251,47 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
         />
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
-            Rank over time
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <LpChart series={[{ id, name: player.display_name, points: lpPoints }]} />
-        </CardContent>
-      </Card>
+      <SectionCard title="Rank over time">
+        <LpChart series={[{ id, name: player.display_name, points: lpPoints }]} />
+      </SectionCard>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
-            Top champions
-          </CardTitle>
-          {topChampions.length > 0 && (
-            <CardAction>
-              <Link
-                href={`/champions?player=${player.slug}`}
-                className="text-xs text-gold-bright hover:underline"
-              >
-                View all →
-              </Link>
-            </CardAction>
-          )}
-        </CardHeader>
-        <CardContent>
-          <TopChampions champions={topChampions} version={version} championMap={championMap} />
-        </CardContent>
-      </Card>
+      <SectionCard
+        title="Top champions"
+        action={
+          topChampions.length > 0 ? (
+            <Link
+              href={`/champions?player=${player.slug}`}
+              className="text-xs text-gold-bright hover:underline"
+            >
+              View all →
+            </Link>
+          ) : undefined
+        }
+      >
+        <TopChampions champions={topChampions} version={version} championMap={championMap} />
+      </SectionCard>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
-              Roles
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RoleSplit byRole={roleSplit} />
-          </CardContent>
-        </Card>
+        <SectionCard title="Roles">
+          <RoleSplit byRole={roleSplit} />
+        </SectionCard>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
-              Lane matchups
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {nemesisName && worstMatchup && (
-              <p className="text-sm text-grey-light">
-                Nemesis: <span className="font-medium text-white">{nemesisName}</span>{" "}
-                <span className="tabular-nums text-loss">
-                  {worstMatchup.wins}W {worstMatchup.games - worstMatchup.wins}L
-                </span>
-              </p>
-            )}
-            <MatchupList matchups={matchups} version={version} championMap={championMap} />
-          </CardContent>
-        </Card>
+        <SectionCard title="Lane matchups">
+          {nemesisName && worstMatchup && (
+            <p className="text-sm text-grey-light">
+              Nemesis: <span className="font-medium text-white">{nemesisName}</span>{" "}
+              <span className="tabular-nums text-loss">
+                {worstMatchup.wins}W {worstMatchup.games - worstMatchup.wins}L
+              </span>
+            </p>
+          )}
+          <MatchupList matchups={matchups} version={version} championMap={championMap} />
+        </SectionCard>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
-            When they play
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <HourHeatmap stats={timeStats} />
-        </CardContent>
-      </Card>
+      <SectionCard title="When they play">
+        <HourHeatmap stats={timeStats} />
+      </SectionCard>
 
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
@@ -367,17 +308,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
             const viewer = participants.find((p) => p.player_id === id);
             if (!viewer) return null;
 
-            const toChampion = (p: ParticipantRow): TeamComposChampion => ({
-              championId: p.champion_id,
-              championName: p.champion_name,
-              kills: p.kills,
-              isSelf: p.id === viewer.id,
-            });
-
-            const allies = sortByRole(participants.filter((p) => p.team_id === viewer.team_id)).map(toChampion);
-            const enemies = sortByRole(participants.filter((p) => p.team_id !== viewer.team_id)).map(toChampion);
-            const opponentParticipant = findLaneOpponent(participants, viewer);
-            const opponent = opponentParticipant ? toChampion(opponentParticipant) : null;
+            const { allies, enemies, opponent } = matchComposition(participants, viewer);
 
             return (
               <MatchRow

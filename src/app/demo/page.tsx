@@ -50,8 +50,7 @@ export default async function DemoPage() {
               topChampions={topChampionsByPlayerId.get(player.id) ?? []}
               version={version}
               championMap={championMap}
-              // Unlinked until phase 3 builds /demo/player/[alias].
-              basePath={null}
+              basePath="/demo"
             />
           ))
         )}

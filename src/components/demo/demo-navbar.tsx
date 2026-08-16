@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard } from "lucide-react";
+import { LayoutDashboard, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // The public demo's own chrome, deliberately not the app's Navbar.
@@ -15,10 +15,13 @@ import { cn } from "@/lib/utils";
 // conditional away from exposing something; a separate component has nothing to
 // forget.
 //
-// One entry for now, and the array is the reason: the demo grows by adding to
-// it. /demo/player/[alias], /demo/matches, /demo/champions and /demo/insights
-// come with phase 3, /demo/scrims and /demo/draft with phase 4.
-const NAV_ITEMS = [{ href: "/demo", label: "Roster", icon: LayoutDashboard }];
+// /demo/player/[alias] is deliberately absent: it's reached by clicking a card,
+// and a nav entry would need a player to point at. /demo/matches and
+// /demo/insights land next; /demo/scrims and /demo/draft with phase 4.
+const NAV_ITEMS = [
+  { href: "/demo", label: "Roster", icon: LayoutDashboard },
+  { href: "/demo/champions", label: "Champions", icon: Trophy },
+];
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/demo") return pathname === "/demo";

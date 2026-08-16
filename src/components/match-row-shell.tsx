@@ -23,20 +23,40 @@ export function MatchRowShell({
 }: {
   win: boolean;
   noteCount: number;
-  /** The notes UI, only mounted while open so a 50-row page isn't 50 live forms. */
-  panel: ReactNode;
+  /**
+   * The notes UI, only mounted while open so a 50-row page isn't 50 live forms.
+   *
+   * Omitted on the public demo, which carries no notes and no match link to put
+   * in a panel. Without one the row renders as a plain div: an expand chevron
+   * that opens onto nothing is worse than no chevron.
+   */
+  panel?: ReactNode;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
 
+  const shellClass = cn(
+    "panel-hex @container border-l-4",
+    panel && "is-interactive",
+    win ? "border-l-win" : "border-l-loss",
+  );
+
+  if (!panel) {
+    return (
+      <div className={shellClass}>
+        <div className="flex w-full items-center gap-3 p-3 text-left">
+          {children}
+          {/* Kept as an empty spacer so rows line up with the interactive
+              version if the two ever appear on one page. */}
+          <div className="w-11 shrink-0" />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={cn(
-        "panel-hex is-interactive @container border-l-4",
-        win ? "border-l-win" : "border-l-loss",
-      )}
-    >
+    <div className={shellClass}>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}

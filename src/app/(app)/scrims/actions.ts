@@ -82,8 +82,12 @@ async function championsForWrite(): Promise<Map<number, ChampionInfo>> {
 /**
  * The columns of scrim_games an entered game owns.
  *
- * `patch` is deliberately absent: nothing enters it yet, and listing it here
- * would have an edit blank it on every save.
+ * `patch` used to be absent here, because nothing entered it — which meant no
+ * recorded game had one and "how did we look on this patch" could not be
+ * answered at all. The form now prefills it from the current DDragon version,
+ * so it is written like any other field. It is still nullable: a series entered
+ * before the field existed keeps its null, and the edit form shows that blank
+ * rather than stamping today's patch onto an old game.
  */
 function gameFields(game: ScrimGameInput, gameNumber: number) {
   return {
@@ -91,6 +95,7 @@ function gameFields(game: ScrimGameInput, gameNumber: number) {
     side: game.side,
     win: game.win,
     duration_seconds: game.durationSeconds,
+    patch: game.patch,
     ally_bans: game.allyBans,
     enemy_bans: game.enemyBans,
   };

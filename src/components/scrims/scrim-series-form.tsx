@@ -13,6 +13,7 @@ import {
   type ScrimKind,
   type ScrimRole,
 } from "@/lib/scrims/types";
+import { patchFromVersion } from "@/lib/ddragon";
 import type { ScrimOpponentRow } from "@/lib/scrims/types";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +82,13 @@ export function ScrimSeriesForm({
   const router = useRouter();
   const [saving, startSaving] = useTransition();
 
+  // The patch every new game starts on. Derived from the DDragon version this
+  // page already loads for the champion pickers, so it costs nothing and is
+  // right whenever a series is entered the same week it was played — which is
+  // almost always. Wrong occasionally and editable in place, which beats
+  // blank-by-default: that is what left every recorded game with no patch.
+  const currentPatch = patchFromVersion(version);
+
   // The form as it was handed over: the saved series when editing, an empty
   // one otherwise. Held as state with a lazy initialiser so it's built once —
   // emptyGame() mints a new key each call, and re-running it every render would
@@ -92,7 +100,7 @@ export function ScrimSeriesForm({
     kind: editing?.kind ?? "scrim",
     fearless: editing?.fearless ?? false,
     notes: editing?.notes ?? "",
-    games: editing?.games ?? [emptyGame("blue", defaultLineup)],
+    games: editing?.games ?? [emptyGame("blue", defaultLineup, currentPatch)],
   }));
 
   const [opponentId, setOpponentId] = useState<string | null>(initial.opponentId);
@@ -136,7 +144,17 @@ export function ScrimSeriesForm({
       // Sides alternate between games of a series, so defaulting to the
       // opposite of the last one is right far more often than not.
       const last = prev[prev.length - 1];
-      return [...prev, emptyGame(last ? otherSide(last.side) : "blue", defaultLineup)];
+      return [
+        ...prev,
+        // Inherits the previous game's patch rather than today's: every game of
+        // a series was played in one sitting, so game 2 is on whatever game 1
+        // said — including when that was corrected by hand.
+        emptyGame(
+          last ? otherSide(last.side) : "blue",
+          defaultLineup,
+          last?.patch ?? currentPatch,
+        ),
+      ];
     });
   }
 

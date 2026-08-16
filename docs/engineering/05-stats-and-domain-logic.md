@@ -583,9 +583,11 @@ broken page.
 
 **A game with no patch recorded is excluded by a patch filter, not treated as a wildcard.**
 "How did we look on 15.3" must not be answered partly with games nobody dated. That makes
-the untagged count worth showing, and today it is the whole dataset — no recorded scrim
-carries a patch, so the patch filter is currently inert. The UI says so under the dropdown
-instead of offering an empty menu with no explanation.
+the untagged count worth showing — and it was, at first, the whole dataset: the entry form
+had no patch input, so nothing had ever written the column. It has one now, prefilled from
+the DDragon version the form already loads (`patchFromVersion`), because an optional box
+beside nine required fields gets skipped every time. Games entered before that stay null and
+the dropdown says how many.
 
 **A backwards date range is swapped, not rejected.** There is no reading of "from December
 to January" that means the empty set, and silently matching nothing is the worst of the

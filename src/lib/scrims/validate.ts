@@ -20,6 +20,12 @@ import {
 
 export const MAX_NOTE_CHARS = 2000;
 export const MAX_NAME_CHARS = 80;
+/**
+ * "15.3" is four. Ten leaves room for a three-digit season, a two-digit patch
+ * and whatever suffix an organiser invents, and stops a paragraph landing in
+ * the column that a filter dropdown enumerates.
+ */
+export const MAX_PATCH_CHARS = 10;
 /** Six hours. Anything longer is a typo, not a game. */
 export const MAX_DURATION_SECONDS = 6 * 60 * 60;
 export const MAX_STAT = 1000;
@@ -52,6 +58,8 @@ export type ScrimGameInput = {
   side: (typeof SCRIM_SIDES)[number];
   win: boolean;
   durationSeconds: number | null;
+  /** "15.3", or null. Prefilled by the form; see MAX_PATCH_CHARS. */
+  patch: string | null;
   allyBans: number[];
   enemyBans: number[];
   /**
@@ -137,6 +145,21 @@ export function validateSeries(
       !(isWholeNumber(game.durationSeconds, MAX_DURATION_SECONDS) && game.durationSeconds > 0)
     ) {
       return `${label}: that duration isn't valid.`;
+    }
+    // Shape rather than membership: patches arrive faster than any list we
+    // could keep, and rejecting a real one is worse than storing an odd one.
+    // What this does catch is a value that would fragment the filter — a date,
+    // a note, an empty string that isn't null.
+    if (game.patch !== null) {
+      if (typeof game.patch !== "string" || game.patch.trim() !== game.patch) {
+        return `${label}: that patch isn't valid.`;
+      }
+      if (game.patch.length === 0 || game.patch.length > MAX_PATCH_CHARS) {
+        return `${label}: write the patch as a number like 15.3, or leave it blank.`;
+      }
+      if (!/^\d+\.\d+/.test(game.patch)) {
+        return `${label}: write the patch as a number like 15.3, or leave it blank.`;
+      }
     }
 
     for (const [side, bans] of [

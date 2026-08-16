@@ -38,6 +38,14 @@ export type GameState = {
   win: boolean;
   /** "32:14", or "32" for whole minutes. Empty is allowed. */
   duration: string;
+  /**
+   * "15.3". Prefilled from the current DDragon version on a new game, because a
+   * patch field nobody fills is worse than no field — an optional text input
+   * next to nine required ones gets skipped, and then "how did we look on this
+   * patch" is unanswerable forever. Editable, since a series is sometimes
+   * entered days late.
+   */
+  patch: string;
   allyBans: Array<number | null>;
   enemyBans: Array<number | null>;
   /** Optional. Saved as the opening note in this game's thread, not on the game. */
@@ -64,7 +72,11 @@ export function newGameKey(): string {
   return `game-${gameKeySeed}`;
 }
 
-export function emptyGame(side: ScrimSide, lineup: Record<ScrimRole, string | null>): GameState {
+export function emptyGame(
+  side: ScrimSide,
+  lineup: Record<ScrimRole, string | null>,
+  patch = "",
+): GameState {
   const forSide = (allies: boolean) =>
     Object.fromEntries(
       SCRIM_ROLES.map((role) => [role, emptyPick(allies ? lineup[role] : null)]),
@@ -76,6 +88,7 @@ export function emptyGame(side: ScrimSide, lineup: Record<ScrimRole, string | nu
     side,
     win: true,
     duration: "",
+    patch,
     allyBans: Array<number | null>(BANS_PER_SIDE).fill(null),
     enemyBans: Array<number | null>(BANS_PER_SIDE).fill(null),
     notes: "",
@@ -138,6 +151,10 @@ export function gameStateFromView(game: ScrimGameView): GameState {
     side: game.side,
     win: game.win,
     duration: formatDurationInput(game.duration_seconds),
+    // Not defaulted to the current patch here, unlike a new game: an old series
+    // being edited was played on whatever patch it was played on, and guessing
+    // today's would be inventing data on rows that predate the field.
+    patch: game.patch ?? "",
     allyBans: bans(game.ally_bans),
     enemyBans: bans(game.enemy_bans),
     notes: "",
@@ -311,6 +328,7 @@ export function buildSeriesPayload({ games, ...meta }: SeriesFormState): BuildRe
       side: game.side,
       win: game.win,
       durationSeconds,
+      patch: game.patch.trim() || null,
       allyBans: game.allyBans.filter((id): id is number => id !== null),
       enemyBans: game.enemyBans.filter((id): id is number => id !== null),
       notes: game.notes.trim() || null,
@@ -376,6 +394,7 @@ export function formSignature(form: SeriesFormState): string {
       game.side,
       game.win,
       game.duration.trim(),
+      game.patch.trim(),
       game.allyBans,
       game.enemyBans,
       game.notes.trim(),

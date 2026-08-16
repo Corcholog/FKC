@@ -176,12 +176,16 @@ the page is *for* filtering, so this is fine at a season's worth of games and wo
 five. The fix is the pagination `/matches` already has (ADR-024's `parsePage`), applied to
 the "Matching games" list only.
 
-**No scrim game records a patch, so the patch filter is inert.** `scrim_games.patch` is
-nullable and the entry form doesn't require it; every game entered to date has it null. The
-filter and the ordering (`comparePatch`) are correct and tested, and the UI states the
-untagged count rather than showing an empty menu — but "how did we look on this patch" is
-currently unanswerable. This is a data-entry gap, not a code one: defaulting the field to
-the current patch in `/scrims/new` would close it going forward.
+**The eight scrim games entered before the patch field existed have no patch.** The entry
+form had no such input at all until then, which is why `/scrims/team`'s patch filter had
+nothing to filter — the column shipped in migration 012 and nothing ever wrote it. The form
+now carries a patch per game, **prefilled from the current DDragon version**, so this closes
+going forward; the existing eight stay null until somebody edits those series, and the
+filter names the untagged count rather than pretending they belong to a patch.
+
+The prefill is the part that matters. An optional text box beside nine required fields gets
+skipped every time — that is the entire history of this column — so the fix was a default,
+not a field.
 
 **The reference panel's two-column layout rests on an unenforced numeric coupling.** The
 sections switch to two columns at a container query of `@md` (28rem), which works only

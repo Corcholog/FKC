@@ -304,7 +304,7 @@ stat columns are named to match `ChampionStatInput`. So:
 |---|---|
 | `scrim_opponents` | Unique on `lower(name)`. Free text would fragment one team's history across `UBA`/`uba`, which is the one thing scouting can't survive. `target_bans integer[]` (migration 020) is the **plan** — who we intend to take off them, in priority order, capped at five by a `cardinality()` check. What we *have* banned is history and lives in `scrim_games.ally_bans`; keeping the two apart is the whole point of the column. |
 | `scrim_series` | `played_on` is a `date`, not a timestamptz: nobody records what time a scrim started. `fearless` scopes "no repeats", which only means anything inside a series. |
-| `scrim_games` | `side` is *ours*; theirs is implied. Bans are `integer[]` — no role, no player, order is the data, ≤5 a side. Same call as `match_participants.items`. `duration_seconds` is nullable, and a missing one costs the CS/min column rather than the game. |
+| `scrim_games` | `side` is *ours*; theirs is implied. Bans are `integer[]` — no role, no player, order is the data, ≤5 a side. Same call as `match_participants.items`. `duration_seconds` is nullable, and a missing one costs the CS/min column rather than the game. `patch` is nullable too and was written by nothing until the entry form grew a field for it — the games that predate that keep their null rather than being backfilled with a guess. |
 | `scrim_picks` | `unique (game_id, ally, team_position)` — ten rows, one per role per side. This is what stops a mistyped draft becoming a six-man team. |
 | `scrim_game_notes` | A thread per game, not a column on the game. Added in migration 013, which also dropped the `scrim_games.notes` it replaced. `parent_note_id` (014) carries replies at any depth. |
 

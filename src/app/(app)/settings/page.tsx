@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { maybeRow, optional, rows } from "@/lib/supabase/read";
-import { DEMO_SUMMARY_SOURCE } from "@/lib/summary-analyst";
+import { DEMO_SUMMARY_DRAFT_SOURCE, DEMO_SUMMARY_SOURCE } from "@/lib/summary-analyst";
 import {
   DemoSummariesForm,
   type DemoSummaryDraft,
@@ -60,21 +60,38 @@ export default async function SettingsPage() {
   const admin = createAdminClient();
   const [{ data: aliasRows }, { data: textRows }] = await Promise.all([
     admin.from("demo_aliases").select("player_id, alias").order("alias"),
-    admin.from("demo_text").select("row_id, body, updated_at").eq("source", DEMO_SUMMARY_SOURCE),
+    admin
+      .from("demo_text")
+      .select("source, row_id, body, updated_at")
+      .in("source", [DEMO_SUMMARY_SOURCE, DEMO_SUMMARY_DRAFT_SOURCE]),
   ]);
-  const bodyByPlayer = new Map(
-    (textRows ?? []).map((r) => [
-      r.row_id as string,
-      { body: (r.body as string) ?? "", updatedAt: (r.updated_at as string) ?? null },
-    ]),
-  );
+
+  const rowsBySource = (source: string) =>
+    new Map(
+      (textRows ?? [])
+        .filter((r) => r.source === source)
+        .map((r) => [
+          r.row_id as string,
+          { body: (r.body as string) ?? "", updatedAt: (r.updated_at as string) ?? null },
+        ]),
+    );
+  const draftRows = rowsBySource(DEMO_SUMMARY_DRAFT_SOURCE);
+  const publishedRows = rowsBySource(DEMO_SUMMARY_SOURCE);
+
   const demoDrafts: DemoSummaryDraft[] = (aliasRows ?? []).map((r) => {
-    const existing = bodyByPlayer.get(r.player_id as string);
+    const playerId = r.player_id as string;
+    const draft = draftRows.get(playerId);
+    const published = publishedRows.get(playerId);
     return {
-      playerId: r.player_id as string,
+      playerId,
       alias: r.alias as string,
-      body: existing?.body ?? "",
-      updatedAt: existing?.updatedAt ?? null,
+      // The draft is the working copy. Falling back to the published text
+      // covers rows published before drafts existed as a separate thing — and,
+      // generally, an editor that opened empty on top of live text would be a
+      // trap: pressing Publish would blank the demo.
+      body: draft?.body ?? published?.body ?? "",
+      updatedAt: draft?.updatedAt ?? published?.updatedAt ?? null,
+      publishedBody: published?.body ?? "",
     };
   });
 

@@ -33,8 +33,21 @@ import {
   type PlayerPromptData,
 } from "@/lib/summary";
 
-/** Where these live in demo_text. The view keyed on it is migration 019. */
+/**
+ * The two rows a demo summary passes through, both in demo_text.
+ *
+ * They exist because the review step has to be real. demo_player_summaries
+ * (migration 019) selects `source = 'player_summary'` and nothing else, so
+ * writing a generated draft into that row would publish it the instant it was
+ * written — which is exactly what this feature is supposed to prevent, and what
+ * it did until this was split.
+ *
+ * Generation writes the draft row. Publishing copies it into the published row.
+ * `source` is already half of demo_text's primary key, so this needed no schema
+ * change: a draft and a publication are two rows for the same player.
+ */
 export const DEMO_SUMMARY_SOURCE = "player_summary";
+export const DEMO_SUMMARY_DRAFT_SOURCE = "player_summary_draft";
 
 // English, unlike the private summaries, which are Rioplatense Spanish because
 // the group is. The demo's entire chrome is English, and a Spanish paragraph

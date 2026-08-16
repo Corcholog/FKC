@@ -1,14 +1,14 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireSession } from "@/lib/auth";
 import { getPuuidByRiotId, describeRiotError } from "@/lib/riot";
 import { backfillPlayerHistory, refetchMatchDetails, RiotKeyInvalidError } from "@/lib/sync";
 import { MAX_CLAN_CONTEXT_CHARS, MAX_PLAYER_CONTEXT_CHARS } from "@/lib/ai-context";
 import { playerSlug } from "@/lib/slug";
-import { DEMO_SUMMARY_SOURCE } from "@/lib/summary-analyst";
+import { DEMO_SUMMARY_DRAFT_SOURCE, DEMO_SUMMARY_SOURCE } from "@/lib/summary-analyst";
 
 import type { PlayerFormState } from "./form-state";
 
@@ -544,24 +544,43 @@ export async function saveDemoSummary(
     if (!playerId) return { error: "Missing player." };
     const body = ((formData.get("body") as string) ?? "").trim();
 
-    // Admin client: demo_text is authenticated-only at the RLS level, but the
-    // grant that matters here is the write, and the rest of this feature's
-    // writes already go through the service role from the API route.
-    const { error } = await createAdminClient().from("demo_text").upsert(
-      {
-        source: DEMO_SUMMARY_SOURCE,
-        row_id: playerId,
-        body,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "source,row_id" },
-    );
+    // Both rows, in one statement. The published row is what /demo serves; the
+    // draft row is the working copy this textarea is bound to, and letting them
+    // drift after a hand edit would mean the next "Generate missing" run saw no
+    // draft and rewrote text somebody had just fixed.
+    //
+    // Admin client: demo_text is authenticated-only at the RLS level, and the
+    // rest of this feature's writes already go through the service role.
+    const updatedAt = new Date().toISOString();
+    const { error } = await createAdminClient()
+      .from("demo_text")
+      .upsert(
+        [DEMO_SUMMARY_SOURCE, DEMO_SUMMARY_DRAFT_SOURCE].map((source) => ({
+          source,
+          row_id: playerId,
+          body,
+          updated_at: updatedAt,
+        })),
+        { onConflict: "source,row_id" },
+      );
     if (error) return { error: error.message };
 
+    // The demo caches its reads for an hour (lib/loaders/demo-cache.ts) under
+    // the "demo" tag. Without this, publishing appears to do nothing for up to
+    // an hour — you open the page you just published to and the card isn't there.
+    //
+    // revalidateTag rather than updateTag: unstable_cache's `tags` option is
+    // documented against revalidateTag, while updateTag is documented against
+    // cacheTag and fetch tags, which this app doesn't use. "max" is
+    // stale-while-revalidate, so the first visit after publishing still serves
+    // the old page and kicks off the refresh — hence the message below.
+    revalidateTag("demo", "max");
     revalidatePath("/settings");
     return {
       success: true,
-      message: body ? "Published to the demo." : "Cleared — this player's demo card is now hidden.",
+      message: body
+        ? "Published. Reload /demo once to see it — the demo serves one stale response first."
+        : "Taken down. It'll be gone from /demo after one reload.",
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong." };

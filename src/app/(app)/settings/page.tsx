@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { maybeRow, optional, rows } from "@/lib/supabase/read";
+import { DEMO_SUMMARY_SOURCE } from "@/lib/summary-analyst";
+import {
+  DemoSummariesForm,
+  type DemoSummaryDraft,
+} from "@/components/settings/demo-summaries-form";
 import { AddPlayerForm } from "@/components/settings/add-player-form";
 import { PlayerRow } from "@/components/settings/player-row";
 import { RefetchDetailsForm } from "@/components/settings/refetch-details-form";
@@ -48,6 +54,30 @@ export default async function SettingsPage() {
     "team recap timestamp",
   );
 
+  // Admin client: demo_aliases and demo_text are both authenticated-only at the
+  // RLS level and have no policy for the signed-in role, by design — they are a
+  // back-office mapping, not app data. This page is the back office.
+  const admin = createAdminClient();
+  const [{ data: aliasRows }, { data: textRows }] = await Promise.all([
+    admin.from("demo_aliases").select("player_id, alias").order("alias"),
+    admin.from("demo_text").select("row_id, body, updated_at").eq("source", DEMO_SUMMARY_SOURCE),
+  ]);
+  const bodyByPlayer = new Map(
+    (textRows ?? []).map((r) => [
+      r.row_id as string,
+      { body: (r.body as string) ?? "", updatedAt: (r.updated_at as string) ?? null },
+    ]),
+  );
+  const demoDrafts: DemoSummaryDraft[] = (aliasRows ?? []).map((r) => {
+    const existing = bodyByPlayer.get(r.player_id as string);
+    return {
+      playerId: r.player_id as string,
+      alias: r.alias as string,
+      body: existing?.body ?? "",
+      updatedAt: existing?.updatedAt ?? null,
+    };
+  });
+
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <div>
@@ -79,6 +109,17 @@ export default async function SettingsPage() {
             initialContext={(clanProfile?.context as string | null) ?? null}
             lastGeneratedAt={(teamSummary?.generated_at as string | null) ?? null}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-heading text-base tracking-wide text-grey-light uppercase">
+            Demo summaries
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DemoSummariesForm drafts={demoDrafts} />
         </CardContent>
       </Card>
 

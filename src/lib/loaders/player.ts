@@ -7,7 +7,7 @@
 // pages and lib/*-stats.ts, here forced by the cache rather than by taste.
 
 import { fetchAllByIds, fetchAllRows } from "@/lib/supabase/fetch-all";
-import { maybeRow, rows } from "@/lib/supabase/read";
+import { maybeRow, optional, rows } from "@/lib/supabase/read";
 import type { DataSource } from "@/lib/data-source";
 import { aggregateByRole, type PlayerAgg } from "@/lib/player-stats";
 import { topChampionsByPlayer, type ChampionAgg } from "@/lib/champion-stats";
@@ -83,7 +83,8 @@ export type RankHistoryRow = {
 export type AiSummaryRow = {
   summary_text: string | null;
   generated_at: string | null;
-  stale: boolean | null;
+  /** Absent on the demo — nothing regenerates that text on a schedule. */
+  stale?: boolean | null;
 };
 
 export type PlayerProfileRows = {
@@ -93,7 +94,7 @@ export type PlayerProfileRows = {
   /** All ten participants of every match in the history — enemies included. */
   allHistoryParticipants: (MatchupInput & LaneDiffInput)[];
   rankHistory: RankHistoryRow[];
-  /** Null on the demo: there is no demo_player_ai_summaries, deliberately. */
+  /** On the demo this is the hand-reviewed analyst text, not the private one. */
   aiSummary: AiSummaryRow | null;
 };
 
@@ -142,11 +143,20 @@ export async function fetchPlayerProfileRows(
       .order("game_creation", { ascending: false })
       .limit(RECENT_FORM_LIMIT)
       .returns<MatchListRow[]>(),
-    // The demo has no counterpart for this table on purpose — an AI summary is
-    // prose written about a named person, from notes and clan context. Phase 5
-    // gives the demo its own analyst-voice text instead.
+    // Two different tables, not one table behind a view.
+    //
+    // player_ai_summaries is prose written about a named person from their own
+    // match notes and the clan's context, and it regenerates unattended every
+    // night. demo_player_summaries is a separate body of text, written in an
+    // analyst voice from aliases only, and published by hand from Settings —
+    // see lib/summary-analyst.ts. `stale` has no meaning on that side: nothing
+    // rewrites it on a schedule, so it is never stale, only old.
     source.demo
-      ? Promise.resolve({ data: null, error: null })
+      ? source.supabase
+          .from("demo_player_summaries")
+          .select("summary_text, generated_at")
+          .eq("player_id", id)
+          .maybeSingle<AiSummaryRow>()
       : source.supabase
           .from("player_ai_summaries")
           .select("summary_text, generated_at, stale")
@@ -199,7 +209,11 @@ export async function fetchPlayerProfileRows(
     historyRows,
     allHistoryParticipants,
     rankHistory: rows(rankHistoryResult, "rank history"),
-    aiSummary: maybeRow(aiSummaryResult, "AI summary"),
+    // Optional rather than fatal: this card is an extra on a page that is about
+    // the numbers. It also means the demo keeps working between deploying this
+    // code and running migration 019 — without it, a view that does not exist
+    // yet would 500 every player page rather than hide one paragraph.
+    aiSummary: optional<AiSummaryRow | null>(aiSummaryResult, "AI summary", null),
   };
 }
 

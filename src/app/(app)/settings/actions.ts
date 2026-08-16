@@ -8,6 +8,7 @@ import { getPuuidByRiotId, describeRiotError } from "@/lib/riot";
 import { backfillPlayerHistory, refetchMatchDetails, RiotKeyInvalidError } from "@/lib/sync";
 import { MAX_CLAN_CONTEXT_CHARS, MAX_PLAYER_CONTEXT_CHARS } from "@/lib/ai-context";
 import { playerSlug } from "@/lib/slug";
+import { DEMO_SUMMARY_SOURCE } from "@/lib/summary-analyst";
 
 import type { PlayerFormState } from "./form-state";
 
@@ -514,4 +515,55 @@ export async function removePlayerLogin(playerId: string): Promise<void> {
   await admin.auth.admin.deleteUser(linkedUserId);
 
   revalidatePath("/settings");
+}
+
+// ------------------------------------------------------------
+// Demo summaries
+// ------------------------------------------------------------
+
+/**
+ * Saves one reviewed demo summary, or clears it.
+ *
+ * Separate from generation on purpose. /api/demo-summaries writes drafts; this
+ * is the step where a person decides a draft is fit to publish, and the two
+ * being separate is what keeps unattended output off a page with no login in
+ * front of it.
+ *
+ * An empty body is a legitimate save, not a no-op: demo_player_summaries
+ * filters out blank bodies, so clearing this box unpublishes that player's card
+ * without deleting the row someone might want to edit back.
+ */
+export async function saveDemoSummary(
+  _prevState: PlayerFormState,
+  formData: FormData,
+): Promise<PlayerFormState> {
+  try {
+    await requireSession();
+
+    const playerId = (formData.get("playerId") as string) ?? "";
+    if (!playerId) return { error: "Missing player." };
+    const body = ((formData.get("body") as string) ?? "").trim();
+
+    // Admin client: demo_text is authenticated-only at the RLS level, but the
+    // grant that matters here is the write, and the rest of this feature's
+    // writes already go through the service role from the API route.
+    const { error } = await createAdminClient().from("demo_text").upsert(
+      {
+        source: DEMO_SUMMARY_SOURCE,
+        row_id: playerId,
+        body,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "source,row_id" },
+    );
+    if (error) return { error: error.message };
+
+    revalidatePath("/settings");
+    return {
+      success: true,
+      message: body ? "Published to the demo." : "Cleared — this player's demo card is now hidden.",
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Something went wrong." };
+  }
 }

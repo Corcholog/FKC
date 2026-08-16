@@ -78,6 +78,11 @@ export function maybeRow<T>(result: Result<T>, what: string): T | null {
  * — so one failed banner read would replace the entire app with a full-screen
  * error instead of a page missing one banner.
  *
+ * The other case is content that is genuinely an extra on the page it sits on,
+ * where "render without it" beats "render nothing". The AI summary card is the
+ * only one so far: the player page is about the numbers, and a summary that
+ * failed to load should cost the reader a paragraph, not the page.
+ *
  * Logs rather than swallows, so the failure still exists somewhere. Do not reach
  * for this to quiet a page read; that's the bug this file exists to fix.
  */

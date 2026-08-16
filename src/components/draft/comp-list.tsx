@@ -57,12 +57,15 @@ export function CompList({
   champions,
   version,
   winConditionTags,
+  readOnly = false,
 }: {
   kind: DraftCompKind;
   comps: DraftCompRow[];
   champions: Champion[];
   version: string;
   winConditionTags: DraftTagRow[];
+  /** Drops New, Edit, Delete and the tag manager. See ChampionProfileTable's prop. */
+  readOnly?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [winCon, setWinCon] = useState(ALL_WINCONS);
@@ -114,16 +117,18 @@ export function CompList({
           {/* The win-condition vocabulary is only reachable from the kind that
               uses it — a manage button for tags this page can't set would be
               dead UI. */}
-          {shape.winConditions && (
+          {!readOnly && shape.winConditions && (
             <TagManagerDialog
               tags={winConditionTags}
               kind="win_condition"
               label="Manage win conditions"
             />
           )}
-          <Button type="button" size="sm" onClick={() => setEditing({ comp: null })}>
-            <Plus /> New {copy.noun}
-          </Button>
+          {!readOnly && (
+            <Button type="button" size="sm" onClick={() => setEditing({ comp: null })}>
+              <Plus /> New {copy.noun}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -181,9 +186,11 @@ export function CompList({
         <div className="panel-hex flex flex-col items-center gap-3 p-10 text-center">
           <p className="text-sm text-grey-light">Nothing saved yet.</p>
           <p className="max-w-md text-xs text-grey-mid">{copy.empty}</p>
-          <Button type="button" size="sm" className="mt-1" onClick={() => setEditing({ comp: null })}>
-            <Plus /> New {copy.noun}
-          </Button>
+          {!readOnly && (
+            <Button type="button" size="sm" className="mt-1" onClick={() => setEditing({ comp: null })}>
+              <Plus /> New {copy.noun}
+            </Button>
+          )}
         </div>
       ) : filtered.length === 0 ? (
         <p className="panel-hex p-6 text-center text-sm text-grey-mid">
@@ -203,13 +210,14 @@ export function CompList({
               version={version}
               tagLabels={tagLabels}
               onEdit={() => setEditing({ comp })}
+              readOnly={readOnly}
             />
           ))}
         </div>
       )}
 
       {/* Outside every branch above, so "New" works from the empty state too. */}
-      {editing && (
+      {!readOnly && editing && (
         <CompFormDialog
           key={editing.comp?.id ?? "new"}
           kind={kind}

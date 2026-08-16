@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { optional } from "@/lib/supabase/read";
 import { getSession } from "@/lib/auth";
 import { getChampionList, getLatestVersion } from "@/lib/ddragon";
 import { DEFAULT_LANE, mainLane } from "@/lib/lolalytics";
@@ -22,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // is cache()d, so this costs nothing the rest of the render doesn't already pay.
   const session = await getSession();
 
-  const [{ data: state }, version, { data: rolesPlayed }] = await Promise.all([
+  const [stateResult, version, rolesResult] = await Promise.all([
     supabase.from("sync_state").select("riot_key_valid, last_sync_status").eq("id", 1).single(),
     getLatestVersion(),
     // Ordered by id rather than left unordered: a LIMIT without an ORDER BY
@@ -37,8 +38,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           .order("id", { ascending: true })
           .limit(LANE_SAMPLE_SIZE)
           .returns<{ team_position: string | null }[]>()
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null, error: null }),
   ]);
+
+  // Both reads are `optional`, not `rows`, and the distinction matters more here
+  // than anywhere else in the app: a layout that throws is caught by
+  // global-error.tsx, not (app)/error.tsx — so one failed banner read would
+  // replace the whole app with a full-screen error instead of a navbar missing
+  // one badge. They still get logged, they just don't take the site down.
+  const state = optional(stateResult, "sync state (navbar)", null);
+  const rolesPlayed = optional(rolesResult, "lane sample (navbar)", null);
 
   // Both DDragon fetches are revalidated daily, so this is a cache read on
   // every render but the first of the day.

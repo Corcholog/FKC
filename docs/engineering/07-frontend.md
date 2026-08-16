@@ -5,7 +5,17 @@
 ```
 src/app/
 ├── layout.tsx                Root: fonts, <Toaster />. No auth logic.
-├── login/page.tsx            The only public route. "use client".
+├── robots.ts                 Disallow everything (see §14)
+├── login/page.tsx            Public route. "use client".
+├── demo/                     Public, read-only, anonymized. A *sibling* of (app), so
+│   │                         none of the private chrome or queries can reach in. §14
+│   ├── layout.tsx            DemoNavbar + a permanent, non-dismissible banner
+│   ├── page.tsx              /demo                    Roster grid + what the tool is
+│   ├── player/[alias]/       /demo/player/x           Mirrors /player/[slug]
+│   ├── matches/, champions/, tierlists/, insights/
+│   ├── scrims/               Own layout — *not* the private one, which carries the
+│   │                         "New scrim" button that is the door to the write path
+│   └── draft/                Board + reference panel, minus every save action
 └── (app)/                    Route group — parentheses = no URL segment
     ├── layout.tsx            Navbar + key banner. Everything inside is authed.
     ├── page.tsx              /              Dashboard
@@ -20,6 +30,7 @@ src/app/
     ├── scrims/               Section with its own layout + tab strip (see below)
     │   ├── layout.tsx        Heading, tabs, "New scrim" — wraps everything under it
     │   ├── page.tsx          /scrims                  Overview: records, players
+    │   ├── team/             /scrims/team             The filtered team view — §15
     │   ├── history/          /scrims/history          Every series, drafts rendered
     │   ├── drafts/           /scrims/drafts           Pick/ban aggregates
     │   ├── opponents/        /scrims/opponents        Teams; [slug] is the scouting page
@@ -43,7 +54,10 @@ src/app/
 
 The `(app)` route group is what lets one layout wrap every authenticated page without
 adding an `/app` prefix to any URL. `/login` sits outside it precisely so it doesn't get
-the navbar.
+the navbar. `/demo` sits outside it for a stronger version of the same reason: the private
+layout reads `sync_state` and the session, and its navbar carries a Sync button, an
+account email and a link to `/settings`. Inheriting any of that on a public page would be
+either a leak or a 500.
 
 **Every page except `/login` is a Server Component.** No `"use client"`, no `useEffect`
 data fetching, no loading state management. Client components exist only where
@@ -787,3 +801,182 @@ read-only line that has to grey the champions you don't have and ring the one yo
 Sharing them would mean `dense` plus an optional `onEdit` plus a per-champion emphasis
 callback on a component whose job is none of that. They share `ChampionAvatar` and `Badge`,
 which is the part that would actually drift.
+
+## 14. `/demo` — one page, rendered twice
+
+The public demo is the same pages against anonymized data. The security half is
+[04, §10](04-auth-and-security.md); this is how it avoids being a second copy of the
+frontend.
+
+### `DataSource`, not `if (demo)`
+
+A loader takes a `DataSource` instead of a `SupabaseClient`:
+
+```ts
+export type DataSource = {
+  supabase: SupabaseClient;
+  table: (name: TableName) => string;   // "matches" → "matches" | "demo_matches"
+  demo: boolean;
+};
+```
+
+The `demo_*` views expose **the same column names** as the base tables, so the only thing
+that differs between the two reads is the table name. `privateSource(supabase)` and
+`demoSource(createPublicClient())` are the two constructors, and the second is the only
+place `/demo` gets a client from.
+
+The `demo` flag is not for choosing a table — `table()` does that. It is for the handful
+of things the demo has no counterpart *for*: match notes, AI attribution, "Edited by X".
+Those are conditional selects rather than conditional renders, so the column is never
+fetched:
+
+```ts
+const seriesColumns = (source: DataSource) =>
+  source.demo ? SERIES_BASE_COLUMNS : `${SERIES_BASE_COLUMNS}, created_by`;
+```
+
+Asking a view for a column it doesn't have is a `42703` error, not a `null` — so getting
+this wrong breaks the page loudly, which is the correct direction.
+
+### `fetchXRows` + `buildX`, and why the split is mandatory
+
+Every loader in `src/lib/loaders/` is split in two: a `fetchXRows(source)` that returns
+**plain arrays**, and a pure `buildX(rows)` that folds them into whatever the page wants.
+That mirrors the fetch/compute split the rest of the codebase already uses, but here it is
+load-bearing rather than stylistic:
+
+> **`unstable_cache` serializes its entries.** A `Map` returned from a cached loader comes
+> back as a plain `{}` on the second request, and every `.get()` on it throws.
+
+The trap is that the *first* request is a cache miss and works perfectly. It looks fine
+locally and breaks for the second visitor. Cache the rows; fold afterwards.
+
+### Data cache, not ISR
+
+```ts
+export const dynamic = "force-dynamic";          // on every demo page
+cachedDemoLoad("insights", () => fetchInsightsRows(source));   // 1h, tag "demo"
+```
+
+`export const revalidate = 3600` would be the obvious way to do this and is wrong here:
+with no dynamic API in the tree, Next prerenders such a page **at build time**, which
+means `next build` connects to Supabase. CI builds with a placeholder project URL
+precisely because nothing should be contacted at build time, so an ISR demo page turns a
+green pipeline red for reasons unrelated to the code. Keeping the page dynamic and caching
+the *data* gets the thing that actually matters — a link passed around a coaching staff
+costs one read an hour, not one per person — with no build-time database dependency.
+
+Not `"use cache"` either: that directive needs `cacheComponents: true`, which changes the
+rendering model for every existing route. Not a change to make in passing for the demo's
+benefit. See [09, ADR-036](09-decision-log.md).
+
+Publishing a demo summary calls `revalidateTag("demo", "max")`. Next 16 takes **two**
+arguments there; the single-argument form is deprecated. `"max"` is
+stale-while-revalidate, so the first read after publishing still serves the old page — the
+success message in `/settings` says so rather than letting it look broken.
+
+### Private-only UI is a slot, not a flag
+
+Where a page has controls the demo must not render, the shared component takes a
+`ReactNode` slot or a render prop, and the demo **omits it by not passing it**:
+
+```tsx
+<ScrimSeriesView series={series} actions={<SeriesActions … />} notesFor={…} />   // private
+<ScrimSeriesView series={series} />                                             // demo
+```
+
+A boolean prop (`canEdit={false}`) puts the unsafe branch inside the shared component,
+where it renders unless someone remembers to pass the flag. A slot inverts that: the
+dangerous markup only exists at the private call site. `ScrimEmptyState` follows the same
+rule from the other end — `canAdd` defaults to `false`, so the value that reveals a write
+path has to be typed on purpose.
+
+A slot becomes a **render prop** when the private-only UI needs something the shared view
+already computed. `OpponentScoutingView`'s `banPlanForm` takes the enemy pick counts the
+page's own aggregate produced, so the editable ban plan carries the same *"they picked it
+3×"* annotation the read-only one does without counting twice — and the demo, passing no
+function, falls back to the read-only list rather than losing the section.
+
+`/demo/scrims` gets its own `layout.tsx` rather than reusing the private one for exactly
+this reason: that layout's "New scrim" button is the entrance to the whole write path.
+
+### Tier labels are relabelled, not hidden
+
+`/tierlists` rows are named by the person who made the list, and those names are group
+in-jokes. `relabelForDemo` replaces them positionally with `S/A/B/C/D/F`, which is what a
+stranger would expect a tier list to say anyway.
+
+The flag that drives it is carried **on the fetched rows**, not passed to the component by
+the page. Forgetting a prop would publish the real labels; there is no way to forget a
+field that arrived with the data.
+
+### What the demo drops, measured rather than assumed
+
+Anonymization is not free and it is worth knowing what it costs before showing the page:
+
+| Surface | Lost |
+|---|---|
+| `/demo/draft/champions` | nothing — 96 profiles, 0 notes |
+| `/demo/draft/counters` | 4 notes |
+| `/demo/draft/comps`, `/synergies` | 1 label, 5 notes |
+| every match row | the whole notes panel |
+| `/demo/tierlists` | "Edited by X" and the real row names |
+
+The draft simulator survives intact because it is `sessionStorage` state, not a database
+read (ADR-033) — a signed-out visitor can pick and ban on the board exactly as a member
+can, which is the most convincing thing on the demo and cost nothing to expose.
+
+## 15. `/scrims/team` — the filter is the page
+
+The other four scrim tabs each answer one question over every game ever recorded. This one
+answers any of them over a subset, because that is what preparation looks like: not "how do
+we draft" but "how did we draft against this team, on this patch, when they had Maokai".
+
+So the page is a filter bar and then folds — record, draft order, game length, both
+champion pools, both ban lists, and the matching games themselves. Every section reads the
+same `applyScrimFilter(games, filter)` array.
+
+### The filter lives in the URL
+
+`TeamFilterBar` is a client component whose every control does one thing: `router.push` a
+new query string. The page re-renders on the server with new `searchParams`, and the
+aggregation stays where the rest of this codebase keeps it — in pure functions, on the
+server, over rows the page already had.
+
+The alternative (filter state in the component, aggregates recomputed in the browser) would
+have meant shipping every game's picks to the client and duplicating the fold. It would
+also have made a filtered view unlinkable, and a filtered view is precisely the thing you
+send to somebody: *"look at our last three officials on red side"*.
+
+Two consequences worth knowing:
+
+- **Nothing re-queries.** `loadScrimGames` already returns the section's entire dataset for
+  every tab, and the demo copy reads it from the same `"scrim-games"` cache entry the other
+  demo scrim pages share. A filtered view costs no extra read on either version.
+- **The filter is applied in JavaScript, not pushed into PostgREST.** Consistent with
+  ADR-015, and here it is not even a trade: a champion filter is a predicate over ten picks
+  per game, which SQL would need a join to express, and the dataset is one season of
+  hand-entered games.
+
+### Champion pickers search all of DDragon, not just what was played
+
+`champions` comes from the DDragon map rather than from the games. *"Have we ever faced
+Ambessa"* is worth being able to ask and get **no** to; a list built from the games
+themselves can only ever answer yes.
+
+Adding a champion that is already applied is greyed rather than hidden, the same rule the
+draft board uses — a vanishing list entry reads as a bug.
+
+`ChampionChips` is declared at module scope, and not only because `react-hooks/static-components`
+says so: a component created during render is a new type each time, so React remounts it,
+which would wipe the combobox's typed text on every keystroke that changed the parent. The
+deliberate remount (bumping `pickerKey` to clear the box after a pick) only means something
+if the accidental one isn't also happening — and there is **one key per side**, since a
+shared counter would clear half-typed text out of the other box every time a champion was
+added to this one.
+
+### The empty state names the filter, not the data
+
+"No games" on a page whose entire job is narrowing reads as an empty database. The message
+says no game matches *every one of these filters*, and points at the per-option counts —
+which are over the unfiltered set precisely so they can be read as a way out.

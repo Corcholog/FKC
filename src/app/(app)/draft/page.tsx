@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { privateSource } from "@/lib/data-source";
 import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
 import {
   loadChampionCounters,
@@ -9,7 +10,7 @@ import {
 import { DraftSimulator } from "@/components/draft/draft-simulator";
 
 export default async function DraftPage() {
-  const supabase = await createClient();
+  const source = privateSource(await createClient());
   const version = await getLatestVersion();
 
   // Six loads and not one of them filtered, which is deliberate: the reference
@@ -19,11 +20,11 @@ export default async function DraftPage() {
   const [championMap, profiles, winConditionTags, functionTags, counters, comps] =
     await Promise.all([
       getChampionMap(version),
-      loadChampionProfiles(supabase),
-      loadDraftTags(supabase, "win_condition"),
-      loadDraftTags(supabase, "function"),
-      loadChampionCounters(supabase),
-      loadDraftComps(supabase),
+      loadChampionProfiles(source),
+      loadDraftTags(source, "win_condition"),
+      loadDraftTags(source, "function"),
+      loadChampionCounters(source),
+      loadDraftComps(source),
     ]);
 
   // Plain arrays, not the Maps these come as: the simulator is a client

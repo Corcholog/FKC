@@ -35,6 +35,8 @@ end still renders a list of plausible champions.
 | `indexCounters` | Both directions built in one pass, with no row counted twice |
 | `ladderPoints` / `formatLadderPoints` round-trip | The apex-tier branch and the unranked-is-null rule |
 | `SlidingWindowLimiter` (fake timers) | The chained-acquire race and the `notifyRateLimited` pause |
+| `winRatePastMinute` | That each mark contains every longer game, and that a mark under `MIN_DURATION_SAMPLE` is flagged rather than plotted — the 15-minute point must equal the overall winrate |
+| `laneDiffForPlayer` | That `games` counts only matches where a same-role enemy was found, and that support CS diff is kept here while `player-stats.ts` drops it |
 | `computeStreak` | The signed-accumulator flip, and that it sorts its own input |
 | `groupIntoSessions` | Gap measured from game *end*, not start |
 | `aggregateDuoStats` | Canonical pair ordering; five-stack → 10 pairs |
@@ -50,7 +52,7 @@ logic from the I/O. That extraction is worth doing anyway.
 ## 2. No Postgres-side aggregation
 
 Every stats page selects all relevant `match_participants` rows and folds them in
-JavaScript. At five players and a few hundred games that's a few thousand rows and it's
+JavaScript. At nine players and a few hundred games that's a few thousand rows and it's
 genuinely fine. It breaks down when either the roster or the history grows by an order of
 magnitude.
 
@@ -168,6 +170,23 @@ combobox and role filter are what keep it usable; past a few hundred annotated c
 neither is enough. `/draft/champions` has the same shape but a fixed ceiling — there are only
 ~170 champions.
 
+**`/scrims/team` renders every matching game.** Same shape, one level worse: an unfiltered
+visit draws the entire archive as full draft cards. The filter is what keeps it usable, and
+the page is *for* filtering, so this is fine at a season's worth of games and won't be at
+five. The fix is the pagination `/matches` already has (ADR-024's `parsePage`), applied to
+the "Matching games" list only.
+
+**The eight scrim games entered before the patch field existed have no patch.** The entry
+form had no such input at all until then, which is why `/scrims/team`'s patch filter had
+nothing to filter — the column shipped in migration 012 and nothing ever wrote it. The form
+now carries a patch per game, **prefilled from the current DDragon version**, so this closes
+going forward; the existing eight stay null until somebody edits those series, and the
+filter names the untagged count rather than pretending they belong to a patch.
+
+The prefill is the part that matters. An optional text box beside nine required fields gets
+skipped every time — that is the entire history of this column — so the fix was a default,
+not a field.
+
 **The reference panel's two-column layout rests on an unenforced numeric coupling.** The
 sections switch to two columns at a container query of `@md` (28rem), which works only
 because the docked panel is `w-[30rem]` and the sheet below `xl` is `max-w-sm` (24rem). Narrow
@@ -182,14 +201,56 @@ next thing that needs multi-select will either bend it or write a second one.
 page is withheld until the slowest query resolves rather than streaming in parts. recharts
 and `@dnd-kit` are statically imported into client bundles.
 
-**The match-row assembly is copy-pasted three times.** The `toChampion` +
-`allies`/`enemies`/`opponent` + `participantsByMatch` block, and its byte-identical
-14-column select string, appear in `page.tsx`, `matches/page.tsx` and
-`player/[slug]/page.tsx`. One `lib/match-rows.ts` would remove ~120 duplicated lines.
-`ParticipantRow` is likewise redeclared verbatim in the same three files — which §3 above
-would also fix.
+**The match-row assembly used to be copy-pasted three times** — the `toChampion` +
+`allies`/`enemies`/`opponent` + `participantsByMatch` block, its byte-identical 14-column
+select, and a verbatim `ParticipantRow` in each of `page.tsx`, `matches/page.tsx` and
+`player/[slug]/page.tsx`. `src/lib/match-rows.ts` now owns all of it, and the demo's
+player page reuses the same module. Both entries are closed; the underlying reason they
+were dangerous — no generated database types, §3 — is not.
 
-## 7. Deliberate non-features
+## 7. The public demo's own gaps
+
+`/demo` is a public surface bolted onto an app that was private by construction, and it
+carries risks the rest of the app doesn't.
+
+**Nothing about it is tested, and it is the part where an untested regression is worst.**
+Every leak check so far has been manual: render the pages, then grep the RSC payload
+against a needle set built from the live database — real display names, slugs, puuids, the
+Riot IDs of untracked participants, tier labels, opponent names, enemy nicknames, `created_by`
+auth ids, match notes, `ai_context`, `clan_profile.context`. It found real problems (and,
+repeatedly, false positives worth knowing about: an untracked player named "Blue" against
+the draft board's "Blue side" heading, another named "Monk" against Riot's `MonkeyKing`
+asset key, and Next's own `"forbidden":"$undefined"` RSC boundary key). But it is a sweep
+somebody has to remember to run, and it proves nothing about the *next* page anybody adds.
+
+The mechanical parts are testable and would catch the realistic failure: assert that every
+`demo_*` view's column list is a subset of an allowlist, and that no page under `src/app/demo/`
+imports `createClient` from `lib/supabase/server`. Both are cheap. Neither exists.
+
+**`demo_scrim_picks` collapses an opponent's roster by position.** Enemy nicknames become
+`'Rival ' || team_position`, which has to be stable per person because `team-stats.ts` groups
+by `lower(player_name)` to derive a roster ([02, §13](02-data-model.md)). So a team that
+fielded two different toplaners across a season shows as one "Rival TOP" with their games
+merged. The demo's scouting page is therefore *wrong*, not merely vague, wherever that
+happened. Fixing it needs a per-person alias for enemy nicknames — a fourth mapping table,
+populated by hand.
+
+**Demo summaries go stale silently.** They are generated on a button press and published by
+hand, with no equivalent of `player_ai_summaries.stale` — nothing marks a summary as
+describing a roster state that has since moved. As long as the app keeps syncing, the
+numbers on `/demo/player/x` drift away from the prose above them, and only a person
+re-reading the page would notice.
+
+**A new column on a base table does not reach the demo, and a new demo page has to be
+remembered.** The first is the safe direction and is the point of ADR-034. The second is
+not: nothing structurally prevents adding `/demo/foo` that reads through the wrong client.
+The lint rule above is the missing guard.
+
+**The demo layer has no fixture path.** Everything it shows comes from the live database
+through views, so there is no way to demo the demo — to develop against it without a real
+roster's data present.
+
+## 8. Deliberate non-features
 
 These are choices, not omissions:
 
@@ -197,7 +258,9 @@ These are choices, not omissions:
   minutes, need a second call per match with a much larger payload. At ~1.2s per call that
   roughly doubles sync cost. Explicitly declined in the Riot integration notes.
 - **No light theme.** One permanent dark theme; a toggle would be dead weight.
-- **No public signup.** The app is private by construction.
+- **No public signup.** Accounts are created by hand, and there is no route that makes
+  one. `/demo` is public but is read-only and has no account behind it — it widened what a
+  stranger can *see*, not what they can *become*.
 - **No re-fetching of stored matches during a normal sync.** Match data is immutable once a
   game ends; `refetchMatchDetails` is the explicit manual exception.
 - **A summary can stay stale indefinitely.** `/api/summaries` only rewrites one after
@@ -212,7 +275,7 @@ These are choices, not omissions:
   totals by counting. A question like "how did they do on Ziggs eight months ago" has no
   answer in the prompt, and the correct output is to say there isn't one.
 
-## 8. Cut, not pending
+## 9. Cut, not pending
 
 **Phase 14 — private per-player AI chat.** Dropped. It was the last unbuilt roadmap item,
 and the identity groundwork it needed shipped anyway in Phase 11 for note ownership, so
@@ -221,7 +284,7 @@ in this app stays one-way and group-visible: scheduled player summaries and a te
 that everyone reads. `match_notes` is therefore the only owner-scoped table the schema
 will need.
 
-## 9. What would break first at 10× scale
+## 10. What would break first at 10× scale
 
 In the order it would actually hurt:
 

@@ -33,6 +33,7 @@ export function ChampionProfileRowView({
   profile,
   onChange,
   counters,
+  readOnly = false,
 }: {
   champion: Champion;
   /** Full roster — only needed once expanded, for the counter editor. */
@@ -44,6 +45,11 @@ export function ChampionProfileRowView({
   onChange: (next: ChampionProfileFields) => void;
   /** Every noted matchup, so the expanded row doesn't need its own fetch. */
   counters: ChampionCounterRow[];
+  /**
+   * Renders every field as text instead of a control. The row still expands —
+   * reading the counters is the point of the page — it just can't write.
+   */
+  readOnly?: boolean;
 }) {
   const [saving, startSaving] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -96,40 +102,70 @@ export function ChampionProfileRowView({
           </div>
         </td>
         <td className="px-4 py-2.5">
+          {/* Read-only shows only the roles this champion actually has. The
+              editable version has to show all five, because an unset one is
+              the control you click to set it; a public page listing five greyed
+              roles per champion would just be noise. */}
           <div className="flex flex-wrap gap-1">
-            {DRAFT_ROLES.map((role) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => toggleRole(role)}
-                aria-pressed={roles.includes(role)}
-                className={cn(
-                  "rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase transition-colors",
-                  roles.includes(role)
-                    ? "border-gold bg-gold-muted/30 text-gold-bright"
-                    : "border-border text-grey-mid hover:text-grey-light",
-                )}
-              >
-                {formatRoleShort(role)}
-              </button>
-            ))}
+            {readOnly
+              ? roles.map((role) => (
+                  <span
+                    key={role}
+                    className="rounded-sm border border-gold bg-gold-muted/30 px-1.5 py-0.5 text-[10px] font-medium text-gold-bright uppercase"
+                  >
+                    {formatRoleShort(role)}
+                  </span>
+                ))
+              : DRAFT_ROLES.map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    onClick={() => toggleRole(role)}
+                    aria-pressed={roles.includes(role)}
+                    className={cn(
+                      "rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase transition-colors",
+                      roles.includes(role)
+                        ? "border-gold bg-gold-muted/30 text-gold-bright"
+                        : "border-border text-grey-mid hover:text-grey-light",
+                    )}
+                  >
+                    {formatRoleShort(role)}
+                  </button>
+                ))}
           </div>
         </td>
         {/* No min-w on either: the header cells own every width now (see the
             comment on the table), and a min-width here would fight table-fixed
             for control of the column. */}
         <td className="px-4 py-2.5">
-          <TagMultiSelect tags={tags} kind="function" selected={tagSlugs} onChange={changeTags} max={12} />
+          {readOnly ? (
+            <div className="flex flex-wrap gap-1">
+              {tagSlugs.map((slug) => (
+                <span
+                  key={slug}
+                  className="rounded-sm bg-bg-tertiary px-1.5 py-0.5 text-[11px] text-grey-light"
+                >
+                  {tags.find((t) => t.slug === slug)?.label ?? slug}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <TagMultiSelect tags={tags} kind="function" selected={tagSlugs} onChange={changeTags} max={12} />
+          )}
         </td>
         <td className="px-4 py-2.5">
-          <Input
-            value={notesDraft}
-            onChange={(e) => setNotesDraft(e.target.value)}
-            onBlur={commitNotes}
-            placeholder="Notes"
-            aria-label={`Notes for ${champion.name}`}
-            className="h-8 text-sm"
-          />
+          {readOnly ? (
+            <p className="text-sm text-grey-light">{profile?.notes}</p>
+          ) : (
+            <Input
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              onBlur={commitNotes}
+              placeholder="Notes"
+              aria-label={`Notes for ${champion.name}`}
+              className="h-8 text-sm"
+            />
+          )}
         </td>
         <td className="px-2 py-2.5 text-center">
           <div className="flex items-center justify-center gap-1.5">
@@ -158,7 +194,13 @@ export function ChampionProfileRowView({
       {expanded && (
         <tr className="border-b border-border last:border-b-0">
           <td colSpan={5} className="p-0">
-            <ChampionCounters champion={champion} champions={champions} version={version} allCounters={counters} />
+            <ChampionCounters
+              champion={champion}
+              champions={champions}
+              version={version}
+              allCounters={counters}
+              readOnly={readOnly}
+            />
           </td>
         </tr>
       )}

@@ -150,6 +150,7 @@ export function DraftSimulator({
   functionTags,
   counters,
   comps,
+  readOnly = false,
 }: {
   champions: Champion[];
   version: string;
@@ -163,6 +164,13 @@ export function DraftSimulator({
   counters: ChampionCounterRow[];
   /** Phase 3's saved comps *and* synergies, unfiltered. Same note. */
   comps: DraftCompRow[];
+  /**
+   * Drops the two save buttons and the save dialog. Everything else stays —
+   * the board itself is sessionStorage (ADR-033) and never touches the
+   * database, so drafting, fearless tracking and the PNG export work
+   * identically for a signed-out visitor.
+   */
+  readOnly?: boolean;
 }) {
   const [series, setSeries] = useState<SeriesBoard>(emptySeries);
   const [currentGame, setCurrentGame] = useState(0);
@@ -567,6 +575,7 @@ export function DraftSimulator({
               gamesWithContent={fillCounts.filter((n) => n > 0).length}
               onClearGame={clearGame}
               onClearSeries={clearSeries}
+              readOnly={readOnly}
               canSaveComp={compSources.length > 0}
               canSaveSynergy={synergySides.length > 0}
               onSaveComp={() => setSaving({ kind: "comp", sources: compSources })}
@@ -642,7 +651,7 @@ export function DraftSimulator({
           />
         )}
 
-        {saving && (
+        {!readOnly && saving && (
           <SaveCompDialog
             kind={saving.kind}
             sources={saving.sources}

@@ -245,7 +245,8 @@ per-minute burst is how you conclude the feature is broken for a day.
 
 ## 6. Prompt construction
 
-Two prompts. They share a **language** constant and nothing else:
+Three prompts now — the player summary, the team recap, and the demo's analyst read (§6b).
+The first two share a **language** constant and nothing else:
 
 ```ts
 const SHARED_LANGUAGE = `Do not use markdown formatting… All output must be in natural
@@ -311,6 +312,64 @@ the roster sorted by rank, the week's aggregate record, duo winrates, civil wars
 notable streaks. The reasoning is explicit: a recap that just lists five individual records
 adds nothing over the award tiles above it. The prompt even says *"Do not just list
 everyone's record one by one — say something about the group."*
+
+## 6b. The demo's analyst read — a third profile, not a translated second
+
+`src/lib/summary-analyst.ts`. Same data as the player summary; a different reader.
+
+The private summary is written **for the person it is about**. It opens with what their
+friends wrote about them, quotes their own match notes back at them, and answers *how am I
+doing*. Substituting aliases into that prompt would still produce a group's inside voice,
+addressed to nobody in the room. This one is written for somebody deciding whether the tool
+is worth using, and answers *what would I need to know to play with or against this player*.
+
+**The anonymization is in what the prompt is built from, not in what the model is told.**
+`gatherPlayerPromptData` takes an optional `AliasMap`, and when it has one it:
+
+- substitutes the alias for `display_name` on the player row,
+- resolves clanmates named in game lines through the same map, so a line reads
+  `duo with Onyx (Caitlyn)`,
+- **skips the `match_notes` query entirely** rather than filtering its results,
+- passes an empty `AiContext`, so neither `clan_profile.context` nor `players.ai_context`
+  is assembled into the text.
+
+A model cannot leak a note it was never shown. That is a stronger property than any
+instruction, and it is checkable without spending a request — the same
+build-it-separately-from-sending-it split as §6 above, used here to verify all nine
+assembled prompts carried their alias, zero note lines, and zero hits against a 68-needle
+set drawn from the live database.
+
+The output is **4–5 bullets, in English**:
+
+- Bullets because a scouting read is skimmed next to four others, where the private
+  summary's three paragraphs are the wrong shape. They also survive review better: a claim
+  per line can be struck out on its own, while removing one sentence from a paragraph means
+  rewriting the paragraph.
+- English because the demo's entire chrome is English, and a Rioplatense Spanish paragraph
+  inside it reads as an untranslated leftover rather than as a choice. One constant
+  (`ANALYST_DEMO_VOICE`) decides that.
+
+Same `temperature: 0.4` as the private analyst voice, for the same reason: the failure mode
+of this prompt is an invented winrate, not a dull sentence. The prompt additionally forbids
+referring to the player by any name other than the alias, and forbids speculating about who
+they are.
+
+**Where it is written, and why that is not where it is published:** generation writes
+`demo_text` under `source = 'player_summary_draft'`; the public view reads
+`source = 'player_summary'`. Publishing is a person pressing a button in `/settings`. See
+[09, ADR-039](09-decision-log.md) — that split exists because the first version didn't have
+it and three summaries went live unreviewed.
+
+`/api/demo-summaries` is also **not on the cron**, which is the one place this differs
+structurally from everything else in this document. §1's whole argument is that AI work
+belongs in a scheduled batch. It still does — for text that only the group reads. Text on a
+page with no login in front of it is the exception, and an unattended nightly rewrite of it
+is exactly what the review gate exists to prevent.
+
+The 60-second ceiling applies here too, and bites harder: a demo summary costs ~15s (a
+~10k-character prompt plus reading the player's whole history first), so about three fit in
+one invocation. The route therefore skips players that already have a draft, reports how
+many `remaining`, and refines its per-call estimate from measurement as it goes.
 
 ### Reading a prompt without spending a request
 

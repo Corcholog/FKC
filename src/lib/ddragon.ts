@@ -104,6 +104,23 @@ export function championIconUrlById(ddragonId: string, version: string): string 
 }
 
 /**
+ * The patch a DDragon version belongs to: `"15.3.1"` → `"15.3"`.
+ *
+ * DDragon versions carry a third segment that is a *build* rather than a patch —
+ * it moves for asset fixes that nobody playing would call a new patch — and
+ * `scrim_games.patch` wants the two-part number everyone says out loud. Keeping
+ * the build would also split one patch's games across several values, which is
+ * the one thing a patch filter cannot survive.
+ *
+ * Returns the input unchanged if it doesn't look like a version, rather than
+ * inventing one — the caller uses this to *prefill* a field somebody can edit.
+ */
+export function patchFromVersion(version: string): string {
+  const match = version.match(/^(\d+)\.(\d+)/);
+  return match ? `${match[1]}.${match[2]}` : version;
+}
+
+/**
  * The grey "no champion" portrait, for an empty slot on the draft board.
  *
  * **This one is not DDragon.** DDragon has no such asset — `img/champion/-1.png`,

@@ -95,6 +95,7 @@ export function DraftControls({
   gamesWithContent,
   onClearGame,
   onClearSeries,
+  readOnly = false,
   canSaveComp,
   canSaveSynergy,
   onSaveComp,
@@ -111,6 +112,8 @@ export function DraftControls({
   onClearGame: () => void;
   onClearSeries: () => void;
   /** A side of the visible game has all five picks. */
+  /** Hides both save buttons entirely. See the comment beside them. */
+  readOnly?: boolean;
   canSaveComp: boolean;
   /** A side of the visible game has at least two picks. */
   canSaveSynergy: boolean;
@@ -148,36 +151,44 @@ export function DraftControls({
       {/* The saves read as primary against the clears and the export, because
           they're the reason to have drafted anything here. Disabled states say
           what's missing rather than just refusing — a greyed button with no
-          explanation reads as broken. */}
-      <Button
-        type="button"
-        size="icon-sm"
-        disabled={!canSaveComp}
-        onClick={onSaveComp}
-        aria-label="Save composition"
-        title={
-          canSaveComp
-            ? "Save a side's five picks as a composition"
-            : "Fill one side's five picks to save a composition"
-        }
-      >
-        <Users />
-      </Button>
+          explanation reads as broken.
 
-      <Button
-        type="button"
-        size="icon-sm"
-        disabled={!canSaveSynergy}
-        onClick={onSaveSynergy}
-        aria-label="Save synergy"
-        title={
-          canSaveSynergy
-            ? "Pick two to four champions from one side"
-            : "Two picks on one side are needed to save a synergy"
-        }
-      >
-        <Link2 />
-      </Button>
+          Absent rather than disabled on the public demo: a disabled button is a
+          promise that signing in isn't what's missing, and here it is. Clearing
+          and the PNG export stay — the board is sessionStorage either way. */}
+      {!readOnly && (
+        <>
+          <Button
+            type="button"
+            size="icon-sm"
+            disabled={!canSaveComp}
+            onClick={onSaveComp}
+            aria-label="Save composition"
+            title={
+              canSaveComp
+                ? "Save a side's five picks as a composition"
+                : "Fill one side's five picks to save a composition"
+            }
+          >
+            <Users />
+          </Button>
+
+          <Button
+            type="button"
+            size="icon-sm"
+            disabled={!canSaveSynergy}
+            onClick={onSaveSynergy}
+            aria-label="Save synergy"
+            title={
+              canSaveSynergy
+                ? "Pick two to four champions from one side"
+                : "Two picks on one side are needed to save a synergy"
+            }
+          >
+            <Link2 />
+          </Button>
+        </>
+      )}
 
       <ConfirmButton
         icon={<Eraser />}

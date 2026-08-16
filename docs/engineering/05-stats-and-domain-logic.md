@@ -413,6 +413,71 @@ the right instinct for any order-dependent aggregate.
 `NOTABLE_STREAK = 3` — at 2 games it's noise, so the 🔥/💀 markers and badges only appear
 from 3.
 
+## 9b. Game length, map side, and the lane opponent
+
+Three modules added together, all answering *when* or *against whom* rather than *how
+well*, and all built from columns the sync already stores — no new Riot calls.
+
+### `duration-stats.ts` — two readings of the same rows
+
+A 55% winrate that is 64% under 25 minutes and 41% past 35 is a completely different
+player from a flat 55%, and the difference is actionable: draft them something that
+closes, or stop giving them scaling picks.
+
+The module computes it twice, because the two readings fail differently:
+
+- **`aggregateByDuration`** buckets into `15–25 / 25–30 / 30–35 / 35+`. Clean to read, but
+  the long bucket is always the thinnest, and a 3-game bucket at 33% looks like a finding
+  when it is a coin landing badly.
+- **`winRatePastMinute`** is the cumulative curve: among games that lasted *at least* X
+  minutes, how did they end. Marks at 15/20/25/30/35/40. Every point contains every longer
+  game, so the sample shrinks gradually instead of being sliced into thin cells — and the
+  shape shows *where* the decline starts rather than only that it exists.
+
+**The floor is 15:00, not 0.** Migration 007 deleted the participant rows of every match
+under 900 seconds, so there is no shorter bucket to build. That also gives a free
+correctness check: the curve's value at the 15-minute mark must equal the overall winrate,
+because every stored game clears it.
+
+`MIN_DURATION_SAMPLE = 5` marks a point as unreliable rather than hiding it — the same
+discipline as `Ranked.unranked` in `stat-ranking.tsx`. `durationSwing` returns the
+first-to-last delta, or `null` when neither end has a usable sample.
+
+### `lane-diff.ts` — the flat question a coach asks first
+
+`matchups.ts` answers "which champions beat me". This answers "across every game, do they
+come out of lane ahead or behind, and by how much" — gold, CS and damage against the
+person standing across from them, via the same `findLaneOpponent` from `roles.ts`.
+
+**Everything is per minute.** A 40-minute game produces bigger gaps than a 20-minute one
+for reasons that have nothing to do with the player, so absolute totals would mostly
+measure game length.
+
+**Support CS diff is kept, unlike everywhere else.** `player-stats.ts` drops support games
+from CS/min because it averages one player across every role and support farm drags the
+number down (§1). Here the comparison is like-for-like — a support's lane opponent is the
+enemy support — so the number means something. Two modules, opposite calls, both correct;
+this is the case where copying the convention across would have been the bug.
+
+`games` counts only matches where a same-role enemy was found. Riot leaves `team_position`
+empty on some autofills, so that is strictly fewer than the games played, and the panel
+says which number it is reading.
+
+This is also the one place Phase 2 needed a query change: the historical-participant read
+on the player page selected only kills/deaths/assists and now also takes `total_cs`,
+`damage_dealt_to_champions` and `gold_earned`.
+
+### `side-stats.ts` — honest about being nearly worthless in soloq
+
+`aggregateBySide` splits on `team_id` (100 blue, 200 red) into games, winrate and average
+duration.
+
+In solo queue the side is **assigned**, so a gap is close to noise unless the sample is
+large — `MIN_SIDE_GAMES = 100`, far above any other threshold in the codebase, and the
+caption says outright that this is a curiosity. It is a module rather than four lines
+inside the player page because the same two functions carry a real signal on the scrims
+side, where the side comes out of a draft the team prepared for.
+
 ## 10. The pattern worth stealing
 
 Every one of these modules has the same shape:
@@ -440,6 +505,8 @@ read path and the only part that touches Supabase.
 | `team-stats.ts` | Overall record, blue/red split, by series type, head-to-head per opponent, per-player aggregates |
 | `draft-stats.ts` | Pick and ban frequency per side, per-role pools, presence, the fearless pool |
 | `opponents.ts` | An opponent's roster and pools, derived from nicknames |
+| `filters.ts` | Which subset of games a question is about — see §11b |
+| `team-splits.ts` | Game length and draft order at team level, adapting §9b's modules |
 | `validate.ts` | What a submitted series must satisfy before it's written |
 
 **These reuse the soloq helpers rather than re-deriving them**, which is the whole reason
@@ -495,3 +562,54 @@ champion banned in game 1 and never played can be picked or banned again in game
 `components/scrims/draft-form-state.ts`) implement this, and must agree — if they drift, the
 form greys a champion that a saved series says is legal. Both exclude bans; `usedInGame` is
 the within-game one and includes them.
+
+## 11b. The scouting query (`filters.ts`, `team-splits.ts`)
+
+Every module above answers one question over *every* recorded game. Preparation asks the
+same questions over a subset — this patch, this opponent, officials only, games where they
+had Maokai — so `filters.ts` is a `ScrimFilter` plus a predicate, and `/scrims/team`
+(§15 of [07](07-frontend.md)) folds each aggregate over the filtered array.
+
+**Champion filters are AND, and over picks only.** "We faced K'Sante *and* Maokai" is a
+question about a composition; OR would return the union, which is nearly every game and
+therefore no answer. Bans are excluded because a banned champion was never on the map, so
+counting one as *faced* would attach a result to a game it took no part in.
+
+**Options come from the unfiltered set, with unfiltered counts.** A dropdown rebuilt from
+the current results is a dead end: choosing "official" would leave "official" as the only
+kind and there would be no way back except editing the URL. Carrying each option's count
+also makes an empty result legible as a combination that never happened rather than as a
+broken page.
+
+**A game with no patch recorded is excluded by a patch filter, not treated as a wildcard.**
+"How did we look on 15.3" must not be answered partly with games nobody dated. That makes
+the untagged count worth showing — and it was, at first, the whole dataset: the entry form
+had no patch input, so nothing had ever written the column. It has one now, prefilled from
+the DDragon version the form already loads (`patchFromVersion`), because an optional box
+beside nine required fields gets skipped every time. Games entered before that stay null and
+the dropdown says how many.
+
+**A backwards date range is swapped, not rejected.** There is no reading of "from December
+to January" that means the empty set, and silently matching nothing is the worst of the
+three available behaviours.
+
+`comparePatch` compares segment by segment as numbers, because `"15.10".localeCompare("15.9")`
+is negative — a patch dropdown whose top entry is not the newest patch is wrong in a way
+nobody checks. A non-numeric segment falls back to text so the comparison stays total
+rather than collapsing to `NaN` and reporting equal.
+
+### `team-splits.ts` — what scrims have that soloq doesn't
+
+`scrimDurationSplit` and `firstPickSplit` adapt §9b's modules rather than reimplementing
+them, and the adaptation is the interesting part:
+
+- **`scrim_games.duration_seconds` is nullable** (it is typed by hand and often skipped)
+  and scrims have **no 15-minute floor**, unlike soloq where migration 007 deleted
+  everything shorter. `aggregateByDuration` silently drops both. So the wrapper counts them
+  as `untimed` and `tooShort`, and the caption states what the split is actually over. A
+  length split over 40 games that quietly describes 26 is exactly the failure this codebase
+  spends its comments avoiding.
+- **Side means something else here.** In soloq it is assigned, which is why
+  `MIN_SIDE_GAMES` is 100 and the caption calls it a curiosity. In a scrim it comes out of
+  a draft the team prepared for, and blue picks first — so `firstPickSplit` reports the
+  same partition under the name that makes it actionable: the first-pick record.

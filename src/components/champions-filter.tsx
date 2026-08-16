@@ -9,11 +9,23 @@ type Player = {
   display_name: string;
 };
 
-export function ChampionsFilter({ players, selectedId }: { players: Player[]; selectedId: string }) {
+export function ChampionsFilter({
+  players,
+  selectedId,
+  basePath = "",
+}: {
+  players: Player[];
+  selectedId: string;
+  /** "" in the private app, "/demo" in the public one. */
+  basePath?: string;
+}) {
   const router = useRouter();
 
   return (
-    <Select value={selectedId} onValueChange={(value) => router.push(`/champions?player=${value}`)}>
+    <Select
+      value={selectedId}
+      onValueChange={(value) => router.push(`${basePath}/champions?player=${value}`)}
+    >
       <SelectTrigger className="w-44">
         <SelectValue>{(value: string) => players.find((p) => p.slug === value)?.display_name}</SelectValue>
       </SelectTrigger>

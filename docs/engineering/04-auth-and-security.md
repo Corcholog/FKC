@@ -1,8 +1,9 @@
 # 04 — Auth & Security
 
-The access model is small but has a few genuinely non-obvious pieces: four different
-Supabase clients, a permission that RLS *can't* express, and a login flow that resolves
-a display name to an email through a `security definer` function.
+The access model is small but has a few genuinely non-obvious pieces: five different
+Supabase clients, a permission that RLS *can't* express, a login flow that resolves
+a display name to an email through a `security definer` function, and — since the demo
+— one deliberately public read path that works by *bypassing* RLS in a controlled way.
 
 ## 1. The access model
 
@@ -13,21 +14,26 @@ There is **no public signup**. Two kinds of account, both created by hand:
 | Shared viewer | Supabase dashboard | Everything | No — owns no games |
 | Per-player | `/settings`, service-role client | Everything | Only on their own games |
 
+Since the demo there is also a third caller with no account at all: **anonymous readers
+of `/demo`**, who can read the `demo_*` views and nothing else. That surface is its own
+section (§10) because it inverts the assumption the rest of this document rests on.
+
 There is also **no admin role**. `/settings` — roster CRUD, the Riot key, login creation
 — is open to every signed-in user. That's a deliberate scope decision for a five-person
 friend group, and it's called out again in [10](10-known-gaps.md) as the thing that
 would have to change first if the app ever grew.
 
-## 2. Four Supabase clients
+## 2. Five Supabase clients
 
 The most common Supabase mistake is using the wrong one. `src/lib/supabase/`:
 
-| File | Factory | Runs in | Key | RLS |
-|---|---|---|---|---|
-| `client.ts` | `createBrowserClient` | Browser | publishable | **enforced** |
-| `server.ts` | `createServerClient` + `cookies()` | RSC, Server Actions, Route Handlers | publishable | **enforced** |
-| `middleware.ts` | `createServerClient` + request/response jars | `src/proxy.ts` | publishable | **enforced** |
-| `admin.ts` | `createClient` | Server only | **secret** | **bypassed** |
+| File | Factory | Runs in | Key | Role | RLS |
+|---|---|---|---|---|---|
+| `client.ts` | `createBrowserClient` | Browser | publishable | caller's | **enforced** |
+| `server.ts` | `createServerClient` + `cookies()` | RSC, Server Actions, Route Handlers | publishable | caller's | **enforced** |
+| `middleware.ts` | `createServerClient` + request/response jars | `src/proxy.ts` | publishable | caller's | **enforced** |
+| `public.ts` | `createClient`, **no cookie jar** | `/demo` pages only | publishable | always `anon` | **enforced** |
+| `admin.ts` | `createClient` | Server only | **secret** | service role | **bypassed** |
 
 `admin.ts` is the dangerous one. Its rules:
 
@@ -39,16 +45,29 @@ auth: { autoRefreshToken: false, persistSession: false }
 Those two flags matter: an admin client has no user session and shouldn't try to
 maintain one — in a serverless context that would be pure overhead and a footgun.
 
-It is used in exactly four places, and each has a reason:
+It is used in six places, and each has a reason:
 1. `/api/sync` — Vercel Cron has no user session.
 2. `/api/summaries` — same, plus it writes summaries for *every* player, not the caller's.
-3. `settings/actions.ts` — creating/deleting `auth.users`, and writing `players.user_id`
-   (which the `authenticated` role is not granted).
-4. Avatar upload/delete in Supabase Storage.
+3. `/api/weekly` — same, for the weekly Discord recap.
+4. `/api/demo-summaries` — writes demo drafts for every aliased player, and reads
+   `demo_aliases`, which has no policy for the signed-in role (§10).
+5. `settings/actions.ts` — creating/deleting `auth.users`, writing `players.user_id`
+   (which the `authenticated` role is not granted), and publishing demo text.
+6. `settings/page.tsx` — reading `demo_aliases` / `demo_text` for the review UI.
+
+Plus avatar upload/delete in Supabase Storage, which goes through the same factory.
 
 The proxy client needs its own factory because it must write refreshed session cookies
 onto both the request (so downstream handlers see them) and the response (so the browser
 gets them) — a different cookie plumbing than either of the other two.
+
+`public.ts` needs its own factory for the opposite reason: it must **not** have a cookie
+jar. `/demo` is reachable while signed in — on purpose, since the only people who can
+tell whether an alias slipped are the ones who know the real names — and the cookie-aware
+server client would run those pages as `authenticated`, where RLS hands back the real
+tables. A demo page that queried `players` by mistake would then render real names for
+exactly the reviewers least likely to notice, and aliases for everyone else. With `anon`
+pinned, that same mistake fails closed with a permission error.
 
 ## 3. The proxy gate
 
@@ -67,14 +86,27 @@ sessions silently stop refreshing and users get logged out mid-visit.
 Three routing rules:
 
 ```ts
-if (pathname.startsWith("/api/")) return supabaseResponse;  // routes do their own auth
-if (!user && !isPublicPath) redirect("/login");
-if (user && isPublicPath)  redirect("/");
+if (pathname.startsWith("/api/")) return supabaseResponse;      // routes do their own auth
+if (!user && !isPublic(pathname)) redirect("/login");           // prefix-aware
+if (user && PUBLIC_PATHS.includes(pathname)) redirect("/");     // exact match only
 ```
 
 `/api/*` is excluded because `/api/sync` accepts a `CRON_SECRET` bearer token instead of
 a session, and because an API route must return JSON — an HTML redirect would break the
 navbar's `res.json()` call.
+
+**The two public checks are deliberately asymmetric**, and that asymmetry is the whole
+reason there are two constants:
+
+```ts
+const PUBLIC_PATHS    = ["/login"];   // exact
+const PUBLIC_PREFIXES = ["/demo"];    // subtree
+```
+
+Signed *out*, both are reachable. Signed *in*, only `/login` bounces you — a login form
+is meaningless once you have a session, but bouncing a signed-in user off `/demo` would
+make the demo unreviewable by the only people qualified to review it. Widening the second
+check to `isPublic()` would look like a tidy-up and would quietly remove the review path.
 
 **Route protection is not the only defence.** `requireSession()` /
 `requireSessionPlayer()` (`src/lib/auth.ts`) re-check in every Server Action and route
@@ -293,3 +325,113 @@ attached to no player.
 unlink, for the same reason. The player's notes survive with `author_user_id` set to NULL
 (`ON DELETE SET NULL`) — they become read-only rather than disappearing, which is right,
 because notes are the only irreplaceable data in the database.
+
+## 10. The public demo
+
+Everything above assumes "no session ⇒ no data". `/demo` is the exception: a read-only,
+identity-stripped copy of the whole app that a stranger can open. It exists because a
+member of the group applied for a coaching role and needed to show the tool to a hiring
+staff who obviously cannot be given logins.
+
+The requirement is not "the pages display aliases". It is **there is no path by which a
+real name leaves the database**. Three independent layers, each sufficient on its own:
+
+**1. The view is the projection.** `demo_players` has no `riot_game_name`, no `puuid`, no
+`ai_context`, no `user_id` — there is nothing to filter because the column does not exist.
+This is why the obfuscation lives in Postgres rather than in the render layer: a render-layer
+filter is a line of code somebody can forget, and forgetting it is invisible. The proof
+that this matters is `player/[slug]/page.tsx`, which does `.select("*")` on players — the
+widest select in the app. Against the view that is safe *by construction*.
+
+**2. `anon` cannot read the real tables.** Already true before the demo: every base table
+is `authenticated`-only. Migration 018 adds `grant select` on the views and **touches no
+existing policy**, so `anon`'s access to real data is exactly what it was — none.
+
+**3. The demo pages hold a session-less client.** `createPublicClient()` never attaches
+cookies, so its JWT is `anon` even for a signed-in visitor (§2).
+
+### Why the views run with `security_invoker` off
+
+A Postgres view defaults to `security_invoker = off`, meaning it executes as its **owner**
+(`postgres`) and therefore reads the base tables *without* the caller's RLS applying. The
+view's own column list is what constrains the caller. That is normally a footgun — it is
+the thing Supabase warns about — and here it is the mechanism, used in one direction only:
+the views expose strictly less than the tables, and `anon` has `select` on nothing else.
+
+> **Do not add `with (security_invoker = on)` to these views.** They would return zero
+> rows for `anon` and the demo would render empty in production **with no error anywhere** —
+> RLS denies by matching no rows, not by raising.
+
+That warning is repeated at the top of `docs/migrations/018_demo_views.sql`, because the
+migration is where somebody would actually be standing when they were tempted.
+
+### The mapping tables are not public
+
+`demo_aliases` joins a puuid to an alias. Published, it would undo the entire file in one
+request. So the three mapping tables (`demo_aliases`, `demo_opponent_aliases`, `demo_text`)
+carry the ordinary `authenticated`-only policy and are granted to `anon` nowhere. They are
+back-office data, which is also why `/settings` reads them through the **admin** client
+rather than the caller's.
+
+Verified from outside, with the publishable key:
+
+```bash
+curl "$URL/rest/v1/demo_players?select=display_name,slug" -H "apikey: $PUBLISHABLE_KEY"
+# → [{"display_name":"Nova","slug":"nova"}, …]
+
+curl "$URL/rest/v1/players?select=riot_game_name"          -H "apikey: $PUBLISHABLE_KEY"
+# → []                       (RLS: zero rows, not an error)
+
+curl "$URL/rest/v1/demo_text?select=body"                  -H "apikey: $PUBLISHABLE_KEY"
+# → 42501 permission denied for table demo_text
+
+curl "$URL/rest/v1/demo_players?select=riot_game_name"     -H "apikey: $PUBLISHABLE_KEY"
+# → 42703 column does not exist      ← layer 1, proven rather than assumed
+```
+
+The last one is the check worth keeping: it proves the column is *absent*, not merely
+unselected.
+
+### Free text is opt-in, never filtered
+
+Prose is the one thing projection cannot anonymize — a match note names people, quotes
+them, and carries the group's slang. So no real text column appears in any view. The views
+`left join` `demo_text` instead, which means **a row with no override shows no text**. The
+failure mode of forgetting to write an override is a blank panel; the failure mode of a
+filter-based approach is a published in-joke.
+
+`match_notes`, `scrim_game_notes`, `player_ai_summaries`, `team_ai_summary`, `clan_profile`
+and `sync_state` have **no view at all**. The last two are the most dangerous in the
+database: `clan_profile.context` is described in its own schema comment as holding inside
+jokes, slang and nicknames, and `sync_state` holds the plaintext Riot key plus a
+`last_error` in which Riot embeds puuids.
+
+### The AI text passes through a human
+
+The demo's player summaries are generated by a second prompt profile (see
+[06](06-ai-layer.md)) and land in `demo_text` under `source = 'player_summary_draft'`.
+The public view `demo_player_summaries` (migration 019) selects
+`source = 'player_summary'` and nothing else. Publishing is a button in `/settings` that
+copies one row to the other.
+
+Those two sources exist because the review step has to be real, and briefly wasn't:
+generation originally wrote straight into the published row, so the first three summaries
+were live before anyone had read them. `source` is already half of `demo_text`'s primary
+key, so splitting them needed no schema change. See [09, ADR-039](09-decision-log.md).
+
+`/api/demo-summaries` is also, unlike `/api/summaries`, **deliberately not on the cron**.
+A nightly job that rewrites public prose unattended is the exact thing the review gate
+exists to prevent.
+
+### Residual risks, accepted and named
+
+- **`resolve_login_email(text)` is executable by `anon`** (§6) and the site now has a page
+  a stranger can reach. Unchanged in substance: it returns a `<uuid>@player.invalid`
+  placeholder that routes nowhere and is useless without the password, and the login form
+  answers identically for an unknown name and a wrong password.
+- **`matches.game_creation` + duration + champion set** is, in principle, enough to
+  identify a specific LAS game with effort. Not obfuscated, because shifting timestamps
+  would break the hour heatmap and the LP series — which are part of what the demo is for.
+- **The demo has no automated tests.** Every leak check so far has been a manual sweep of
+  the rendered RSC payload against a needle set built from the live database. That is a
+  real gap, listed in [10](10-known-gaps.md).

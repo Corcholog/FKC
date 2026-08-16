@@ -286,6 +286,19 @@ export function ScrimGameFields({
           className="h-8 w-20 text-sm"
         />
 
+        {/* Prefilled from the current DDragon version rather than left blank.
+            An optional text box beside nine required fields gets skipped every
+            time — which is exactly what happened before this existed, and why
+            no recorded game carries a patch. */}
+        <Input
+          value={game.patch}
+          onChange={(e) => onChange({ patch: e.target.value })}
+          placeholder="15.3"
+          title="Patch this game was played on"
+          aria-label={`Game ${index + 1} patch`}
+          className="h-8 w-16 text-sm"
+        />
+
         {canRemove && (
           <Button
             type="button"

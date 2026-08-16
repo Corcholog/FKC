@@ -1,18 +1,16 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { privateSource } from "@/lib/data-source";
+import {
+  buildChampionPool,
+  fetchChampionRows,
+  fetchChampionsRoster,
+} from "@/lib/loaders/champions";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
-import { allChampionsByPlayer, type ChampionStatInput } from "@/lib/champion-stats";
+import { avatarTint } from "@/lib/avatar-tint";
 import { ChampionsFilter } from "@/components/champions-filter";
 import { ChampionTierList } from "@/components/champion-tier-list";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
-type PlayerRow = {
-  id: string;
-  slug: string;
-  display_name: string;
-  avatar_url: string | null;
-};
 
 export default async function ChampionsPage({
   searchParams,
@@ -20,15 +18,13 @@ export default async function ChampionsPage({
   searchParams: Promise<{ player?: string }>;
 }) {
   const { player: playerParam } = await searchParams;
-  const supabase = await createClient();
+  const source = privateSource(await createClient());
 
-  const { data: players } = await supabase
-    .from("players")
-    .select("id, slug, display_name, avatar_url")
-    .order("display_name")
-    .returns<PlayerRow[]>();
+  // Note what the empty state below now means. Before the read helper it covered
+  // both "no players tracked" and "the roster read failed", and told you the first.
+  const players = await fetchChampionsRoster(source);
 
-  if (!players || players.length === 0) {
+  if (players.length === 0) {
     return (
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
         <div>
@@ -43,26 +39,8 @@ export default async function ChampionsPage({
   const selectedPlayer = players.find((p) => p.slug === playerParam) ?? players[0];
   if (playerParam && !players.some((p) => p.slug === playerParam)) notFound();
 
-  type ChampionStatRow = Omit<ChampionStatInput, "game_duration_seconds"> & {
-    matches: { game_duration_seconds: number } | null;
-  };
-
-  const statRows = await fetchAllRows<ChampionStatRow>((from, to) =>
-    supabase
-      .from("match_participants")
-      .select(
-        "player_id, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, matches!inner(game_duration_seconds)",
-      )
-      .eq("player_id", selectedPlayer.id)
-      .range(from, to)
-      .returns<ChampionStatRow[]>(),
-  );
-
-  const flatRows: ChampionStatInput[] = statRows.map((r) => ({
-    ...r,
-    game_duration_seconds: r.matches?.game_duration_seconds ?? 0,
-  }));
-  const champions = allChampionsByPlayer(flatRows).get(selectedPlayer.id) ?? [];
+  const statRows = await fetchChampionRows(source, selectedPlayer.id);
+  const champions = buildChampionPool(statRows, selectedPlayer.id);
 
   const version = await getLatestVersion();
   const championMap = await getChampionMap(version);
@@ -73,11 +51,15 @@ export default async function ChampionsPage({
         <div className="flex items-center gap-3">
           <Avatar size="lg">
             {selectedPlayer.avatar_url && <AvatarImage src={selectedPlayer.avatar_url} alt="" />}
-            <AvatarFallback>{selectedPlayer.display_name.slice(0, 2).toUpperCase()}</AvatarFallback>
+            <AvatarFallback style={avatarTint(selectedPlayer.display_name)}>
+              {selectedPlayer.display_name.slice(0, 2).toUpperCase()}
+            </AvatarFallback>
           </Avatar>
           <div>
             <h1 className="font-heading text-2xl font-semibold text-white">Champions</h1>
-            <p className="text-sm text-grey-light">{selectedPlayer.display_name}&apos;s champion stats.</p>
+            <p className="text-sm text-grey-light">
+              {selectedPlayer.display_name}&apos;s champion stats.
+            </p>
           </div>
         </div>
         <ChampionsFilter players={players} selectedId={selectedPlayer.slug} />

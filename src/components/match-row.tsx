@@ -23,7 +23,13 @@ export type TeamComposChampion = {
 };
 
 type MatchRowData = {
-  riotMatchId: string;
+  /**
+   * Null on the public demo. `demo_matches` has no riot_match_id on purpose: it
+   * is the single field that de-anonymizes a whole lobby, since pasting it into
+   * any third-party site returns all ten real Riot IDs. Only the notes panel
+   * uses it, and the demo has no notes panel either.
+   */
+  riotMatchId: string | null;
   championId: number;
   championName: string;
   win: boolean;
@@ -97,7 +103,8 @@ export function MatchRow({
   match: MatchRowData;
   version: string;
   championMap: Map<number, ChampionInfo>;
-  notes: MatchRowNotes;
+  /** Omitted on the public demo — no notes, and no riot_match_id to link out with. */
+  notes?: MatchRowNotes;
   /** Shown above the champion name when this row appears outside a single
    * player's own page (e.g. a squad-wide feed) so it's clear whose game it is. */
   playerName?: string;
@@ -114,17 +121,21 @@ export function MatchRow({
   return (
     <MatchRowShell
       win={match.win}
-      noteCount={notes.items.length}
+      noteCount={notes?.items.length ?? 0}
       panel={
-        <NotesSection
-          matchParticipantId={notes.participantId}
-          playerId={notes.playerId}
-          playerName={notes.ownerName}
-          notes={notes.items}
-          canAddNote={notes.canAdd}
-          currentUserId={notes.currentUserId}
-          matchInfoUrl={leagueOfGraphsMatchUrl(match.riotMatchId)}
-        />
+        notes && (
+          <NotesSection
+            matchParticipantId={notes.participantId}
+            playerId={notes.playerId}
+            playerName={notes.ownerName}
+            notes={notes.items}
+            canAddNote={notes.canAdd}
+            currentUserId={notes.currentUserId}
+              matchInfoUrl={
+              match.riotMatchId ? leagueOfGraphsMatchUrl(match.riotMatchId) : null
+            }
+          />
+        )
       }
     >
       <div className="flex min-w-0 flex-1 items-center gap-3">

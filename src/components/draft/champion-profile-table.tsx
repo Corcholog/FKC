@@ -41,6 +41,7 @@ export function ChampionProfileTable({
   functionTags,
   profiles,
   counters,
+  readOnly = false,
 }: {
   /** realChampions(map) — alphabetical, numeric id kept. */
   champions: Champion[];
@@ -50,6 +51,14 @@ export function ChampionProfileTable({
   profiles: ChampionProfileRow[];
   /** Every noted matchup — passed straight through to whichever row expands. */
   counters: ChampionCounterRow[];
+  /**
+   * Drops every control that writes. Defaults to false so the private table is
+   * unchanged, and the public demo has to ask for it — but note that asking
+   * wrong is not a breach: every draft action calls requireSession() first and
+   * the base tables are RLS authenticated-only, so a control that slipped
+   * through would error rather than write.
+   */
+  readOnly?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [annotatedFilter, setAnnotatedFilter] = useState<AnnotatedFilter>("all");
@@ -101,7 +110,9 @@ export function ChampionProfileTable({
             {profileMap.size} of {champions.length} annotated
           </span>
         </h2>
-        <TagManagerDialog tags={functionTags} kind="function" label="Manage function tags" />
+        {!readOnly && (
+          <TagManagerDialog tags={functionTags} kind="function" label="Manage function tags" />
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -209,6 +220,7 @@ export function ChampionProfileTable({
                   profile={profileMap.get(champion.championId) ?? null}
                   onChange={(next) => updateProfile(champion.championId, next)}
                   counters={counters}
+                  readOnly={readOnly}
                 />
               ))}
             </tbody>

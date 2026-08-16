@@ -31,7 +31,8 @@ export type ChampionProfileRow = {
   tags: string[];
   notes: string | null;
   updated_at: string;
-  updated_by: string | null;
+  /** Private only — the demo view drops it and the demo never selects it. */
+  updated_by?: string | null;
 };
 
 /** The editable fields of a profile, without the row's DB metadata. */
@@ -60,7 +61,8 @@ export type ChampionCounterRow = {
   counter_champion_id: number;
   target_champion_id: number;
   note: string | null;
-  created_by: string | null;
+  /** Private only — the demo view drops it and the demo never selects it. */
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -102,7 +104,8 @@ export type DraftCompRow = {
   champion_ids: number[];
   win_conditions: string[];
   notes: string | null;
-  created_by: string | null;
+  /** Private only — the demo view drops it and the demo never selects it. */
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -62,8 +62,8 @@ const MAX_NOTES = 40;
 // saying nothing. Enforced in src/app/api/summaries/route.ts.
 export const MIN_NEW_GAMES = 5;
 
-const MAX_CHAMPION_LINES = 10;
-const MAX_MATCHUP_LINES = 6;
+export const MAX_CHAMPION_LINES = 10;
+export const MAX_MATCHUP_LINES = 6;
 
 // Language rules, shared so the two prompts can't drift into different
 // languages. Tone is deliberately *not* shared any more: the player summary is
@@ -136,7 +136,7 @@ type LobbyParticipant = MatchupInput & {
 // only exist once the other nine participants are loaded — who they were up
 // against in lane and how that went, which of their friends were in the game,
 // and how much of the team's damage was theirs.
-type DetailedGame = {
+export type DetailedGame = {
   row: SignalRow;
   matchId: string;
   participantId: string;
@@ -150,21 +150,43 @@ type DetailedGame = {
 
 export type SummaryResult = { summaryText: string; generatedAt: string } | { notEnoughData: true };
 
+/**
+ * Real player id → the alias to print instead.
+ *
+ * Passing one to `gatherPlayerPromptData` switches it into the shape the public
+ * demo needs. It is deliberately one parameter rather than three booleans: the
+ * three things it changes — the name at the top, the teammates named inside a
+ * game line, and whether the private prose is read at all — have to move
+ * together or the anonymisation is only partial, and "partial" here means a
+ * real name in the middle of a paragraph nobody re-reads before publishing.
+ */
+export type AliasMap = Map<string, string>;
+
+const NO_AI_CONTEXT: AiContext = { clan: null, byPlayerId: new Map() };
+
 // Deliberately no wins/losses. players.wins/losses is recounted at sync time,
 // so between a sync and the next one it can disagree with a count taken from
 // the match rows right now — and this prompt tells the model never to state a
 // number that isn't in it, then hands it two different overall records to
 // choose from. The record printed below is counted from the same rows every
 // other number here is derived from, so it cannot drift from them.
-type PlayerRow = {
+export type PlayerRow = {
   display_name: string;
   tier: string | null;
   division: string | null;
   league_points: number | null;
 };
 
-/** Everything the prompt builder needs, already resolved and joined up. */
-type PlayerPromptInput = {
+/**
+ * Everything the prompt builder needs, already resolved and joined up.
+ *
+ * Exported because there are two prompt profiles over the same data now: the
+ * private summary below, and the analyst-voice one the public demo publishes
+ * (lib/summary-analyst.ts). Gathering it is the expensive half — two round
+ * trips and a full signal computation — and neither profile should pay for it
+ * twice or drift from the other's idea of what a "game line" contains.
+ */
+export type PlayerPromptData = {
   player: PlayerRow;
   playerId: string;
   signals: PlayerSignals;
@@ -217,14 +239,45 @@ export async function buildPlayerSummaryPrompt(
   playerId: string,
   preloadedContext?: AiContext,
 ): Promise<string | null> {
-  const { data: player, error: playerError } = await supabase
+  const data = await gatherPlayerPromptData(supabase, playerId, { preloadedContext });
+  return data === null ? null : buildPlayerPrompt(data);
+}
+
+/**
+ * Every number and line the two prompt profiles are written from.
+ *
+ * Pass `aliases` and this reads as the public demo needs it: the alias replaces
+ * the display name, teammates inside a game line are aliased too, the
+ * match_notes query is *not issued* — rather than issued and then filtered —
+ * and the AI context blocks are empty. Omitting it is the private default, so
+ * the anonymised path is the one you have to ask for.
+ */
+export async function gatherPlayerPromptData(
+  supabase: SupabaseClient,
+  playerId: string,
+  options: { preloadedContext?: AiContext; aliases?: AliasMap } = {},
+): Promise<PlayerPromptData | null> {
+  const { preloadedContext, aliases } = options;
+  const anonymous = aliases !== undefined;
+
+  const { data: playerRow, error: playerError } = await supabase
     .from("players")
     .select("display_name, tier, division, league_points")
     .eq("id", playerId)
     .single();
-  if (playerError || !player) throw new Error("Player not found.");
+  if (playerError || !playerRow) throw new Error("Player not found.");
 
-  const aiContext = preloadedContext ?? (await loadAiContext(supabase));
+  // The alias is the only name this prompt will ever see. Substituted here, at
+  // the read, rather than at the point each name is printed — there are three
+  // such points and one of them is inside a per-game line.
+  const player: PlayerRow = anonymous
+    ? { ...(playerRow as PlayerRow), display_name: aliases.get(playerId) ?? "This player" }
+    : (playerRow as PlayerRow);
+
+  // clan_profile.context describes itself in the schema as inside jokes, slang
+  // and nicknames, and players.ai_context is one person's reputation written by
+  // their friends. Neither is loaded at all on the anonymous path.
+  const aiContext = anonymous ? NO_AI_CONTEXT : (preloadedContext ?? (await loadAiContext(supabase)));
 
   // Query from matches (not match_participants) so game_creation is a true
   // top-level column — see the same fix/comment in player/[slug]/page.tsx.
@@ -244,15 +297,20 @@ export async function buildPlayerSummaryPrompt(
       .eq("match_participants.player_id", playerId)
       .order("game_creation", { ascending: false })
       .returns<MatchWithParticipant[]>(),
-    supabase
-      .from("match_notes")
-      .select(
-        "note, created_at, match_participant_id, match_participants!inner(champion_id, champion_name, player_id)",
-      )
-      .eq("match_participants.player_id", playerId)
-      .order("created_at", { ascending: false })
-      .limit(MAX_NOTES)
-      .returns<NoteRow[]>(),
+    // Not issued at all when anonymous. A note is a player writing about their
+    // own game in their own words — the single most personal text in the
+    // database — and the safest way not to publish it is never to hold it.
+    anonymous
+      ? Promise.resolve({ data: [] as NoteRow[] })
+      : supabase
+          .from("match_notes")
+          .select(
+            "note, created_at, match_participant_id, match_participants!inner(champion_id, champion_name, player_id)",
+          )
+          .eq("match_participants.player_id", playerId)
+          .order("created_at", { ascending: false })
+          .limit(MAX_NOTES)
+          .returns<NoteRow[]>(),
     supabase.from("players").select("id, display_name"),
   ]);
 
@@ -326,9 +384,12 @@ export async function buildPlayerSummaryPrompt(
     playerId,
   );
 
-  const nameByPlayerId = new Map(
-    (roster ?? []).map((p) => [p.id as string, p.display_name as string]),
-  );
+  // Teammates named inside a game line. The alias map wins outright when it is
+  // present: a tracked player missing from it would otherwise fall through to
+  // their real display name in the middle of a paragraph.
+  const nameByPlayerId = anonymous
+    ? aliases
+    : new Map((roster ?? []).map((p) => [p.id as string, p.display_name as string]));
 
   const notesByParticipant = new Map<string, string[]>();
   for (const n of noteRows) {
@@ -390,7 +451,7 @@ export async function buildPlayerSummaryPrompt(
       playedAt: playedAtByParticipant.get(n.match_participant_id) ?? null,
     }));
 
-  return buildPlayerPrompt({ player, playerId, signals, detailed, olderNotes, aiContext });
+  return { player, playerId, signals, detailed, olderNotes, aiContext };
 }
 
 // ------------------------------------------------------------
@@ -416,7 +477,7 @@ function thousands(value: number): string {
   return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(Math.round(value));
 }
 
-function pct(value: number): string {
+export function pct(value: number): string {
   return `${Math.round(value)}%`;
 }
 
@@ -437,7 +498,7 @@ function csClause(
 // before migration 005 or from a patch where Riot stopped sending it. Printing
 // a 0 for a missing value hands the model a fact that isn't true, and it will
 // write a sentence about it. Missing fields are omitted from the line entirely.
-function detailLine(game: DetailedGame): string {
+export function detailLine(game: DetailedGame): string {
   const { row, opponent } = game;
 
   const head = [
@@ -500,7 +561,7 @@ function detailLine(game: DetailedGame): string {
 // genuinely more games than the window — computeTrend returns a null delta
 // otherwise, because comparing the last 10 against a history that *is* those
 // same 10 games is a comparison to itself.
-function trendBlock(signals: PlayerSignals): string {
+export function trendBlock(signals: PlayerSignals): string {
   const { recent, lifetime, delta } = signals.trend;
   if (!delta) {
     return `Only ${lifetime.games} recorded games — not enough history to compare recent form against a baseline yet.`;
@@ -535,7 +596,7 @@ function trendBlock(signals: PlayerSignals): string {
 // The ten per-index points collapse into three buckets. Ten lines of two-game
 // samples is noise the model would happily narrate; "does this player fall off
 // late in a session" is the question actually being asked.
-function sessionBlock(signals: PlayerSignals): string {
+export function sessionBlock(signals: PlayerSignals): string {
   const buckets: { label: string; games: number; wins: number }[] = [
     { label: "games 1-2 of a session", games: 0, wins: 0 },
     { label: "games 3-4 of a session", games: 0, wins: 0 },
@@ -569,7 +630,7 @@ function buildPlayerPrompt({
   detailed,
   olderNotes,
   aiContext,
-}: PlayerPromptInput): string {
+}: PlayerPromptData): string {
   // Counted from the same rows as every split below — see the note on PlayerRow.
   const overallWins = signals.trend.lifetime.wins;
   const overallLosses = signals.trend.lifetime.games - overallWins;

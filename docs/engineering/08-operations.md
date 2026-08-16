@@ -50,10 +50,21 @@ Migrations to date:
 | 009 | AI summaries opt-in |
 | 010 | Champion tier lists |
 | 011 | Revoked `authenticated` access to `sync_state` (the Riot key) |
+| 012–014 | Scrims: opponents, series, games, picks, then note threads and replies |
+| 015–017 | Draft strategy: tags + champion profiles, counters, comps |
+| 018 | The demo layer: 3 mapping tables, 13 views, `select` to `anon` |
+| 019 | `demo_player_summaries`, the view that publishes reviewed AI text |
+| 020 | `scrim_opponents.target_bans` — the ban plan; recreates `demo_scrim_opponents` |
 
 Migration 007 is the one to read as a template — it opens with a query to check what
 you're about to lose (cascade-deleted notes) *before* it deletes anything, and states the
 expected side effect (W/L totals tick down) up front.
+
+018 is the one to read **before editing anything demo-shaped**. It carries the warning that
+matters (`security_invoker` must stay off, or the demo silently renders empty) and a verify
+block that proves the boundary from outside with `curl` rather than asserting it. 019's
+verify block is the same shape: read the view as `anon`, then confirm the underlying
+`demo_text` still answers `42501` and that its columns answer `42703` through the view.
 
 ## 3. Deployment
 
@@ -212,6 +223,48 @@ Their history is not backfilled automatically on add — the next sync discovers
 back up to 200 matches per run. Press Sync a few times. (A Riot *ID change* on an existing
 player does trigger an immediate backfill; a brand-new player doesn't.)
 
+**They do not appear on `/demo`, and that is deliberate.** Every demo view joins
+`demo_aliases` inner, so a player with no alias row is invisible there. Publishing someone
+takes one insert:
+
+```sql
+insert into demo_aliases (player_id, alias, alias_slug)
+values ('<puuid>', 'Vesper', 'vesper');
+```
+
+Same for a new scrim opponent, in `demo_opponent_aliases` — until then their series and
+games are hidden too.
+
+### A demo page shows nothing where the private one shows text
+
+Working as designed. Every free-text column is served through `demo_text`, and a row with
+no override renders empty ([09, ADR-037](09-decision-log.md)). To publish a specific note,
+insert one row keyed on its surface and id:
+
+```sql
+insert into demo_text (source, row_id, body) values ('counter', '<counter uuid>', '…');
+-- sources: champion_profile | counter | comp | comp_label | opponent | series
+```
+
+Then wait out the 1-hour data cache, or redeploy.
+
+### The demo shows stale numbers
+
+`/demo` caches its reads for an hour (`DEMO_REVALIDATE_SECONDS`). A publish from `/settings`
+calls `revalidateTag("demo", "max")`, which is stale-while-revalidate — **the first load
+after publishing still shows the old page**. Load it twice before concluding anything is
+broken.
+
+### Generating the demo's AI summaries
+
+`/settings` → *Demo summaries*. The button generates drafts for whoever doesn't have one;
+about three fit in a 60-second invocation, so press it until it stops saying `remaining`.
+Nothing reaches `/demo` until you press **Publish** on that player's row, and the status
+line on each row reads the *published* text, not the box — "live, but not this version"
+means the box has been edited since. An empty box plus Publish takes the card down.
+
+This is the one AI path with no cron behind it, on purpose ([06 §6b](06-ai-layer.md)).
+
 ## 6. Cost and capacity
 
 Everything runs on free tiers. The ceilings that actually bind, roughly in the order
@@ -244,6 +297,12 @@ TypeScript:
 Adding a writable column to `players` also means adding it to the `grant update (…)` list
 in `schema.sql`, or it's silently read-only for signed-in users. See
 [04 §5](04-auth-and-security.md).
+
+**A column added to a base table does not reach its `demo_` view**, because every view
+lists its columns explicitly. That is the safe direction — the demo shows less, never more
+— but it means a new column the demo *should* show needs a migration that recreates the
+view, plus a check that nothing in the new column is identifying. See
+[02 §13](02-data-model.md) for the criterion.
 
 ## 8. Commands
 

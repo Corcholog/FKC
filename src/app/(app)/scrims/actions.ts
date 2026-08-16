@@ -1,11 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireSession } from "@/lib/auth";
 import { getChampionMap, getLatestVersion, type ChampionInfo } from "@/lib/ddragon";
 import { opponentSlug } from "@/lib/slug";
 import type { ScrimPickRow } from "@/lib/scrims/types";
 import {
+  cleanBanPlan,
   cleanText,
   validateSeries,
   MAX_NAME_CHARS,
@@ -81,8 +82,12 @@ async function championsForWrite(): Promise<Map<number, ChampionInfo>> {
 /**
  * The columns of scrim_games an entered game owns.
  *
- * `patch` is deliberately absent: nothing enters it yet, and listing it here
- * would have an edit blank it on every save.
+ * `patch` used to be absent here, because nothing entered it — which meant no
+ * recorded game had one and "how did we look on this patch" could not be
+ * answered at all. The form now prefills it from the current DDragon version,
+ * so it is written like any other field. It is still nullable: a series entered
+ * before the field existed keeps its null, and the edit form shows that blank
+ * rather than stamping today's patch onto an old game.
  */
 function gameFields(game: ScrimGameInput, gameNumber: number) {
   return {
@@ -90,6 +95,7 @@ function gameFields(game: ScrimGameInput, gameNumber: number) {
     side: game.side,
     win: game.win,
     duration_seconds: game.durationSeconds,
+    patch: game.patch,
     ally_bans: game.allyBans,
     enemy_bans: game.enemyBans,
   };
@@ -450,6 +456,55 @@ export async function updateOpponentNotes(
     return {};
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not save those notes." };
+  }
+}
+
+/**
+ * The ban plan for one opponent — which champions we intend to take off them.
+ *
+ * Validated against the live DDragon champion list rather than trusted, for the
+ * same reason `saveScrimSeries` is: a server action is a POST endpoint, so the
+ * fact that our own picker only offers real champions proves nothing about what
+ * arrives here. `cleanBanPlan` drops anything unknown or duplicated and keeps
+ * the order, which is the priority — first in the array is first off the board.
+ */
+export async function updateOpponentBanPlan(
+  opponentId: string,
+  championIds: number[],
+): Promise<ScrimActionResult> {
+  try {
+    const { supabase } = await requireSession();
+    if (!opponentId) return { error: "Missing opponent." };
+
+    const championMap = await getChampionMap(await getLatestVersion());
+    // An empty map means DDragon is down, and cleaning against it would silently
+    // wipe the plan. Refusing is the only honest option: the alternative is a
+    // save that reports success and deletes the prep.
+    if (championMap.size === 0) {
+      return { error: "Champion list unavailable right now — try again in a moment." };
+    }
+
+    const { data, error } = await supabase
+      .from("scrim_opponents")
+      .update({ target_bans: cleanBanPlan(championIds, new Set(championMap.keys())) })
+      .eq("id", opponentId)
+      .select("id");
+
+    if (error) return { error: error.message };
+    if (!data || data.length === 0) return { error: BLOCKED };
+
+    revalidatePath("/scrims/opponents", "page");
+    revalidatePath("/scrims/opponents/[slug]", "page");
+    // The ban plan is the one column on this table the demo actually renders —
+    // `notes` reaches it through demo_text, but target_bans passes straight
+    // through the view. Without this it would sit behind the hour-long demo
+    // cache, which reads as the save not having worked. revalidateTag rather
+    // than updateTag for the reason settings/actions.ts gives: unstable_cache's
+    // `tags` option is documented against revalidateTag.
+    revalidateTag("demo", "max");
+    return {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not save that ban plan." };
   }
 }
 

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
+import { privateSource } from "@/lib/data-source";
 import { getChampionMap, getLatestVersion, type ChampionInfo } from "@/lib/ddragon";
 import { slugify } from "@/lib/slug";
 import { loadDraftTags } from "@/lib/draft/queries";
@@ -43,7 +44,7 @@ export async function saveChampionProfile(input: ChampionProfileInput): Promise<
     const { supabase, user } = await requireSession();
 
     const championMap = await championsForWrite();
-    const tagSlugs = new Set((await loadDraftTags(supabase, "function")).map((t) => t.slug));
+    const tagSlugs = new Set((await loadDraftTags(privateSource(supabase), "function")).map((t) => t.slug));
 
     const problem = validateChampionProfile(input, new Set(championMap.keys()), tagSlugs);
     if (problem) return { error: problem };
@@ -335,7 +336,7 @@ export async function saveDraftComp(
 
     const championMap = await championsForWrite();
     const winConditionSlugs = new Set(
-      (await loadDraftTags(supabase, "win_condition")).map((t) => t.slug),
+      (await loadDraftTags(privateSource(supabase), "win_condition")).map((t) => t.slug),
     );
 
     const problem = validateDraftComp(input, new Set(championMap.keys()), winConditionSlugs);

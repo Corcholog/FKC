@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
 import { loadOpponents, loadSeries } from "@/lib/scrims/queries";
+import { privateSource } from "@/lib/data-source";
 import { SCRIM_ROLES, type ScrimRole } from "@/lib/scrims/types";
 import { gameStateFromView } from "@/components/scrims/draft-form-state";
 import { ScrimSeriesForm } from "@/components/scrims/scrim-series-form";
@@ -45,13 +46,13 @@ export default async function EditScrimSeriesPage({
   const supabase = await createClient();
 
   const [games, { data: roster }, opponents, version] = await Promise.all([
-    loadSeries(supabase, id),
+    loadSeries(privateSource(supabase), id),
     supabase
       .from("players")
       .select("id, display_name")
       .order("display_name")
       .returns<RosterRow[]>(),
-    loadOpponents(supabase),
+    loadOpponents(privateSource(supabase)),
     getLatestVersion(),
   ]);
 

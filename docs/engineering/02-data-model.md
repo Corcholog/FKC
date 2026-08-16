@@ -1,8 +1,9 @@
 # 02 — Data Model
 
-Nine tables. The runnable DDL is `docs/schema.sql` (fresh install) plus the numbered
-files in `docs/migrations/` (incremental) — both kept locally, outside this published
-folder.
+Nine core tables, plus three later islands that hang off them: scrims (§9), draft strategy
+(§10–12), and the demo's mapping layer (§13–14). The runnable DDL is `docs/schema.sql`
+(fresh install) plus the numbered files in `docs/migrations/` (incremental) — both kept
+locally, outside this published folder.
 
 ## 1. The shape
 
@@ -38,6 +39,9 @@ folder.
 
 Singletons (id = 1, enforced by CHECK):
   sync_state · clan_profile · team_ai_summary
+
+Plus two islands with their own sections: scrims (§9) and the demo (§13). The demo
+adds no facts — three mapping tables and fourteen views over everything above.
 ```
 
 ## 2. `players` — the roster
@@ -526,3 +530,128 @@ matches), which btree cannot answer. `loadDraftComps` exposes those as `containe
 `champion_profiles.tags`. The two vocabularies are separate by convention (`kind`) rather
 than by constraint, so the cleanup is unconditional — a slug left dangling in an array
 renders as a raw slug with no label, which reads as corruption.
+
+## 13. The demo layer — three tables and fourteen views
+
+Migrations 018 and 019. This layer stores **no facts about the game**. It is a mapping
+from real identities to invented ones, plus a set of views that apply it. Delete every
+row in it and the private app is unchanged; delete the views and only `/demo` breaks.
+
+Why it is in Postgres rather than in the render layer is [04, §10](04-auth-and-security.md)
+and [09, ADR-034](09-decision-log.md). What follows is the shape.
+
+### The mapping tables
+
+| Table | Key | Holds |
+|---|---|---|
+| `demo_aliases` | `player_id → players(id)` | `public_id uuid`, `alias`, `alias_slug` |
+| `demo_opponent_aliases` | `opponent_id → scrim_opponents(id)` | same three |
+| `demo_text` | `(source, row_id)` | `body`, `updated_at` |
+
+All three are `authenticated`-only and granted to `anon` nowhere. `demo_aliases` maps a
+puuid to an alias; published, it would undo the whole design in one request.
+
+**`public_id` exists because `players.id` *is* the Riot puuid.** Exposing it would hand
+out a stable, real Riot account identifier — worse than a display name, because it
+survives renames and resolves against Riot's own API. Every view substitutes the
+surrogate wherever a player is referenced, including in foreign keys, so nothing the
+demo emits can be joined back to a real account.
+
+**Both alias joins are inner.** A player or an opponent with no alias row does not appear
+in the demo at all — and for opponents, neither do their series or games, which are
+restricted through `demo_scrim_series`. Adding a roster member or a new opponent
+therefore *hides* them until somebody writes an alias, rather than publishing them by
+default. The default has to be the safe one, because the unsafe one is silent.
+
+**`demo_text` is the only source of prose.** `source` names the surface, `row_id` is that
+surface's id cast to text (the ids it points at are variously `uuid`, `integer` and
+`text`). The views `left join` it, so **a row with no override renders no text at all**.
+Current sources: `champion_profile`, `counter`, `comp`, `comp_label`, `opponent`,
+`series`, `player_summary`, `player_summary_draft`.
+
+The last two are the same text in two states — see §14 below.
+
+### The views, and the criterion for a column
+
+Every view lists its columns explicitly; `select *` would silently publish the next column
+anybody adds to a base table. **Column names match the base tables exactly**, which is
+what lets one loader serve both versions by swapping a table name rather than existing
+twice ([07](07-frontend.md)).
+
+| View | Identity replaced | Columns deliberately absent |
+|---|---|---|
+| `demo_players` | `public_id` as `id`, alias as both names, `'DEMO'` tag line | real `id` (puuid), `user_id`, `ai_context`, `ai_summary_enabled`, `synced_through`, `avatar_url` |
+| `demo_matches` | — | **`riot_match_id`** |
+| `demo_match_participants` | `public_id` as `player_id` | `puuid`, `riot_game_name`, `riot_tag_line` |
+| `demo_player_rank_history` | `public_id` | — |
+| `demo_champion_tier_lists` | `public_id` | `updated_by` |
+| `demo_draft_tags` | — | — |
+| `demo_champion_profiles` | — | `notes` → `demo_text` |
+| `demo_champion_counters` | — | `note` → `demo_text`, `created_by` |
+| `demo_draft_comps` | — | `label` **and** `notes` → `demo_text` |
+| `demo_scrim_opponents` | opponent alias | `notes` → `demo_text` |
+| `demo_scrim_series` | opponent `public_id` | `created_by`, `notes` → `demo_text` |
+| `demo_scrim_games` | — (already clean) | — |
+| `demo_scrim_picks` | ally alias, or a positional label | the typed nickname |
+| `demo_player_summaries` | `public_id` | everything else — it is a projection of `demo_text` |
+
+Four of those are worth the reasoning:
+
+**`avatar_url` is dropped, not blanked, and not only because of the photo.** The Storage
+object path is `${players.id}.${ext}` (`settings/actions.ts`), so the URL string itself
+*contains the puuid*. The demo renders an initials tile derived from a hash of the alias
+instead.
+
+**`riot_match_id` is the single most dangerous column in the database for this purpose.**
+It de-anonymizes the entire lobby in one step: paste it into any third-party site and all
+ten Riot IDs come back, aliases or not. Everything else leaks one person; this leaks the
+match.
+
+**The three Riot-ID columns on `match_participants` cost nothing to drop.** Nine of every
+ten rows belong to untracked strangers who never agreed to appear here, so their Riot IDs
+are as much of a problem as the roster's — and those columns appear in **no `.select()`
+anywhere in the app**, because untracked participants already render as champion icons
+only. The join to `demo_aliases` is a `left` join for the same reason: an inner join would
+drop the nine other rows and take every team composition with it.
+
+**`draft_comps.label` goes through `demo_text` even though it is not a note.** It is a
+free-text field the team typed, and it holds in-jokes. `compTitle()` already falls back to
+the champion names when a comp has no label, so an un-overridden comp reads as its
+portraits rather than as a gap.
+
+### `demo_scrim_picks` and the label that has to be stable
+
+`scrim_picks.player_name` is a nickname somebody typed — an enemy's, or an untracked
+ally substitute's. Allies resolve through `demo_aliases`; everyone else gets
+`'Rival ' || team_position` (or `'Sub '`).
+
+The label is **positional rather than per-row on purpose**. `lib/scrims/team-stats.ts`
+groups an opponent's history by `lower(player_name)` to derive their roster, so a per-row
+label would split one enemy toplaner into one "player" per game and the derived roster
+would be meaningless. Role plus side is the coarsest thing that keeps the grouping intact.
+
+The cost is the other direction: an opponent who fielded two different toplaners across a
+season collapses into one "Rival TOP". That is a real inaccuracy in the demo's scouting
+page and it is listed in [10](10-known-gaps.md).
+
+## 14. `demo_text` as a two-state row
+
+Migration 019 adds one view:
+
+```sql
+create or replace view public.demo_player_summaries as
+select a.public_id as player_id, t.body as summary_text, t.updated_at as generated_at
+from public.demo_text t
+join public.demo_aliases a on a.player_id = t.row_id
+where t.source = 'player_summary'
+  and length(btrim(t.body)) > 0;
+```
+
+Note `source = 'player_summary'` **and nothing else**. Generated text is written under
+`source = 'player_summary_draft'`, and publishing is an upsert of both rows with the same
+body. So one player's summary is up to two rows: what exists, and what is public.
+
+This needed no schema change — `source` was already half the primary key — and it is the
+only reason the review step in `/settings` is real rather than decorative. The
+`length(btrim(body)) > 0` filter means clearing the published row is a valid operation:
+it takes the card off the demo instead of rendering an empty one.

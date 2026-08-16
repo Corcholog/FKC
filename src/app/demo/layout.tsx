@@ -13,7 +13,7 @@ import { DemoNavbar } from "@/components/demo/demo-navbar";
 export const metadata: Metadata = {
   title: "SoloQ Tracker — public demo",
   description:
-    "A League of Legends performance tracker for a five-person roster. Real match data, anonymized identities.",
+    "A League of Legends performance tracker for a full roster. Real match data, anonymized identities.",
   // The demo is a link you send someone, not a page that should rank. It also
   // means a search engine never caches a snapshot of the roster's numbers.
   robots: { index: false, follow: false },

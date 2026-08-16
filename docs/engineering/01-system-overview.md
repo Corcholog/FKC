@@ -46,26 +46,36 @@
    │  players · matches · match_participants ·     │
    │  player_rank_history · match_notes ·          │
    │  player_ai_summaries · team_ai_summary ·      │
-   │  clan_profile · sync_state                    │
+   │  clan_profile · sync_state · scrim_* ·        │
+   │  draft_* · champion_*                         │
    │  + Storage bucket: avatars                    │
-   └───────────────────▲──────────────────────────┘
-                       │ anon key, RLS enforced
-                       │
-   ┌───────────────────┴──────────────────────────┐
-   │  Next.js Server Components (every page)       │
-   │  src/proxy.ts gates every request first       │
-   └───────────────────▲──────────────────────────┘
-                       │ champion icons
-                       │
-              ┌────────┴─────────┐
+   │  ─────────────────────────────────────────    │
+   │  demo_* views  (owner-executed projections)   │
+   │  demo_aliases · demo_text  (not public)       │
+   └────────▲──────────────────────▲──────────────┘
+            │ publishable key      │ publishable key
+            │ session JWT          │ **no session** → anon
+            │ RLS enforced         │ select granted on views only
+            │                      │
+   ┌────────┴───────────────┐  ┌───┴──────────────────────────┐
+   │ (app) Server Components│  │ /demo Server Components       │
+   │ src/proxy.ts gates them│  │ createPublicClient()          │
+   └────────▲───────────────┘  │ unstable_cache, 1h            │
+            │                  └───▲──────────────────────────┘
+            │ champion icons       │
+            └───────┬──────────────┘
+              ┌─────┴────────────┐
               │  DDragon CDN     │
               │  (24h revalidate)│
               └──────────────────┘
 ```
 
-Note the two arrows into Postgres. **The sync and the AI batch write with the service
-role key (RLS bypassed); every page reads with the publishable key (RLS enforced).**
-That split is the whole security model and is covered in [04](04-auth-and-security.md).
+Note the three arrows into Postgres. **The sync and the AI batch write with the service
+role key (RLS bypassed); private pages read with the publishable key and the visitor's
+session (RLS enforced); the demo reads with the publishable key and *no* session, so its
+JWT is `anon`, which RLS denies on every real table and which has `select` on the
+`demo_*` views only.** That split is the whole security model and is covered in
+[04](04-auth-and-security.md).
 
 ## 3. Request lifecycle for a page view
 
@@ -120,7 +130,10 @@ src/
 ├── app/
 │   ├── layout.tsx              Root: fonts (Geist + Rajdhani), Toaster
 │   ├── globals.css             The entire design system — tokens + shadcn mapping
-│   ├── login/page.tsx          The one public route
+│   ├── login/page.tsx          Public route
+│   ├── robots.ts               noindex, everything — the demo is a link, not a listing
+│   ├── demo/                   Public, read-only, anonymized mirror. Sibling of (app),
+│   │                           never a child — it must not inherit the private chrome
 │   ├── (app)/                  Route group: everything behind auth
 │   │   ├── layout.tsx          Navbar + key-expired banner
 │   │   ├── page.tsx            Dashboard (awards, activity, squad, team recap)
@@ -134,24 +147,31 @@ src/
 │   │   └── account/            Password change for the signed-in player
 │   └── api/
 │       ├── sync/route.ts       The daily sync (also the navbar button)
-│       └── summaries/route.ts  The daily AI batch
+│       ├── summaries/route.ts  The daily AI batch
+│       ├── weekly/route.ts     The weekly Discord recap
+│       └── demo-summaries/     The demo's analyst summaries — a button, never a cron
 ├── lib/
-│   ├── supabase/               Four clients: browser, server, admin, proxy
+│   ├── supabase/               Five clients: browser, server, proxy, public, admin
+│   ├── data-source.ts          `DataSource` — which set of tables a read goes to
+│   ├── loaders/                One loader per page, shared by the private and demo
+│   │                           versions: fetchXRows (cacheable) + buildX (pure)
 │   ├── riot.ts                 Riot HTTP client + DTO types + field whitelists
 │   ├── rate-limiter.ts         Sliding-window limiter (shared by Riot and Gemini)
 │   ├── sync.ts                 The sync engine — the densest file in the repo
 │   ├── participant-row.ts      Riot DTO → database row mapping
 │   ├── ddragon.ts              Champion id ↔ display name ↔ icon URL
 │   ├── auth.ts                 Session helpers (React `cache`-deduped)
-│   ├── {player,champion,duo,time}-stats.ts, sessions.ts, streaks.ts, matchups.ts
+│   ├── {player,champion,duo,time,duration,side}-stats.ts, lane-diff.ts,
+│   │   sessions.ts, streaks.ts, matchups.ts
 │   │                           The pure-function domain layer — no I/O
 │   ├── rank.ts                 Tier/division/LP ↔ sortable & plottable numbers
-│   ├── gemini.ts, summary.ts, ai-context.ts    The AI layer
+│   ├── gemini.ts, summary.ts, summary-analyst.ts, ai-context.ts    The AI layer
 │   └── roles.ts, format.ts, slug.ts, lolalytics.ts, utils.ts
 └── components/
     ├── ui/                     shadcn primitives (Base UI under the hood)
     ├── charts/                 Recharts wrappers + the shared chart palette
-    ├── settings/, player/, insights/, account/
+    ├── settings/, player/, insights/, account/, demo/
+    ├── scrims/views/           The body of each scrims page, minus its write actions
     └── (top level)             match-row, award-tile, stat-ranking, navbar, …
 ```
 
@@ -166,11 +186,19 @@ player page, and the AI prompts without drifting.
 
 **Aggregation happens in JavaScript, not in Postgres.** Every stats page selects all
 relevant `match_participants` rows unbounded and folds them in memory. At this roster's
-volume (five players × a few hundred games) that's a few thousand rows and it's fine.
+volume (nine tracked players × a few hundred games) that's a few thousand rows and it's fine.
 It is also the first thing that would need to change at scale — see
 [10](10-known-gaps.md).
 
-**Writes go through Server Actions, not API routes.** The two API routes exist only
-because they need `maxDuration = 60` and an unauthenticated cron entry point. Everything
-else — adding a player, writing a note, editing AI context — is a `"use server"`
-function returning a `PlayerFormState`/`NoteFormState` consumed by `useActionState`.
+**Writes go through Server Actions, not API routes.** The API routes exist only because
+they need `maxDuration = 60` and either a cron entry point or a budget longer than an
+action should hold. Everything else — adding a player, writing a note, editing AI context
+— is a `"use server"` function returning a `PlayerFormState`/`NoteFormState` consumed by
+`useActionState`.
+
+**Most pages are read twice over: once private, once anonymized.** A loader in
+`src/lib/loaders/` takes a `DataSource` and calls `source.table("match_participants")`,
+which resolves to either the real table or its `demo_` view. The views expose the same
+column names, so there is no `if (demo)` branch inside a query and no second copy of a
+loader to drift. See [07](07-frontend.md) for the pattern and
+[04](04-auth-and-security.md) for why the safety lives in Postgres rather than here.

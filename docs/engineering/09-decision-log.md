@@ -854,3 +854,181 @@ The cost is that a draft can't be shared or reopened tomorrow. If that turns out
 the fix is a `draft_boards` table serialising the existing `SeriesBoard` type — `board.ts` was
 written to make that straightforward, and `isSeriesBoard` is already the validator such a
 table would need.
+
+---
+
+## ADR-034 — Anonymize in Postgres, not in the render layer
+
+**Context.** A member of the group applied for a coaching role, showed this app as the tool
+the group analyses itself with, and the hiring staff wanted to look at it. They obviously
+cannot be given logins. The requirement that follows is not "the pages display aliases" —
+it is *there must be no path by which a real name leaves the database*.
+
+The obvious implementation is a mapping applied while rendering: fetch the real rows, swap
+the names on the way out.
+
+**Decision.** Do it in the database. `demo_*` views project the base tables with identity
+replaced by a surrogate and sensitive columns simply **absent**, and `anon` is granted
+`select` on those views and nothing else (migration 018).
+
+**Consequences.** A render-layer mapping is a line of code, and a line of code can be
+forgotten — silently, because the page still renders. A missing column cannot be
+forgotten: selecting it is a `42703` error and the page breaks loudly. The proof this
+matters already existed in the codebase — `player/[slug]/page.tsx` does `.select("*")` on
+`players`, the widest select in the app. Against the view that is safe by construction,
+and the loader needs no discipline at all.
+
+It also means the guarantee holds for callers that are not this app. Someone hitting
+PostgREST directly with the publishable key gets aliases, because that is all the role can
+read — not because the frontend was polite.
+
+The cost is that the views must be maintained alongside the tables: adding a column to
+`players` does *not* add it to `demo_players`, which is the failure mode pointing in the
+safe direction, and adding a demo-visible column means editing SQL rather than TypeScript.
+
+Aliases themselves are **data, not code** — three mapping tables edited without a deploy,
+so a name that turns out to be too on-the-nose is one `update` away.
+
+---
+
+## ADR-035 — One deployment with public routes, not a separate demo project
+
+**Context.** The alternative shape is a second Vercel project pointed at a scrubbed copy of
+the database, or a fork with fixtures.
+
+**Decision.** One deployment. `/demo` is a public route subtree in the same app, with
+`PUBLIC_PREFIXES` in the proxy and its own layout.
+
+**Consequences.** One repo, one domain, one CI pipeline, and — the real argument — **no
+drift**. A separate demo would have started identical and diverged with the first feature
+that shipped to only one of them, which is the ordinary fate of demo forks. Here the demo
+renders the same components as the private app, so a broken demo page is a broken page.
+
+It also means the demo shows *real, current* data, which is most of why it is convincing:
+a live roster's rank movement and champion pools read as a tool in use, and fixtures read
+as a mockup.
+
+The cost is that the blast radius of a mistake is the production app, which is exactly why
+ADR-034 puts the boundary in Postgres rather than in a component.
+
+---
+
+## ADR-036 — Cache the data, not the page
+
+**Context.** A demo link gets passed around a staff. Paying a Supabase read per visitor is
+wasteful on a free tier, and `/demo/insights` reads the entire participant table.
+
+The idiomatic answer is `export const revalidate = 3600` on the page.
+
+**Decision.** `export const dynamic = "force-dynamic"` on every demo page, with
+`unstable_cache` (1 hour, tag `"demo"`) around each loader instead.
+
+**Consequences.** With no dynamic API in the tree, `revalidate` makes Next prerender the
+page **at build time** — so `next build` would connect to Supabase. CI builds with a
+placeholder project URL precisely because nothing should be contacted at build time, so an
+ISR demo page turns a green pipeline red for reasons unrelated to the code. Caching the
+data gets the property that actually matters (one read an hour, not one per visitor) with
+no build-time database dependency.
+
+`"use cache"` was the other candidate and needs `cacheComponents: true`, which changes the
+rendering model for every existing route in the app — too large a change to make in
+passing for the demo's benefit.
+
+The constraint this introduces: **cache entries are serialized**, so a `Map` returned from
+a cached loader comes back as `{}` on the second request. Every loader is therefore split
+into `fetchXRows` (plain arrays) and a pure `buildX`. The bug it prevents is a nasty one —
+the first request is a cache miss and works, so it looks correct locally and fails for the
+second visitor.
+
+---
+
+## ADR-037 — Free text is published by explicit override, never by filtering
+
+**Context.** Prose is the one thing projection cannot anonymize. A match note names people,
+quotes them, and carries the group's slang; `clan_profile.context` literally describes
+itself as holding inside jokes and nicknames.
+
+**Decision.** No real text column appears in any view. The views `left join` a `demo_text`
+table keyed on `(source, row_id)`, so **a row with no override shows no text at all**.
+
+**Consequences.** The default is silence. Forgetting to write an override produces a blank
+panel; a filter-based approach that missed a case produces a published in-joke. Given that
+the reviewer of both outcomes is the person who wrote the joke, the first failure is the
+one to engineer for.
+
+`draft_comps.label` goes through the same gate even though it is not a note — it is free
+text somebody typed, and `compTitle()` already falls back to champion names, so an
+un-overridden comp reads as its portraits rather than as a gap.
+
+Six tables get **no view at all**: `match_notes`, `scrim_game_notes`, `player_ai_summaries`,
+`team_ai_summary`, `clan_profile`, `sync_state`. The last is the most important — it holds
+the plaintext Riot key and a `last_error` in which Riot embeds puuids.
+
+The measured cost, so it is not a guess: the demo loses 4 counter notes, 1 comp label, 5
+comp notes, every match-notes panel, and the "Edited by X" line on tier lists. The draft
+reference pages lose nothing, because nobody had written notes on them.
+
+---
+
+## ADR-038 — The demo's AI is a second prompt profile, not the same prompt with aliases
+
+**Context.** The private player summary is written *for the person it is about*: it opens
+with what their friends wrote, quotes their own match notes back at them, and answers "how
+am I doing". Substituting aliases into that produces something that still reads as a
+group's inside voice, addressed to nobody in the room.
+
+**Decision.** `summary-analyst.ts` is a separate prompt profile over the same data.
+`gatherPlayerPromptData` takes an optional alias map, and when it has one it does not fetch
+match notes or AI context at all — the anonymization is in what the prompt is *built from*,
+not in what the model is told to avoid saying.
+
+Output is 4–5 scouting bullets in English rather than three paragraphs of Rioplatense
+Spanish, because the audience skims it next to four others.
+
+**Consequences.** The model cannot leak a note it was never shown, which is a stronger
+guarantee than any instruction in a prompt. Verified offline against the assembled prompts
+rather than the output: all nine carry their alias, zero note lines, zero hits against a
+68-needle set.
+
+Bullets also survive review better than prose — a claim per line can be struck out on its
+own, where removing one sentence from a paragraph means rewriting the paragraph.
+
+The demo's summaries are in English while the private ones are Spanish. One constant
+(`ANALYST_DEMO_VOICE`) decides that; a Spanish paragraph inside an English demo would read
+as an untranslated leftover rather than as a choice.
+
+---
+
+## ADR-039 — Generated public text lands in a draft row, and publishing is a second write
+
+**Context.** `/api/demo-summaries` generates prose that appears on a page with no login in
+front of it. The whole point of that feature is that a person reads it first.
+
+The first implementation wrote generated text straight into `demo_text` under
+`source = 'player_summary'` — which is exactly the row `demo_player_summaries` publishes.
+Three summaries went live before anyone had read them.
+
+**Decision.** Generation writes `source = 'player_summary_draft'`. Publishing is a button
+in `/settings` that upserts both rows. `source` was already half the primary key, so this
+needed no schema change.
+
+**Consequences.** The review step is real rather than decorative, and the status line in
+`/settings` reads the *published* row, never the textarea — so it can distinguish "live on
+the demo" from "live, but not this version". Clearing the box and publishing takes the card
+down, because the public view filters on `length(btrim(body)) > 0`.
+
+Two supporting decisions fell out of the same bug report:
+
+- The endpoint is **deliberately not on the cron**, unlike `/api/summaries`. A nightly job
+  that rewrites public prose unattended is the exact thing this gate exists to prevent.
+- A run fills in what is *missing* rather than walking the roster from the top, and reports
+  `remaining`. Without that, a 60-second invocation that fits three generations rewrites
+  the same first three players on every press. The per-call time estimate starts at 15s and
+  is then **replaced by measurement**; it was a fixed 8s against calls that really take
+  ~15s, so the loop kept starting a generation it could not finish and the work was lost
+  when the platform killed the invocation.
+
+Publishing calls `revalidateTag("demo", "max")`. Without it the 1-hour data cache from
+ADR-036 means a freshly published summary appears on some pages and not others depending on
+when each was last read — which is how the unreviewed-publication bug was noticed in the
+first place.

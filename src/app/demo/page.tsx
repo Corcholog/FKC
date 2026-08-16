@@ -26,7 +26,7 @@ export default async function DemoPage() {
       <div className="flex flex-col gap-2">
         <h1 className="font-heading text-2xl font-semibold text-white">Roster</h1>
         <p className="max-w-2xl text-sm text-grey-light">
-          A performance tracker built for a five-person League of Legends roster. It pulls every
+          A performance tracker built for a League of Legends roster. It pulls every
           ranked game from Riot&rsquo;s API, keeps all ten participants of each match, and turns
           that into per-player and cross-player analysis — rank history, champion pools, lane
           matchups, duo synergy and session tilt.

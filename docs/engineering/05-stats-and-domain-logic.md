@@ -413,6 +413,71 @@ the right instinct for any order-dependent aggregate.
 `NOTABLE_STREAK = 3` — at 2 games it's noise, so the 🔥/💀 markers and badges only appear
 from 3.
 
+## 9b. Game length, map side, and the lane opponent
+
+Three modules added together, all answering *when* or *against whom* rather than *how
+well*, and all built from columns the sync already stores — no new Riot calls.
+
+### `duration-stats.ts` — two readings of the same rows
+
+A 55% winrate that is 64% under 25 minutes and 41% past 35 is a completely different
+player from a flat 55%, and the difference is actionable: draft them something that
+closes, or stop giving them scaling picks.
+
+The module computes it twice, because the two readings fail differently:
+
+- **`aggregateByDuration`** buckets into `15–25 / 25–30 / 30–35 / 35+`. Clean to read, but
+  the long bucket is always the thinnest, and a 3-game bucket at 33% looks like a finding
+  when it is a coin landing badly.
+- **`winRatePastMinute`** is the cumulative curve: among games that lasted *at least* X
+  minutes, how did they end. Marks at 15/20/25/30/35/40. Every point contains every longer
+  game, so the sample shrinks gradually instead of being sliced into thin cells — and the
+  shape shows *where* the decline starts rather than only that it exists.
+
+**The floor is 15:00, not 0.** Migration 007 deleted the participant rows of every match
+under 900 seconds, so there is no shorter bucket to build. That also gives a free
+correctness check: the curve's value at the 15-minute mark must equal the overall winrate,
+because every stored game clears it.
+
+`MIN_DURATION_SAMPLE = 5` marks a point as unreliable rather than hiding it — the same
+discipline as `Ranked.unranked` in `stat-ranking.tsx`. `durationSwing` returns the
+first-to-last delta, or `null` when neither end has a usable sample.
+
+### `lane-diff.ts` — the flat question a coach asks first
+
+`matchups.ts` answers "which champions beat me". This answers "across every game, do they
+come out of lane ahead or behind, and by how much" — gold, CS and damage against the
+person standing across from them, via the same `findLaneOpponent` from `roles.ts`.
+
+**Everything is per minute.** A 40-minute game produces bigger gaps than a 20-minute one
+for reasons that have nothing to do with the player, so absolute totals would mostly
+measure game length.
+
+**Support CS diff is kept, unlike everywhere else.** `player-stats.ts` drops support games
+from CS/min because it averages one player across every role and support farm drags the
+number down (§1). Here the comparison is like-for-like — a support's lane opponent is the
+enemy support — so the number means something. Two modules, opposite calls, both correct;
+this is the case where copying the convention across would have been the bug.
+
+`games` counts only matches where a same-role enemy was found. Riot leaves `team_position`
+empty on some autofills, so that is strictly fewer than the games played, and the panel
+says which number it is reading.
+
+This is also the one place Phase 2 needed a query change: the historical-participant read
+on the player page selected only kills/deaths/assists and now also takes `total_cs`,
+`damage_dealt_to_champions` and `gold_earned`.
+
+### `side-stats.ts` — honest about being nearly worthless in soloq
+
+`aggregateBySide` splits on `team_id` (100 blue, 200 red) into games, winrate and average
+duration.
+
+In solo queue the side is **assigned**, so a gap is close to noise unless the sample is
+large — `MIN_SIDE_GAMES = 100`, far above any other threshold in the codebase, and the
+caption says outright that this is a curiosity. It is a module rather than four lines
+inside the player page because the same two functions carry a real signal on the scrims
+side, where the side comes out of a draft the team prepared for.
+
 ## 10. The pattern worth stealing
 
 Every one of these modules has the same shape:

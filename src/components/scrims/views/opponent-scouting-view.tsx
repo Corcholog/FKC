@@ -5,7 +5,12 @@ import { championDisplayName, type ChampionInfo } from "@/lib/ddragon";
 import { formatKdaRatio, kdaRatioForGame } from "@/lib/format";
 import { formatRole, formatRoleShort } from "@/lib/roles";
 import { groupBySeries } from "@/lib/scrims/queries";
-import { countBans, aggregatePicksByRole, type ChampionBanCount } from "@/lib/scrims/draft-stats";
+import {
+  aggregatePicks,
+  aggregatePicksByRole,
+  countBans,
+  type ChampionBanCount,
+} from "@/lib/scrims/draft-stats";
 import { deriveOpponentRoster, namedPickCoverage } from "@/lib/scrims/opponents";
 import { overallRecord, recordBySide } from "@/lib/scrims/team-stats";
 import { SCRIM_KIND_LABELS, SCRIM_ROLES, type ScrimGameView, type ScrimOpponentRow } from "@/lib/scrims/types";
@@ -67,6 +72,66 @@ function BanList({
   );
 }
 
+/**
+ * The plan, cross-referenced against what they actually play.
+ *
+ * A target ban is a decision, and the number that justifies it is already on
+ * this page — how often this opponent picked that champion. Putting the two
+ * side by side is what turns the plan from a list into an argument, and it
+ * catches a plan that has gone stale: a target they have not picked in the
+ * games on record is either old prep or a read from somewhere else, and either
+ * way that is worth seeing before Saturday.
+ *
+ * Read-only. The editor renders the same annotation from the same counts, which
+ * is why they are passed in rather than derived twice.
+ */
+function BanPlan({
+  championIds,
+  pickCounts,
+  version,
+  championMap,
+}: {
+  championIds: number[];
+  pickCounts: BanPlanPickCounts;
+  version: string;
+  championMap: Map<number, ChampionInfo>;
+}) {
+  const counts = new Map(pickCounts);
+
+  return (
+    <ol className="flex flex-wrap gap-2">
+      {championIds.map((id, index) => (
+        <li
+          key={id}
+          className="flex items-center gap-2 rounded-sm border border-border bg-bg-tertiary/40 px-2 py-1.5"
+        >
+          <span className="text-xs tabular-nums text-grey-mid">{index + 1}</span>
+          <ChampionIcon
+            championId={id}
+            version={version}
+            championMap={championMap}
+            size="sm"
+            banned
+          />
+          <div className="min-w-0">
+            <p className="truncate text-sm text-grey-light">
+              {championDisplayName(id, championMap, String(id))}
+            </p>
+            <p className="text-[10px] text-grey-mid">{describePickCount(counts.get(id) ?? 0)}</p>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** `[championId, times this opponent picked it]`. An array, so it crosses to a client component. */
+export type BanPlanPickCounts = Array<[number, number]>;
+
+export function describePickCount(picked: number): string {
+  return picked === 0 ? "not picked in these games" : `they picked it ${picked}×`;
+}
+
 export function OpponentScoutingView({
   opponent,
   games,
@@ -74,6 +139,7 @@ export function OpponentScoutingView({
   championMap,
   basePath = "",
   notesForm,
+  banPlanForm,
 }: {
   opponent: ScrimOpponentRow;
   games: ScrimGameView[];
@@ -81,6 +147,13 @@ export function OpponentScoutingView({
   championMap: Map<number, ChampionInfo>;
   basePath?: string;
   notesForm?: ReactNode;
+  /**
+   * The editor, as a render prop over the counts this view already derived —
+   * so the editable list carries the same "they picked it 3×" annotation the
+   * read-only one does without counting twice. Omitted on the demo, which falls
+   * back to the read-only list.
+   */
+  banPlanForm?: (pickCounts: BanPlanPickCounts) => ReactNode;
 }) {
   const overall = overallRecord(games);
   const sides = recordBySide(games);
@@ -91,6 +164,11 @@ export function OpponentScoutingView({
   const ourBans = countBans(games, "ally").slice(0, 10);
   const theirPools = aggregatePicksByRole(games, "enemy");
   const series = groupBySeries(games);
+  // One pass over their picks, shared by the read-only plan and the editor.
+  const banPlanCounts: BanPlanPickCounts = aggregatePicks(games, "enemy").map((c) => [
+    c.championId,
+    c.games,
+  ]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -124,6 +202,34 @@ export function OpponentScoutingView({
           <SeriesScore wins={overall.wins} losses={overall.losses} className="ml-auto text-2xl" />
         )}
       </div>
+
+      {/* The plan sits above the history, because it is the thing you act on
+          and the history below is what justifies it. Without an editor it
+          renders read-only, and disappears entirely when there is no plan —
+          the demo should show prep that exists, not an empty affordance for
+          something it cannot do. */}
+      {(banPlanForm || opponent.target_bans.length > 0) && (
+        <section className="panel-hex flex flex-col gap-3 p-4">
+          {banPlanForm ? (
+            banPlanForm(banPlanCounts)
+          ) : (
+            <>
+              <div>
+                <h3 className="font-heading text-base font-semibold text-white">Ban plan</h3>
+                <p className="mt-0.5 text-xs text-grey-mid">
+                  Who we take off them, in the order we take it.
+                </p>
+              </div>
+              <BanPlan
+                championIds={opponent.target_bans}
+                pickCounts={banPlanCounts}
+                version={version}
+                championMap={championMap}
+              />
+            </>
+          )}
+        </section>
+      )}
 
       {notesForm}
 

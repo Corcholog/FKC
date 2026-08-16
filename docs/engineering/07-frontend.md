@@ -891,6 +891,12 @@ dangerous markup only exists at the private call site. `ScrimEmptyState` follows
 rule from the other end — `canAdd` defaults to `false`, so the value that reveals a write
 path has to be typed on purpose.
 
+A slot becomes a **render prop** when the private-only UI needs something the shared view
+already computed. `OpponentScoutingView`'s `banPlanForm` takes the enemy pick counts the
+page's own aggregate produced, so the editable ban plan carries the same *"they picked it
+3×"* annotation the read-only one does without counting twice — and the demo, passing no
+function, falls back to the read-only list rather than losing the section.
+
 `/demo/scrims` gets its own `layout.tsx` rather than reusing the private one for exactly
 this reason: that layout's "New scrim" button is the entrance to the whole write path.
 

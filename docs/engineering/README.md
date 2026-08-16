@@ -41,7 +41,7 @@ system. Everything else can be read on demand.
 | 06 | [AI layer](06-ai-layer.md) | Gemini, quota economics, prompt construction, error taxonomy |
 | 07 | [Frontend](07-frontend.md) | App Router structure, RSC data fetching, design tokens, charts |
 | 08 | [Operations](08-operations.md) | Env vars, deploys, cron, runbook, what breaks first |
-| 09 | [Decision log](09-decision-log.md) | The load-bearing decisions (ADR-001 to ADR-040), with context and consequences |
+| 09 | [Decision log](09-decision-log.md) | The load-bearing decisions (ADR-001 to ADR-041), with context and consequences |
 | 10 | [Known gaps](10-known-gaps.md) | What's missing, what's stale, what would break at 10× scale |
 
 ## Conventions used in these docs

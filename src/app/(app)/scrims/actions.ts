@@ -6,6 +6,7 @@ import { getChampionMap, getLatestVersion, type ChampionInfo } from "@/lib/ddrag
 import { opponentSlug } from "@/lib/slug";
 import type { ScrimPickRow } from "@/lib/scrims/types";
 import {
+  cleanBanPlan,
   cleanText,
   validateSeries,
   MAX_NAME_CHARS,
@@ -450,6 +451,48 @@ export async function updateOpponentNotes(
     return {};
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not save those notes." };
+  }
+}
+
+/**
+ * The ban plan for one opponent — which champions we intend to take off them.
+ *
+ * Validated against the live DDragon champion list rather than trusted, for the
+ * same reason `saveScrimSeries` is: a server action is a POST endpoint, so the
+ * fact that our own picker only offers real champions proves nothing about what
+ * arrives here. `cleanBanPlan` drops anything unknown or duplicated and keeps
+ * the order, which is the priority — first in the array is first off the board.
+ */
+export async function updateOpponentBanPlan(
+  opponentId: string,
+  championIds: number[],
+): Promise<ScrimActionResult> {
+  try {
+    const { supabase } = await requireSession();
+    if (!opponentId) return { error: "Missing opponent." };
+
+    const championMap = await getChampionMap(await getLatestVersion());
+    // An empty map means DDragon is down, and cleaning against it would silently
+    // wipe the plan. Refusing is the only honest option: the alternative is a
+    // save that reports success and deletes the prep.
+    if (championMap.size === 0) {
+      return { error: "Champion list unavailable right now — try again in a moment." };
+    }
+
+    const { data, error } = await supabase
+      .from("scrim_opponents")
+      .update({ target_bans: cleanBanPlan(championIds, new Set(championMap.keys())) })
+      .eq("id", opponentId)
+      .select("id");
+
+    if (error) return { error: error.message };
+    if (!data || data.length === 0) return { error: BLOCKED };
+
+    revalidatePath("/scrims/opponents", "page");
+    revalidatePath("/scrims/opponents/[slug]", "page");
+    return {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not save that ban plan." };
   }
 }
 

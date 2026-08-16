@@ -20,7 +20,7 @@ import type {
   ScrimSeriesRow,
 } from "@/lib/scrims/types";
 
-const OPPONENT_COLUMNS = "id, name, slug, notes, created_at";
+const OPPONENT_COLUMNS = "id, name, slug, notes, target_bans, created_at";
 // created_by is asked for only privately: it is who entered the series, an auth
 // user id, and demo_scrim_series drops it. Nothing renders it — the write path
 // is its only reader — so the demo simply never selects it.

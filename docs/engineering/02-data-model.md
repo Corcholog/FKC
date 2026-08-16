@@ -302,7 +302,7 @@ stat columns are named to match `ChampionStatInput`. So:
 
 | Table | Worth knowing |
 |---|---|
-| `scrim_opponents` | Unique on `lower(name)`. Free text would fragment one team's history across `UBA`/`uba`, which is the one thing scouting can't survive. |
+| `scrim_opponents` | Unique on `lower(name)`. Free text would fragment one team's history across `UBA`/`uba`, which is the one thing scouting can't survive. `target_bans integer[]` (migration 020) is the **plan** — who we intend to take off them, in priority order, capped at five by a `cardinality()` check. What we *have* banned is history and lives in `scrim_games.ally_bans`; keeping the two apart is the whole point of the column. |
 | `scrim_series` | `played_on` is a `date`, not a timestamptz: nobody records what time a scrim started. `fearless` scopes "no repeats", which only means anything inside a series. |
 | `scrim_games` | `side` is *ours*; theirs is implied. Bans are `integer[]` — no role, no player, order is the data, ≤5 a side. Same call as `match_participants.items`. `duration_seconds` is nullable, and a missing one costs the CS/min column rather than the game. |
 | `scrim_picks` | `unique (game_id, ally, team_position)` — ten rows, one per role per side. This is what stops a mistyped draft becoming a six-man team. |
@@ -578,6 +578,12 @@ anybody adds to a base table. **Column names match the base tables exactly**, wh
 what lets one loader serve both versions by swapping a table name rather than existing
 twice ([07](07-frontend.md)).
 
+That explicitness has a maintenance edge, and migration 020 is the first time it was paid:
+adding `scrim_opponents.target_bans` did **not** add it to `demo_scrim_opponents`, so the
+migration recreates the view. Recreating one is the moment to re-check what it exposes, so
+020's verify block asserts both directions — the new column is readable as `anon`, and
+`created_by` still is not.
+
 | View | Identity replaced | Columns deliberately absent |
 |---|---|---|
 | `demo_players` | `public_id` as `id`, alias as both names, `'DEMO'` tag line | real `id` (puuid), `user_id`, `ai_context`, `ai_summary_enabled`, `synced_through`, `avatar_url` |
@@ -589,7 +595,7 @@ twice ([07](07-frontend.md)).
 | `demo_champion_profiles` | — | `notes` → `demo_text` |
 | `demo_champion_counters` | — | `note` → `demo_text`, `created_by` |
 | `demo_draft_comps` | — | `label` **and** `notes` → `demo_text` |
-| `demo_scrim_opponents` | opponent alias | `notes` → `demo_text` |
+| `demo_scrim_opponents` | opponent alias | `notes` → `demo_text` (`target_bans` passes through — champion ids carry no identity) |
 | `demo_scrim_series` | opponent `public_id` | `created_by`, `notes` → `demo_text` |
 | `demo_scrim_games` | — (already clean) | — |
 | `demo_scrim_picks` | ally alias, or a positional label | the typed nickname |

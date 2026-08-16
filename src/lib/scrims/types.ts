@@ -44,6 +44,12 @@ export type ScrimOpponentRow = {
   name: string;
   slug: string;
   notes: string | null;
+  /**
+   * Champions we intend to ban against them, in priority order — a plan, not a
+   * record. What we *have* banned is history, and lives in `scrim_games.ally_bans`.
+   * Capped at BANS_PER_SIDE by a check constraint (migration 020).
+   */
+  target_bans: number[];
   created_at: string;
 };
 

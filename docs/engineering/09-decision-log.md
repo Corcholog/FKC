@@ -1076,3 +1076,45 @@ The costs, both real:
 No migration. `scrim_series.kind` has distinguished `'scrim' | 'friendly' | 'official'`
 since migration 012, which is the axis a tier-2 team actually needs — practice separated
 from the games that counted — so the filter this ADR is about needed no new column.
+
+---
+
+## ADR-041 — A ban plan is a column, and it is not the ban history
+
+**Context.** The scouting page already answers "what have they banned against us" and "what
+have we banned against them", both from `scrim_games`. Neither is what a coach writes down
+before a series. That is a *decision* — these three are coming off the board on Saturday —
+and it was living in whatever chat the team happened to use, which is where prep goes to
+die.
+
+**Decision.** `scrim_opponents.target_bans integer[]`, ordered by priority, capped at five
+(migration 020). One column, not a table, and deliberately separate from the ban history it
+sits next to on the page.
+
+**Consequences.** A plan has no attributes of its own: no author, no per-entry note, no
+history. That is an array, and the same call `scrim_games.ally_bans` made in 012 and
+`draft_comps.champion_ids` in 017. If a plan ever grows a reason per champion, *that* is
+when it becomes a table; nothing here makes that harder.
+
+Keeping it apart from history is the load-bearing half. The two are easy to conflate and
+mean opposite things — one is what happened, the other is what we intend — and a page that
+merged them would answer neither question. Instead they sit next to each other, and the
+plan's rows carry the number that justifies them: *"they picked it 3×"*, from the same
+`aggregatePicks` the pools below already use. A target they have never picked is not
+necessarily wrong, but it is worth seeing before Saturday rather than after.
+
+Two smaller calls:
+
+- **The check constraint uses `cardinality()`, not `array_length()`** — `array_length('{}', 1)`
+  is `NULL`, and a CHECK evaluating to `NULL` *passes*, so the empty-array case would sail
+  through. Same trap as 017, and 020's verify block probes both the six-element case and the
+  empty one rather than assuming.
+- **The action re-validates against the live DDragon list**, because a server action is a
+  POST endpoint and our own picker offering only real champions proves nothing about what
+  arrives. It refuses outright when DDragon is down: cleaning an unknown list against an
+  empty champion map would report success and silently wipe the prep.
+
+The plan passes through to the demo unchanged — champion ids carry no identity, the same
+reasoning that lets `demo_draft_comps` publish `champion_ids` while routing the label
+through `demo_text`. It is also the only part of the scouting page that shows the tool being
+used to *decide* something rather than to record something, which is worth a stranger seeing.

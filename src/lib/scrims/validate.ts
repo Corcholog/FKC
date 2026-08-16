@@ -84,6 +84,33 @@ function isWholeNumber(value: unknown, max: number): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= max;
 }
 
+/**
+ * A ban plan, cleaned rather than rejected.
+ *
+ * Unlike a series, nothing here is a claim about what happened — it is a list
+ * somebody is assembling — so a duplicate or an unknown id is a slip to drop,
+ * not an error to report back. The check constraint in migration 020 enforces
+ * the ceiling in the database; this keeps a direct POST from ever reaching it,
+ * and keeps the order, which is the priority.
+ */
+export function cleanBanPlan(
+  ids: unknown,
+  validChampionIds: Set<number>,
+  max: number = BANS_PER_SIDE,
+): number[] {
+  if (!Array.isArray(ids)) return [];
+  const seen = new Set<number>();
+  const plan: number[] = [];
+  for (const id of ids) {
+    if (!isWholeNumber(id, Number.MAX_SAFE_INTEGER) || id === 0) continue;
+    if (seen.has(id) || !validChampionIds.has(id)) continue;
+    seen.add(id);
+    plan.push(id);
+    if (plan.length === max) break;
+  }
+  return plan;
+}
+
 /** The first thing wrong with this series, or null if it's sound. */
 export function validateSeries(
   input: ScrimSeriesInput,

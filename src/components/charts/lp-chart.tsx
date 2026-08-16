@@ -170,7 +170,7 @@ function AvatarEndCap({
 // carried forward from their own most recent reading at or before the clicked
 // moment — and anyone not yet synced by then is left out rather than plotted at
 // zero. The row says which reading it used whenever that isn't the clicked one.
-function standingsAt(series: LpSeries[], t: number): RankRow[] {
+function standingsAt(series: LpSeries[], t: number, basePath: string): RankRow[] {
   const standings: { series: LpSeries; point: LpPoint }[] = [];
 
   for (const s of series) {
@@ -187,7 +187,7 @@ function standingsAt(series: LpSeries[], t: number): RankRow[] {
       id: s.id,
       name: s.name,
       avatarUrl: s.avatarUrl ?? null,
-      href: s.slug ? `/player/${s.slug}` : undefined,
+      href: s.slug ? `${basePath}/player/${s.slug}` : undefined,
       value: formatLadderPointsDetailed(point.lp),
       sub: point.t === t ? undefined : `as of ${DATE_TIME_LABEL.format(new Date(point.t))}`,
     }));
@@ -228,10 +228,13 @@ export function LpChart({
   // line already named above it. /insights turns it on, where the whole point is
   // telling six lines apart.
   endCapAvatars = false,
+  basePath = "",
 }: {
   series: LpSeries[];
   height?: number;
   endCapAvatars?: boolean;
+  /** Prefix for the standings' links out to player pages — "/demo" on the demo. */
+  basePath?: string;
 }) {
   const data = useMemo(() => mergeSeries(series), [series]);
   const domain = useMemo(() => ladderDomain(series), [series]);
@@ -390,7 +393,7 @@ export function LpChart({
         onOpenChange={(open) => !open && setOpenAt(null)}
         title={openAt === null ? "" : DATE_TIME_LABEL.format(new Date(openAt))}
         description="Standings at this point in the race, highest LP first."
-        rows={openAt === null ? [] : standingsAt(series, openAt)}
+        rows={openAt === null ? [] : standingsAt(series, openAt, basePath)}
         empty="Nobody had been synced yet at this point."
       />
     </div>

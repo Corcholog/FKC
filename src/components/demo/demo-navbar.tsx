@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Trophy } from "lucide-react";
+import { LayoutDashboard, LineChart, Swords, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // The public demo's own chrome, deliberately not the app's Navbar.
@@ -16,11 +16,13 @@ import { cn } from "@/lib/utils";
 // forget.
 //
 // /demo/player/[alias] is deliberately absent: it's reached by clicking a card,
-// and a nav entry would need a player to point at. /demo/matches and
-// /demo/insights land next; /demo/scrims and /demo/draft with phase 4.
+// and a nav entry would need a player to point at. Icons match the private
+// navbar's, so the two versions are recognisably the same tool.
 const NAV_ITEMS = [
   { href: "/demo", label: "Roster", icon: LayoutDashboard },
+  { href: "/demo/matches", label: "Matches", icon: Swords },
   { href: "/demo/champions", label: "Champions", icon: Trophy },
+  { href: "/demo/insights", label: "Insights", icon: LineChart },
 ];
 
 function isActive(pathname: string, href: string): boolean {

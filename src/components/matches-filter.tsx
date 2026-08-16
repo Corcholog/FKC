@@ -9,14 +9,23 @@ type Player = {
   display_name: string;
 };
 
-export function MatchesFilter({ players, selectedId }: { players: Player[]; selectedId: string | null }) {
+export function MatchesFilter({
+  players,
+  selectedId,
+  basePath = "",
+}: {
+  players: Player[];
+  selectedId: string | null;
+  /** "/demo" on the public copy, so the filter stays inside its own route group. */
+  basePath?: string;
+}) {
   const router = useRouter();
 
   return (
     <Select
       value={selectedId ?? "all"}
       onValueChange={(value) => {
-        router.push(value === "all" ? "/matches" : `/matches?player=${value}`);
+        router.push(value === "all" ? `${basePath}/matches` : `${basePath}/matches?player=${value}`);
       }}
     >
       <SelectTrigger className="w-44">

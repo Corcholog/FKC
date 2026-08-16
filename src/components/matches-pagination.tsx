@@ -8,13 +8,13 @@ import { cn } from "@/lib/utils";
 // that way — the page number lives in the URL, so a specific page is
 // shareable, bookmarkable, and survives a refresh.
 
-export function matchesHref(playerSlug: string | null, page: number): string {
+export function matchesHref(playerSlug: string | null, page: number, basePath = ""): string {
   const params = new URLSearchParams();
   if (playerSlug) params.set("player", playerSlug);
   // Page 1 is the canonical bare URL — no ?page=1 cluttering the common case.
   if (page > 1) params.set("page", String(page));
   const query = params.toString();
-  return query ? `/matches?${query}` : "/matches";
+  return query ? `${basePath}/matches?${query}` : `${basePath}/matches`;
 }
 
 function PageLink({
@@ -60,12 +60,15 @@ export function MatchesPagination({
   totalPages,
   totalMatches,
   playerSlug,
+  basePath = "",
 }: {
   page: number;
   totalPages: number;
   /** Total matching *matches*, not rendered rows — one match can list several tracked players. */
   totalMatches: number;
   playerSlug: string | null;
+  /** "/demo" on the public copy. */
+  basePath?: string;
 }) {
   if (totalMatches === 0) return null;
 
@@ -89,13 +92,13 @@ export function MatchesPagination({
       {totalPages > 1 && (
         <div className="flex items-center gap-2">
           <PageLink
-            href={page > 1 ? matchesHref(playerSlug, page - 1) : null}
+            href={page > 1 ? matchesHref(playerSlug, page - 1, basePath) : null}
             label="Previous"
             icon={<ChevronLeft className="h-3.5 w-3.5" />}
             iconSide="start"
           />
           <PageLink
-            href={page < totalPages ? matchesHref(playerSlug, page + 1) : null}
+            href={page < totalPages ? matchesHref(playerSlug, page + 1, basePath) : null}
             label="Next"
             icon={<ChevronRight className="h-3.5 w-3.5" />}
             iconSide="end"

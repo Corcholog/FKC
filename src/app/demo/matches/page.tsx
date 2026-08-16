@@ -1,62 +1,58 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getSession } from "@/lib/auth";
-import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
-import { notesByParticipant } from "@/lib/match-notes";
-import { privateSource } from "@/lib/data-source";
-import { avatarTint } from "@/lib/avatar-tint";
+import { createPublicClient } from "@/lib/supabase/public";
+import { demoSource } from "@/lib/data-source";
+import { cachedDemoLoad } from "@/lib/loaders/demo-cache";
 import { buildMatchesPage, fetchMatchesPageRows, parsePage } from "@/lib/loaders/matches";
+import { getChampionMap, getLatestVersion } from "@/lib/ddragon";
+import { avatarTint } from "@/lib/avatar-tint";
 import { MatchesList } from "@/components/matches-list";
 import { MatchesFilter } from "@/components/matches-filter";
 import { MatchesPagination } from "@/components/matches-pagination";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-export default async function MatchesPage({
+export const dynamic = "force-dynamic";
+
+// The same page as /matches, against the demo views.
+//
+// No notes: `notesFor` is simply not passed, so every row renders collapsed and
+// non-expandable. That is the whole of the difference — the demo never reads
+// match_notes, and there is no demo view of that table to read.
+export default async function DemoMatchesPage({
   searchParams,
 }: {
   searchParams: Promise<{ player?: string; page?: string }>;
 }) {
   const { player: playerFilter, page: pageParam } = await searchParams;
   const page = parsePage(pageParam);
-  const supabase = await createClient();
+  const playerSlug = playerFilter ?? null;
 
   const [pageRows, version] = await Promise.all([
-    fetchMatchesPageRows(privateSource(supabase), {
-      playerSlug: playerFilter ?? null,
-      page,
-    }),
+    // Keyed by both filters, since they select different rows. A page number
+    // past the end caches an empty array, which is the correct answer and costs
+    // nothing to keep.
+    cachedDemoLoad(`matches:${playerSlug ?? "all"}:${page}`, () =>
+      fetchMatchesPageRows(demoSource(createPublicClient()), { playerSlug, page }),
+    ),
     getLatestVersion(),
   ]);
 
   const { players, selectedPlayer, entries, totalMatches, totalPages } = buildMatchesPage(
     pageRows,
-    playerFilter ?? null,
+    playerSlug,
   );
 
-  // Page 1 always renders — an empty roster or an unplayed filter is a valid
-  // empty state, not a 404. Anything past the end is a genuine 404, the same
-  // way /champions treats an unknown ?player=.
   if (page > 1 && entries.length === 0) notFound();
 
-  // Notes for exactly the rows about to render. Eager rather than fetched on
-  // expand, so a collapsed row can show its note count — otherwise annotated
-  // games are invisible until you open every one of them.
-  const [notesByParticipantId, session, championMap] = await Promise.all([
-    notesByParticipant(
-      supabase,
-      entries.map((e) => e.viewer.id),
-    ),
-    getSession(),
-    getChampionMap(version),
-  ]);
+  const championMap = await getChampionMap(version);
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           {selectedPlayer && (
+            // No AvatarImage: demo_players.avatar_url is always null, so the
+            // tinted initials are the whole avatar here.
             <Avatar size="lg">
-              {selectedPlayer.avatar_url && <AvatarImage src={selectedPlayer.avatar_url} alt="" />}
               <AvatarFallback style={avatarTint(selectedPlayer.display_name)}>
                 {selectedPlayer.display_name.slice(0, 2).toUpperCase()}
               </AvatarFallback>
@@ -71,7 +67,11 @@ export default async function MatchesPage({
             </p>
           </div>
         </div>
-        <MatchesFilter players={players} selectedId={selectedPlayer?.slug ?? null} />
+        <MatchesFilter
+          players={players}
+          selectedId={selectedPlayer?.slug ?? null}
+          basePath="/demo"
+        />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -80,14 +80,6 @@ export default async function MatchesPage({
           version={version}
           championMap={championMap}
           showPlayerName={!selectedPlayer}
-          notesFor={({ viewer, player }) => ({
-            participantId: viewer.id,
-            playerId: viewer.player_id as string,
-            ownerName: player?.display_name ?? "This player",
-            items: notesByParticipantId.get(viewer.id) ?? [],
-            canAdd: session?.player?.id === viewer.player_id,
-            currentUserId: session?.user.id ?? null,
-          })}
         />
       </div>
 
@@ -96,6 +88,7 @@ export default async function MatchesPage({
         totalPages={totalPages}
         totalMatches={totalMatches}
         playerSlug={selectedPlayer?.slug ?? null}
+        basePath="/demo"
       />
     </main>
   );

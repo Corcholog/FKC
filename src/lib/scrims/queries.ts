@@ -11,6 +11,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllByIds, fetchAllRows } from "@/lib/supabase/fetch-all";
+import { maybeRow } from "@/lib/supabase/read";
 import type {
   ScrimGameRow,
   ScrimGameView,
@@ -44,12 +45,17 @@ export async function findOpponentBySlug(
   supabase: SupabaseClient,
   slug: string,
 ): Promise<ScrimOpponentRow | null> {
-  const { data } = await supabase
-    .from("scrim_opponents")
-    .select(OPPONENT_COLUMNS)
-    .eq("slug", slug)
-    .maybeSingle<ScrimOpponentRow>();
-  return data ?? null;
+  // A failed read here used to be indistinguishable from an unknown slug, and
+  // every caller turns null into notFound() — so a blip claimed the opponent had
+  // been deleted.
+  return maybeRow(
+    await supabase
+      .from("scrim_opponents")
+      .select(OPPONENT_COLUMNS)
+      .eq("slug", slug)
+      .maybeSingle<ScrimOpponentRow>(),
+    "scrim opponent",
+  );
 }
 
 /**

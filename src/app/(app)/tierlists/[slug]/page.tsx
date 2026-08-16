@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { maybeRow, rows } from "@/lib/supabase/read";
 import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
 import { allChampionsByPlayer, type ChampionStatInput } from "@/lib/champion-stats";
 import { defaultTiers, normalizeTiers, statMap, type TierChampion } from "@/lib/tierlist";
@@ -28,17 +29,22 @@ export default async function TierListEditorPage({
   const { slug } = await params;
   const supabase = await createClient();
 
-  const { data: player } = await supabase
-    .from("players")
-    .select("id, slug, display_name, avatar_url, user_id")
-    .eq("slug", slug)
-    .maybeSingle<PlayerRow>();
+  const player = maybeRow(
+    await supabase
+      .from("players")
+      .select("id, slug, display_name, avatar_url, user_id")
+      .eq("slug", slug)
+      .maybeSingle<PlayerRow>(),
+    "player",
+  );
 
   // Same rule the overview lists by, enforced here too so a tracked account
-  // with no login can't get a tier list by someone typing the URL.
+  // with no login can't get a tier list by someone typing the URL. maybeRow
+  // above keeps a failed read out of this branch — otherwise a blip renders as
+  // "no such player".
   if (!player || !player.user_id) notFound();
 
-  const [{ data: row }, { data: statRows }] = await Promise.all([
+  const [tierListResult, statRowsResult] = await Promise.all([
     supabase
       .from("champion_tier_lists")
       .select("tiers")
@@ -57,6 +63,9 @@ export default async function TierListEditorPage({
       >(),
   ]);
 
+  const row = maybeRow(tierListResult, "tier list");
+  const statRows = rows(statRowsResult, "champion stats");
+
   const version = await getLatestVersion();
   const championMap = await getChampionMap(version);
   const champions: TierChampion[] = realChampions(championMap);
@@ -67,7 +76,7 @@ export default async function TierListEditorPage({
 
   const aggs =
     allChampionsByPlayer(
-      (statRows ?? []).map((r) => ({
+      statRows.map((r) => ({
         ...r,
         game_duration_seconds: r.matches?.game_duration_seconds ?? 0,
       })),

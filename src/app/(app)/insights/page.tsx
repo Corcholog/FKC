@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { rows } from "@/lib/supabase/read";
 import { ladderPoints, rankSortKey, formatWinRate } from "@/lib/rank";
 import { aggregateDuoStats, duoSynergy, duoWinRate, MIN_DUO_GAMES } from "@/lib/duo-stats";
 import { streaksByPlayer, NOTABLE_STREAK } from "@/lib/streaks";
@@ -62,7 +63,7 @@ type InsightParticipantRow = {
 export default async function InsightsPage() {
   const supabase = await createClient();
 
-  const [{ data: players }, { data: rankHistory }, participantRows] = await Promise.all([
+  const [playersResult, rankHistoryResult, participantRows] = await Promise.all([
     supabase
       .from("players")
       .select("id, slug, display_name, avatar_url, tier, division, league_points, wins, losses")
@@ -86,11 +87,14 @@ export default async function InsightsPage() {
     ),
   ]);
 
-  const roster = players ?? [];
+  const roster = rows(playersResult, "roster");
+  const rankHistory = rows(rankHistoryResult, "rank history");
   const rosterByRank = [...roster].sort((a, b) => rankSortKey(a) - rankSortKey(b));
   const playersById = new Map(roster.map((p) => [p.id, p]));
 
-  const rows = participantRows.map((r) => ({
+  // Renamed from `rows` when the read helper of that name arrived. Everything
+  // downstream folds over this, so the name should say what it holds anyway.
+  const flatRows = participantRows.map((r) => ({
     match_id: r.match_id,
     player_id: r.player_id,
     team_id: r.team_id,
@@ -114,7 +118,7 @@ export default async function InsightsPage() {
       points: [],
     });
   }
-  for (const point of rankHistory ?? []) {
+  for (const point of rankHistory) {
     const series = historyByPlayer.get(point.player_id);
     const lp = ladderPoints(point);
     if (!series || lp === null) continue;
@@ -123,7 +127,7 @@ export default async function InsightsPage() {
   const lpSeries = [...historyByPlayer.values()].filter((s) => s.points.length > 0);
 
   // --- Duos and civil wars ---------------------------------------------
-  const duoStats = aggregateDuoStats(rows);
+  const duoStats = aggregateDuoStats(flatRows);
   const rankedDuos = duoStats.duos.filter((d) => d.games >= MIN_DUO_GAMES);
   const bestDuo = rankedDuos.reduce<(typeof rankedDuos)[number] | null>(
     (best, d) => (!best || duoWinRate(d) > duoWinRate(best) ? d : best),
@@ -135,7 +139,7 @@ export default async function InsightsPage() {
   );
 
   // --- Streaks ----------------------------------------------------------
-  const streaks = streaksByPlayer(rows);
+  const streaks = streaksByPlayer(flatRows);
   const streakBoard = roster
     .map((p) => ({ player: p, streak: streaks.get(p.id) }))
     .filter((entry) => entry.streak && entry.streak.games > 0)
@@ -144,8 +148,8 @@ export default async function InsightsPage() {
   // --- Sessions and time ------------------------------------------------
   // Sessions are per player: one roster-wide timeline would splice five
   // people's evenings into a single fictional 30-game marathon.
-  const rowsByPlayer = new Map<string, typeof rows>();
-  for (const row of rows) {
+  const rowsByPlayer = new Map<string, typeof flatRows>();
+  for (const row of flatRows) {
     if (!row.player_id) continue;
     const list = rowsByPlayer.get(row.player_id) ?? [];
     list.push(row);
@@ -164,7 +168,7 @@ export default async function InsightsPage() {
       )?.[0]
     : null;
 
-  const timeStats = aggregateByTime(rows);
+  const timeStats = aggregateByTime(flatRows);
   const lateNight = lateNightRecord(timeStats);
   const peakHour = busiestHour(timeStats);
   // The comparison the late-night number only means something against.
@@ -192,7 +196,7 @@ export default async function InsightsPage() {
   };
 
   const heatmapBreakdown: Record<string, RankRow[]> = {};
-  for (const [slot, records] of playersByTimeSlot(rows)) {
+  for (const [slot, records] of playersByTimeSlot(flatRows)) {
     heatmapBreakdown[slot] = records.map((r) =>
       playerRow(r.ownerId, `${r.games}g`, `${r.wins}W / ${r.games - r.wins}L`),
     );

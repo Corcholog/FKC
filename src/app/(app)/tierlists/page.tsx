@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Pencil, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { rows } from "@/lib/supabase/read";
 import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
 import { allChampionsByPlayer, type ChampionStatInput } from "@/lib/champion-stats";
 import { formatRelativeTime } from "@/lib/format";
@@ -34,7 +35,7 @@ type TierListRow = {
 export default async function TierListsPage() {
   const supabase = await createClient();
 
-  const [{ data: players }, { data: lists }] = await Promise.all([
+  const [playersResult, listsResult] = await Promise.all([
     // Only players with a login, not the whole tracked roster. A tier list is
     // somebody's opinion, so it needs somebody to hold it — the accounts we
     // track but nobody sits behind (Agus, Hernan, …) have no opinions to
@@ -52,6 +53,9 @@ export default async function TierListsPage() {
       .returns<TierListRow[]>(),
   ]);
 
+  const players = rows(playersResult, "players with logins");
+  const lists = rows(listsResult, "tier lists");
+
   const version = await getLatestVersion();
   const championMap = await getChampionMap(version);
   const championsById = new Map<number, TierChampion>(
@@ -61,21 +65,24 @@ export default async function TierListsPage() {
 
   // Hover stats for every roster player in one pass, same shape the /champions
   // page builds for one.
-  const { data: statRows } = await supabase
-    .from("match_participants")
-    .select(
-      "player_id, team_position, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, matches!inner(game_duration_seconds)",
-    )
-    .not("player_id", "is", null)
-    .returns<
-      (Omit<ChampionStatInput, "game_duration_seconds"> & {
-        team_position: string | null;
-        matches: { game_duration_seconds: number } | null;
-      })[]
-    >();
+  const statRows = rows(
+    await supabase
+      .from("match_participants")
+      .select(
+        "player_id, team_position, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, matches!inner(game_duration_seconds)",
+      )
+      .not("player_id", "is", null)
+      .returns<
+        (Omit<ChampionStatInput, "game_duration_seconds"> & {
+          team_position: string | null;
+          matches: { game_duration_seconds: number } | null;
+        })[]
+      >(),
+    "tierlist hover stats",
+  );
 
   const aggsByPlayer = allChampionsByPlayer(
-    (statRows ?? []).map((r) => ({ ...r, game_duration_seconds: r.matches?.game_duration_seconds ?? 0 })),
+    statRows.map((r) => ({ ...r, game_duration_seconds: r.matches?.game_duration_seconds ?? 0 })),
   );
 
   // Down the page in team order — Top, Jungle, Mid, ADC, Support — rather than

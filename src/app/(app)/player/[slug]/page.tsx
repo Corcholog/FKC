@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllByIds, fetchAllRows } from "@/lib/supabase/fetch-all";
+import { maybeRow, rows } from "@/lib/supabase/read";
 import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap, championDisplayName } from "@/lib/ddragon";
 import { notesByParticipant } from "@/lib/match-notes";
@@ -68,20 +69,26 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
   const { slug } = await params;
   const supabase = await createClient();
 
-  const [{ data: player }, version] = await Promise.all([
-    supabase.from("players").select("*").eq("slug", slug).single(),
+  const [playerResult, version] = await Promise.all([
+    supabase.from("players").select("*").eq("slug", slug).maybeSingle(),
     getLatestVersion(),
   ]);
+  // `.single()` reported "no such player" and "the read failed" the same way —
+  // both left `player` null, and the next line turned both into a 404. A blip
+  // against Supabase claiming a player doesn't exist is a worse lie than an
+  // error page. maybeSingle() keeps a genuine miss as data: null, and maybeRow
+  // throws on anything else.
+  const player = maybeRow(playerResult, "player");
   if (!player) notFound();
   const id = player.id;
 
   // These all only depend on `id`/`version`, not on each other — run them
   // concurrently instead of sequential round trips.
   const [
-    { data: matchListFull },
-    { data: aiSummary },
+    matchListResult,
+    aiSummaryResult,
     ownRows,
-    { data: rankHistory },
+    rankHistoryResult,
     championMap,
   ] = await Promise.all([
     // Query from matches (not match_participants) so game_creation is a true
@@ -123,7 +130,9 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
     getChampionMap(version),
   ]);
 
-  const matchList = matchListFull ?? [];
+  const matchList = rows(matchListResult, "recent matches");
+  const rankHistory = rows(rankHistoryResult, "rank history");
+  const aiSummary = maybeRow(aiSummaryResult, "AI summary");
 
   const historyRows = ownRows.map((r) => ({
     ...r,
@@ -149,7 +158,7 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
     : historyRows.length;
 
   const lpPoints: LpPoint[] = [];
-  for (const point of rankHistory ?? []) {
+  for (const point of rankHistory) {
     const lp = ladderPoints(point);
     if (lp !== null) lpPoints.push({ t: new Date(point.recorded_at).getTime(), lp });
   }

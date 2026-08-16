@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { rows } from "@/lib/supabase/read";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { allChampionsByPlayer, type ChampionStatInput } from "@/lib/champion-stats";
 import { ChampionsFilter } from "@/components/champions-filter";
@@ -22,13 +23,18 @@ export default async function ChampionsPage({
   const { player: playerParam } = await searchParams;
   const supabase = await createClient();
 
-  const { data: players } = await supabase
-    .from("players")
-    .select("id, slug, display_name, avatar_url")
-    .order("display_name")
-    .returns<PlayerRow[]>();
+  // Note what the empty state below now means. Before this it covered both "no
+  // players tracked" and "the roster read failed", and told you the first one.
+  const players = rows(
+    await supabase
+      .from("players")
+      .select("id, slug, display_name, avatar_url")
+      .order("display_name")
+      .returns<PlayerRow[]>(),
+    "roster",
+  );
 
-  if (!players || players.length === 0) {
+  if (players.length === 0) {
     return (
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
         <div>

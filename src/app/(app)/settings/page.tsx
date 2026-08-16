@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { maybeRow, optional, rows } from "@/lib/supabase/read";
 import { AddPlayerForm } from "@/components/settings/add-player-form";
 import { PlayerRow } from "@/components/settings/player-row";
 import { RefetchDetailsForm } from "@/components/settings/refetch-details-form";
@@ -8,25 +9,44 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
-  const { data: players } = await supabase
-    .from("players")
-    .select("id, riot_game_name, riot_tag_line, display_name, avatar_url, user_id, ai_context")
-    .order("display_name");
-  const { data: syncState } = await supabase
-    .from("sync_state")
-    .select("riot_key_valid, last_sync_status, last_sync_finished_at, last_error")
-    .eq("id", 1)
-    .single();
-  const { data: clanProfile } = await supabase
-    .from("clan_profile")
-    .select("context")
-    .eq("id", 1)
-    .maybeSingle();
-  const { data: teamSummary } = await supabase
-    .from("team_ai_summary")
-    .select("generated_at")
-    .eq("id", 1)
-    .maybeSingle();
+  // The roster read is the one that matters here: this page is where players are
+  // added and deleted, so an empty list rendered because the read failed reads
+  // as "the roster is gone" on the exact page where someone would try to fix it.
+  const players = rows(
+    await supabase
+      .from("players")
+      .select("id, riot_game_name, riot_tag_line, display_name, avatar_url, user_id, ai_context")
+      .order("display_name"),
+    "roster",
+  );
+  // sync_state uses .single(), so a missing singleton is already an error rather
+  // than a null. Kept optional: this section is status, and losing it shouldn't
+  // block the roster CRUD below.
+  const syncState = optional(
+    await supabase
+      .from("sync_state")
+      .select("riot_key_valid, last_sync_status, last_sync_finished_at, last_error")
+      .eq("id", 1)
+      .single(),
+    "sync state",
+    null,
+  );
+  const clanProfile = maybeRow(
+    await supabase
+      .from("clan_profile")
+      .select("context")
+      .eq("id", 1)
+      .maybeSingle<{ context: string | null }>(),
+    "clan context",
+  );
+  const teamSummary = maybeRow(
+    await supabase
+      .from("team_ai_summary")
+      .select("generated_at")
+      .eq("id", 1)
+      .maybeSingle<{ generated_at: string | null }>(),
+    "team recap timestamp",
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">

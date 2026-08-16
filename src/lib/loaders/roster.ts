@@ -7,6 +7,7 @@
 // `source.table()` returns.
 
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { rows } from "@/lib/supabase/read";
 import type { DataSource } from "@/lib/data-source";
 import { rankSortKey } from "@/lib/rank";
 import { topChampionsByPlayer, type ChampionAgg, type ChampionStatInput } from "@/lib/champion-stats";
@@ -52,10 +53,13 @@ export type Roster = {
 };
 
 export async function fetchRosterRows(source: DataSource): Promise<RosterRows> {
-  const { data: players } = await source.supabase
-    .from(source.table("players"))
-    .select(ROSTER_COLUMNS)
-    .returns<RosterPlayer[]>();
+  const players = rows(
+    await source.supabase
+      .from(source.table("players"))
+      .select(ROSTER_COLUMNS)
+      .returns<RosterPlayer[]>(),
+    "roster",
+  );
 
   // One bulk query across every tracked player rather than one per card —
   // grouping into per-player top-5 champions happens in JS afterward. Paged,
@@ -80,7 +84,7 @@ export async function fetchRosterRows(source: DataSource): Promise<RosterRows> {
     return { ...r, game_duration_seconds: embedded?.game_duration_seconds ?? 0 };
   });
 
-  return { players: players ?? [], statRows: flatRows };
+  return { players, statRows: flatRows };
 }
 
 /** Pure. Rows in, the shape the page renders out. */

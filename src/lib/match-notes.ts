@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { rows } from "@/lib/supabase/read";
 
 export type MatchNote = {
   id: string;
@@ -26,14 +27,21 @@ export async function notesByParticipant(
   const byParticipant = new Map<string, MatchNote[]>();
   if (participantIds.length === 0) return byParticipant;
 
-  const { data } = await supabase
-    .from("match_notes")
-    .select("id, note, author_user_id, author_name, created_at, match_participant_id")
-    .in("match_participant_id", participantIds)
-    .order("created_at", { ascending: false })
-    .returns<NoteRow[]>();
+  // Notes are the only irreplaceable data in the database, so a failed read has
+  // to be loud. Swallowed, it renders as "nobody reviewed this game" — which is
+  // the same thing the UI shows when a note was genuinely never written, and the
+  // one place where a false negative could get someone to write it again.
+  const data = rows(
+    await supabase
+      .from("match_notes")
+      .select("id, note, author_user_id, author_name, created_at, match_participant_id")
+      .in("match_participant_id", participantIds)
+      .order("created_at", { ascending: false })
+      .returns<NoteRow[]>(),
+    "match notes",
+  );
 
-  for (const { match_participant_id, ...note } of data ?? []) {
+  for (const { match_participant_id, ...note } of data) {
     const list = byParticipant.get(match_participant_id) ?? [];
     list.push(note);
     byParticipant.set(match_participant_id, list);

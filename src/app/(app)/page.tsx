@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Users, Swords, BarChart3, LineChart, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { maybeRow, optional, rows } from "@/lib/supabase/read";
 import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { formatRelativeTime, formatKdaRatio, isoDaysAgo } from "@/lib/format";
@@ -89,11 +90,11 @@ export default async function DashboardPage() {
   // These are independent of each other — run them concurrently instead of
   // paying for a sequential round trip each.
   const [
-    { data: players },
-    { data: syncState },
-    { data: teamSummary },
-    { data: weekRows },
-    { data: matchListFull },
+    playersResult,
+    syncStateResult,
+    teamSummaryResult,
+    weekRowsResult,
+    matchListResult,
     awardRows,
     version,
   ] = await Promise.all([
@@ -152,17 +153,27 @@ export default async function DashboardPage() {
       getLatestVersion(),
     ]);
 
-  const playersById = new Map((players ?? []).map((p) => [p.id, p]));
-  const rosterSorted = [...(players ?? [])].sort((a, b) => rankSortKey(a) - rankSortKey(b));
+  // The roster is the page: every tile, ranking and match row below is keyed by
+  // player. A failed read here used to render the whole dashboard blank, which
+  // is indistinguishable from a roster nobody has filled in yet.
+  const players = rows(playersResult, "roster");
+  const weekRows = rows(weekRowsResult, "this week's games");
+  const matchListFull = rows(matchListResult, "recent matches");
+  const teamSummary = maybeRow(teamSummaryResult, "team recap");
+  // Chrome, not content — a missing sync banner is not worth losing the page for.
+  const syncState = optional(syncStateResult, "sync state", null);
 
-  const totalWins = (players ?? []).reduce((sum, p) => sum + (p.wins ?? 0), 0);
-  const totalLosses = (players ?? []).reduce((sum, p) => sum + (p.losses ?? 0), 0);
+  const playersById = new Map(players.map((p) => [p.id, p]));
+  const rosterSorted = [...players].sort((a, b) => rankSortKey(a) - rankSortKey(b));
+
+  const totalWins = players.reduce((sum, p) => sum + (p.wins ?? 0), 0);
+  const totalLosses = players.reduce((sum, p) => sum + (p.losses ?? 0), 0);
   const totalGames = totalWins + totalLosses;
   const groupWinRate = totalGames === 0 ? null : Math.round((totalWins / totalGames) * 100);
 
-  const gamesThisWeek = weekRows?.length ?? 0;
+  const gamesThisWeek = weekRows.length;
   const weeklyCountByPlayer = new Map<string, number>();
-  for (const row of weekRows ?? []) {
+  for (const row of weekRows) {
     weeklyCountByPlayer.set(row.player_id, (weeklyCountByPlayer.get(row.player_id) ?? 0) + 1);
   }
   let mostActivePlayer: PlayerRow | null = null;
@@ -412,7 +423,7 @@ export default async function DashboardPage() {
     },
   ]);
 
-  const matchList = matchListFull ?? [];
+  const matchList = matchListFull;
   const matchIds = matchList.map((m) => m.id);
   const [allParticipants, championMap] = await Promise.all([
     loadMatchRowParticipants(privateSource(supabase), matchIds),

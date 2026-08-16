@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { notesByParticipant } from "@/lib/match-notes";
+import { rows } from "@/lib/supabase/read";
 import { privateSource } from "@/lib/data-source";
 import {
   groupParticipantsByMatch,
@@ -55,7 +56,7 @@ export default async function MatchesPage({
   const page = parsePage(pageParam);
   const supabase = await createClient();
 
-  const [{ data: players }, version] = await Promise.all([
+  const [playersResult, version] = await Promise.all([
     supabase
       .from("players")
       .select("id, slug, display_name, avatar_url")
@@ -63,8 +64,11 @@ export default async function MatchesPage({
       .returns<PlayerRow[]>(),
     getLatestVersion(),
   ]);
-  const playersById = new Map((players ?? []).map((p) => [p.id, p]));
-  const selectedPlayer = playerFilter ? players?.find((p) => p.slug === playerFilter) ?? null : null;
+  // Not optional: a failed roster read leaves every row without an owner, and
+  // the ?player= filter silently resolves to "no filter" instead of 404ing.
+  const players = rows(playersResult, "roster");
+  const playersById = new Map(players.map((p) => [p.id, p]));
+  const selectedPlayer = playerFilter ? players.find((p) => p.slug === playerFilter) ?? null : null;
 
   // Query from matches (true top-level order — see player/[slug]/page.tsx for
   // why ordering "through" an embedded match_participants collection no-ops).
@@ -86,8 +90,9 @@ export default async function MatchesPage({
     ? matchQuery.eq("match_participants.player_id", selectedPlayer.id)
     : matchQuery.not("match_participants.player_id", "is", null);
 
-  const { data: matchListFull, count } = await matchQuery.returns<MatchListRow[]>();
-  const matchList = matchListFull ?? [];
+  const matchListResult = await matchQuery.returns<MatchListRow[]>();
+  const { count } = matchListResult;
+  const matchList = rows(matchListResult, "match history page");
 
   const totalMatches = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalMatches / MATCHES_PER_PAGE));

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireSession } from "@/lib/auth";
 import { getChampionMap, getLatestVersion, type ChampionInfo } from "@/lib/ddragon";
 import { opponentSlug } from "@/lib/slug";
@@ -495,6 +495,13 @@ export async function updateOpponentBanPlan(
 
     revalidatePath("/scrims/opponents", "page");
     revalidatePath("/scrims/opponents/[slug]", "page");
+    // The ban plan is the one column on this table the demo actually renders —
+    // `notes` reaches it through demo_text, but target_bans passes straight
+    // through the view. Without this it would sit behind the hour-long demo
+    // cache, which reads as the save not having worked. revalidateTag rather
+    // than updateTag for the reason settings/actions.ts gives: unstable_cache's
+    // `tags` option is documented against revalidateTag.
+    revalidateTag("demo", "max");
     return {};
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not save that ban plan." };

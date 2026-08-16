@@ -1118,3 +1118,9 @@ The plan passes through to the demo unchanged — champion ids carry no identity
 reasoning that lets `demo_draft_comps` publish `champion_ids` while routing the label
 through `demo_text`. It is also the only part of the scouting page that shows the tool being
 used to *decide* something rather than to record something, which is worth a stranger seeing.
+
+That makes `target_bans` the **only base-table column the demo renders directly** — every
+other piece of prose on that page reaches it through `demo_text`. So saving a plan calls
+`revalidateTag("demo", "max")`, exactly as publishing a demo summary does (ADR-039).
+Without it the save would sit behind the hour-long cache from ADR-036 and read as not
+having worked.

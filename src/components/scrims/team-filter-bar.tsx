@@ -137,9 +137,16 @@ export function TeamFilterBar({
   totalCount: number;
 }) {
   const router = useRouter();
-  // Remounting the comboboxes is how they clear — they deliberately hold no
-  // effect syncing text back from `selected`. See champion-combobox.tsx.
-  const [pickerKey, setPickerKey] = useState(0);
+  // Remounting a combobox is how it clears — they deliberately hold no effect
+  // syncing text back from `selected`. See champion-combobox.tsx.
+  //
+  // One counter per side rather than one shared. They are two independent
+  // boxes, and a shared counter remounts both: adding a champion to "we played"
+  // would wipe half-typed text out of "we faced".
+  const [pickerKeys, setPickerKeys] = useState<Record<ChampionSide, number>>({
+    allyChampionIds: 0,
+    enemyChampionIds: 0,
+  });
 
   const championById = new Map(champions.map((c) => [c.championId, c]));
   const active = activeScrimFilterCount(filter);
@@ -150,7 +157,7 @@ export function TeamFilterBar({
 
   function addChampion(side: ChampionSide, champion: Champion | null) {
     if (!champion || filter[side].includes(champion.championId)) return;
-    setPickerKey((k) => k + 1);
+    setPickerKeys((keys) => ({ ...keys, [side]: keys[side] + 1 }));
     go({ ...filter, [side]: [...filter[side], champion.championId] });
   }
 
@@ -281,7 +288,7 @@ export function TeamFilterBar({
           champions={champions}
           championById={championById}
           version={version}
-          pickerKey={pickerKey}
+          pickerKey={pickerKeys.allyChampionIds}
           onAdd={(champion) => addChampion("allyChampionIds", champion)}
           onRemove={(id) => removeChampion("allyChampionIds", id)}
         />
@@ -291,7 +298,7 @@ export function TeamFilterBar({
           champions={champions}
           championById={championById}
           version={version}
-          pickerKey={pickerKey}
+          pickerKey={pickerKeys.enemyChampionIds}
           onAdd={(champion) => addChampion("enemyChampionIds", champion)}
           onRemove={(id) => removeChampion("enemyChampionIds", id)}
         />

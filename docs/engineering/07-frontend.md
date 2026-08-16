@@ -971,7 +971,9 @@ draft board uses — a vanishing list entry reads as a bug.
 says so: a component created during render is a new type each time, so React remounts it,
 which would wipe the combobox's typed text on every keystroke that changed the parent. The
 deliberate remount (bumping `pickerKey` to clear the box after a pick) only means something
-if the accidental one isn't also happening.
+if the accidental one isn't also happening — and there is **one key per side**, since a
+shared counter would clear half-typed text out of the other box every time a champion was
+added to this one.
 
 ### The empty state names the filter, not the data
 

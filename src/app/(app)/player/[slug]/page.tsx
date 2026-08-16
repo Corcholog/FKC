@@ -17,6 +17,9 @@ import { topChampionsByPlayer } from "@/lib/champion-stats";
 import { computeStreak, formatStreak, NOTABLE_STREAK } from "@/lib/streaks";
 import { matchupsForPlayer, nemesis, type MatchupInput } from "@/lib/matchups";
 import { aggregateByTime } from "@/lib/time-stats";
+import { aggregateByDuration, durationSwing, winRatePastMinute } from "@/lib/duration-stats";
+import { laneDiffForPlayer, type LaneDiffInput } from "@/lib/lane-diff";
+import { aggregateBySide } from "@/lib/side-stats";
 import { MatchRow } from "@/components/match-row";
 import { AiSummaryCard } from "@/components/ai-summary-card";
 import { RankBadge } from "@/components/rank-badge";
@@ -24,6 +27,10 @@ import { WinrateRing } from "@/components/winrate-ring";
 import { LpChart, type LpPoint } from "@/components/charts/lp-chart";
 import { HourHeatmap } from "@/components/charts/hour-heatmap";
 import { RoleSplit } from "@/components/player/role-split";
+import { DurationSplit } from "@/components/player/duration-split";
+import { DurationCurve } from "@/components/charts/duration-curve";
+import { SideSplit } from "@/components/player/side-split";
+import { LaneDiffPanel } from "@/components/player/lane-diff-panel";
 import { MatchupList } from "@/components/player/matchup-list";
 import { TopChampions } from "@/components/player/top-champions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -154,21 +161,37 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
   // match over the player's entire history, so it's the query that crosses
   // PostgREST's Max rows soonest — at ~100 games — and it's also the one that
   // puts every match uuid into a query string.
+  //
+  // gold_earned, total_cs and damage_dealt_to_champions ride along for the lane
+  // differentials. They're the enemy laner's copies of the three columns the
+  // player's own query already returns — the comparison needs both sides, and
+  // this is the only query that sees the opposing team.
   const historyMatchIds = [...new Set(historyRows.map((r) => r.match_id))];
-  const allHistoryParticipants = await fetchAllByIds<MatchupInput>(
+  const allHistoryParticipants = await fetchAllByIds<MatchupInput & LaneDiffInput>(
     historyMatchIds,
     (chunk, from, to) =>
       supabase
         .from("match_participants")
         .select(
-          "match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists",
+          "match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, gold_earned, total_cs, damage_dealt_to_champions",
         )
         .in("match_id", chunk)
         .range(from, to)
-        .returns<MatchupInput[]>(),
+        .returns<(MatchupInput & LaneDiffInput)[]>(),
   );
 
   const matchups = matchupsForPlayer(allHistoryParticipants, id);
+
+  // Duration lives on matches, and the ten-row query above deliberately doesn't
+  // embed it — ten copies of one number per match is a lot of payload for a
+  // column the player's own rows already carry.
+  const durationByMatch = new Map(historyRows.map((r) => [r.match_id, r.game_duration_seconds]));
+
+  const durationBuckets = aggregateByDuration(historyRows);
+  const survivalPoints = winRatePastMinute(historyRows);
+  const swing = durationSwing(survivalPoints);
+  const sideSplit = aggregateBySide(historyRows);
+  const laneDiff = laneDiffForPlayer(allHistoryParticipants, id, durationByMatch);
   const worstMatchup = nemesis(matchups);
   const nemesisName = worstMatchup
     ? championDisplayName(worstMatchup.championId, championMap, worstMatchup.championName)
@@ -289,9 +312,33 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
         </SectionCard>
       </div>
 
-      <SectionCard title="When they play">
-        <HourHeatmap stats={timeStats} />
+      <SectionCard
+        title="Game length"
+        caption={
+          swing === null
+            ? undefined
+            : swing.delta < 0
+              ? `Loses ${Math.abs(swing.delta)} points of winrate between ${swing.fromMinute}′ and ${swing.toMinute}′.`
+              : `Gains ${swing.delta} points of winrate between ${swing.fromMinute}′ and ${swing.toMinute}′.`
+        }
+      >
+        <DurationCurve points={survivalPoints} />
+        <DurationSplit buckets={durationBuckets} />
       </SectionCard>
+
+      <SectionCard title="Versus the lane opponent">
+        <LaneDiffPanel agg={laneDiff} />
+      </SectionCard>
+
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <SectionCard title="When they play">
+          <HourHeatmap stats={timeStats} />
+        </SectionCard>
+
+        <SectionCard title="Map side">
+          <SideSplit split={sideSplit} />
+        </SectionCard>
+      </div>
 
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between">

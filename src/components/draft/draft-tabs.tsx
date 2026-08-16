@@ -11,15 +11,16 @@ import { cn } from "@/lib/utils";
 // shell.
 
 const TABS = [
-  { href: "/draft", label: "Simulator" },
-  { href: "/draft/champions", label: "Champions" },
-  { href: "/draft/comps", label: "Comps" },
-  { href: "/draft/synergies", label: "Synergies" },
-  { href: "/draft/counters", label: "Counters" },
+  { href: "", label: "Simulator" },
+  { href: "/champions", label: "Champions" },
+  { href: "/comps", label: "Comps" },
+  { href: "/synergies", label: "Synergies" },
+  { href: "/counters", label: "Counters" },
 ];
 
-export function DraftTabs() {
+export function DraftTabs({ basePath = "" }: { basePath?: string }) {
   const pathname = usePathname();
+  const root = `${basePath}/draft`;
 
   return (
     // flex-wrap rather than overflow-x-auto. Setting overflow on one axis
@@ -30,17 +31,16 @@ export function DraftTabs() {
     // scrolls anywhere else.
     <nav className="flex flex-wrap gap-1 border-b border-border">
       {TABS.map((tab) => {
+        const href = `${root}${tab.href}`;
         // Exact for the index (the simulator), prefix for the rest — a URL a
         // tab doesn't own should never light it.
         const active =
-          tab.href === "/draft"
-            ? pathname === "/draft"
-            : pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+          tab.href === "" ? pathname === root : pathname === href || pathname.startsWith(`${href}/`);
 
         return (
           <Link
-            key={tab.href}
-            href={tab.href}
+            key={href}
+            href={href}
             className={cn(
               "relative shrink-0 px-3 py-2 text-sm font-medium transition-colors",
               active ? "text-gold-bright" : "text-grey-light hover:text-white",

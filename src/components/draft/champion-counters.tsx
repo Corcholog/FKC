@@ -26,6 +26,7 @@ export function ChampionCounters({
   version,
   allCounters,
   className,
+  readOnly = false,
 }: {
   champion: Champion;
   /** Full roster, for the editor's comboboxes. */
@@ -34,6 +35,8 @@ export function ChampionCounters({
   allCounters: ChampionCounterRow[];
   /** Replaces the expanded-table-row framing — see the default below. */
   className?: string;
+  /** Drops the Add buttons and the editor. See ChampionProfileTable's prop. */
+  readOnly?: boolean;
 }) {
   const [editorDirection, setEditorDirection] = useState<Direction | null>(null);
 
@@ -55,17 +58,19 @@ export function ChampionCounters({
           <h3 className="text-[10px] font-medium tracking-wide text-grey-mid uppercase">
             {champion.name} counters
           </h3>
-          <Button type="button" size="xs" variant="outline" onClick={() => setEditorDirection("counters")}>
-            <Plus className="size-3" />
-            Add
-          </Button>
+          {!readOnly && (
+            <Button type="button" size="xs" variant="outline" onClick={() => setEditorDirection("counters")}>
+              <Plus className="size-3" />
+              Add
+            </Button>
+          )}
         </div>
         <CounterList
           rows={counters}
           championById={championById}
           version={version}
           otherSideOf={(row) => row.target_champion_id}
-          onOpen={() => setEditorDirection("counters")}
+          onOpen={readOnly ? undefined : () => setEditorDirection("counters")}
           emptyLabel="Nothing noted."
         />
       </div>
@@ -73,22 +78,24 @@ export function ChampionCounters({
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <h3 className="text-[10px] font-medium tracking-wide text-grey-mid uppercase">Countered by</h3>
-          <Button type="button" size="xs" variant="outline" onClick={() => setEditorDirection("counteredBy")}>
-            <Plus className="size-3" />
-            Add
-          </Button>
+          {!readOnly && (
+            <Button type="button" size="xs" variant="outline" onClick={() => setEditorDirection("counteredBy")}>
+              <Plus className="size-3" />
+              Add
+            </Button>
+          )}
         </div>
         <CounterList
           rows={counteredBy}
           championById={championById}
           version={version}
           otherSideOf={(row) => row.counter_champion_id}
-          onOpen={() => setEditorDirection("counteredBy")}
+          onOpen={readOnly ? undefined : () => setEditorDirection("counteredBy")}
           emptyLabel="Nothing noted."
         />
       </div>
 
-      {editorDirection && (
+      {!readOnly && editorDirection && (
         <CounterGroupEditor
           key={editorDirection}
           champions={champions}

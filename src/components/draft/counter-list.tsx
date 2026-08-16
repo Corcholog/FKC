@@ -29,7 +29,8 @@ export function CounterList({
   version: string;
   /** Which id on the row is the champion to show — the reading direction. */
   otherSideOf: (row: ChampionCounterRow) => number;
-  onOpen: () => void;
+  /** Undefined on the public demo — the rows become plain text, not buttons. */
+  onOpen?: () => void;
   emptyLabel: string;
 }) {
   if (rows.length === 0) return <p className="text-xs text-grey-mid">{emptyLabel}</p>;
@@ -38,26 +39,38 @@ export function CounterList({
       {rows.map((row) => {
         const other = championById.get(otherSideOf(row));
         if (!other) return null;
+
+        const body = (
+          <>
+            <ChampionAvatar champion={other} version={version} size="sm" />
+            <span className="shrink-0 truncate text-sm text-grey-light">{other.name}</span>
+            {/* Truncated to one line so a long note can't stretch a card;
+                the full text is on the title, and editing shows all of it. */}
+            {row.note && (
+              <span title={row.note} className="truncate text-xs text-grey-mid">
+                — {row.note}
+              </span>
+            )}
+          </>
+        );
+
         return (
           <li key={row.id}>
             {/* Opens the same list-for-this-champion editor as "Add" — a single
                 entry is a group of one, and editing/removing it is editing the
-                list. */}
-            <button
-              type="button"
-              onClick={onOpen}
-              className="flex w-full items-center gap-2 rounded-sm px-1 py-1 text-left hover:bg-bg-tertiary/40"
-            >
-              <ChampionAvatar champion={other} version={version} size="sm" />
-              <span className="shrink-0 truncate text-sm text-grey-light">{other.name}</span>
-              {/* Truncated to one line so a long note can't stretch a card;
-                  the full text is on the title, and editing shows all of it. */}
-              {row.note && (
-                <span title={row.note} className="truncate text-xs text-grey-mid">
-                  — {row.note}
-                </span>
-              )}
-            </button>
+                list. With nothing to open, it must not be a button: an inert
+                <button> still takes focus and reads as actionable. */}
+            {onOpen ? (
+              <button
+                type="button"
+                onClick={onOpen}
+                className="flex w-full items-center gap-2 rounded-sm px-1 py-1 text-left hover:bg-bg-tertiary/40"
+              >
+                {body}
+              </button>
+            ) : (
+              <div className="flex w-full items-center gap-2 rounded-sm px-1 py-1">{body}</div>
+            )}
           </li>
         );
       })}

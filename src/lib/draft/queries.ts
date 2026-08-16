@@ -8,8 +8,8 @@
 //
 // champion_counters is different — see loadChampionCounters below.
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import type { DataSource } from "@/lib/data-source";
 import type {
   ChampionCounterRow,
   ChampionProfileRow,
@@ -20,18 +20,23 @@ import type {
   DraftTagRow,
 } from "@/lib/draft/types";
 
+// Three tables carry an author column that the demo views drop, and each is
+// asked for only when the source is private — the same treatment riot_match_id
+// and scrim_series.created_by get. Nothing renders them; the write path is
+// their only reader.
 const TAG_COLUMNS = "id, slug, label, kind, created_at";
-const PROFILE_COLUMNS = "champion_id, roles, tags, notes, updated_at, updated_by";
-const COUNTER_COLUMNS =
-  "id, counter_champion_id, target_champion_id, note, created_by, created_at, updated_at";
-const COMP_COLUMNS =
-  "id, kind, label, champion_ids, win_conditions, notes, created_by, created_at, updated_at";
+const PROFILE_BASE = "champion_id, roles, tags, notes, updated_at";
+const COUNTER_BASE = "id, counter_champion_id, target_champion_id, note, created_at, updated_at";
+const COMP_BASE = "id, kind, label, champion_ids, win_conditions, notes, created_at, updated_at";
+
+const withAuthor = (base: string, column: string, source: DataSource) =>
+  source.demo ? base : `${base}, ${column}`;
 
 export async function loadDraftTags(
-  supabase: SupabaseClient,
+  source: DataSource,
   kind?: DraftTagKind,
 ): Promise<DraftTagRow[]> {
-  let query = supabase.from("draft_tags").select(TAG_COLUMNS);
+  let query = source.supabase.from(source.table("draft_tags")).select(TAG_COLUMNS);
   if (kind) query = query.eq("kind", kind);
   const { data, error } = await query.order("label").returns<DraftTagRow[]>();
   if (error) throw new Error(error.message);
@@ -40,11 +45,11 @@ export async function loadDraftTags(
 
 /** Every annotated champion, keyed by id — most reads want a lookup, not a list. */
 export async function loadChampionProfiles(
-  supabase: SupabaseClient,
+  source: DataSource,
 ): Promise<Map<number, ChampionProfileRow>> {
-  const { data, error } = await supabase
-    .from("champion_profiles")
-    .select(PROFILE_COLUMNS)
+  const { data, error } = await source.supabase
+    .from(source.table("champion_profiles"))
+    .select(withAuthor(PROFILE_BASE, "updated_by", source))
     .returns<ChampionProfileRow[]>();
   if (error) throw new Error(error.message);
   return new Map((data ?? []).map((row) => [row.champion_id, row]));
@@ -59,11 +64,11 @@ export async function loadChampionProfiles(
  * `.range()` paging can't overlap or skip — see lib/scrims/queries.ts:74-84
  * for the same trap in the table this pattern is copied from.
  */
-export async function loadChampionCounters(supabase: SupabaseClient): Promise<ChampionCounterRow[]> {
+export async function loadChampionCounters(source: DataSource): Promise<ChampionCounterRow[]> {
   return fetchAllRows<ChampionCounterRow>((from, to) =>
-    supabase
-      .from("champion_counters")
-      .select(COUNTER_COLUMNS)
+    source.supabase
+      .from(source.table("champion_counters"))
+      .select(withAuthor(COUNTER_BASE, "created_by", source))
       .order("counter_champion_id")
       .order("target_champion_id")
       .range(from, to)
@@ -91,7 +96,7 @@ export async function loadChampionCounters(supabase: SupabaseClient): Promise<Ch
  * same trap documented in lib/scrims/queries.ts:74-84.
  */
 export async function loadDraftComps(
-  supabase: SupabaseClient,
+  source: DataSource,
   options?: {
     kind?: DraftCompKind;
     hasAllOf?: number[];
@@ -101,7 +106,9 @@ export async function loadDraftComps(
   },
 ): Promise<DraftCompRow[]> {
   return fetchAllRows<DraftCompRow>((from, to) => {
-    let query = supabase.from("draft_comps").select(COMP_COLUMNS);
+    let query = source.supabase
+      .from(source.table("draft_comps"))
+      .select(withAuthor(COMP_BASE, "created_by", source));
     if (options?.kind) query = query.eq("kind", options.kind);
     if (options?.hasAllOf?.length) query = query.contains("champion_ids", options.hasAllOf);
     if (options?.hasAnyOf?.length) query = query.overlaps("champion_ids", options.hasAnyOf);

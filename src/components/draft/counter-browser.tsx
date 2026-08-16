@@ -42,11 +42,14 @@ export function CounterBrowser({
   version,
   counters,
   profiles,
+  readOnly = false,
 }: {
   champions: Champion[];
   version: string;
   counters: ChampionCounterRow[];
   profiles: ChampionProfileRow[];
+  /** Drops every "Add answers" entry point and the editor. See ChampionProfileTable. */
+  readOnly?: boolean;
 }) {
   const [focused, setFocused] = useState<Champion | null>(null);
   // The combobox deliberately has no effect syncing its text back from
@@ -128,9 +131,11 @@ export function CounterBrowser({
             ))}
           </div>
         </div>
-        <Button type="button" size="sm" onClick={() => setEditorTarget({})}>
-          <Plus /> Add answers
-        </Button>
+        {!readOnly && (
+          <Button type="button" size="sm" onClick={() => setEditorTarget({})}>
+            <Plus /> Add answers
+          </Button>
+        )}
       </div>
 
       {focused && (
@@ -144,6 +149,7 @@ export function CounterBrowser({
             version={version}
             allCounters={counters}
             className="panel-hex rounded-lg border-t-0 bg-transparent p-4"
+            readOnly={readOnly}
           />
         </div>
       )}
@@ -159,15 +165,18 @@ export function CounterBrowser({
             Search a champion above to write down what beats them, or add answers from a
             champion&apos;s row on the Champions tab.
           </p>
-          <Button type="button" size="sm" className="mt-1" onClick={() => setEditorTarget({})}>
-            <Plus /> Add answers
-          </Button>
+          {!readOnly && (
+            <Button type="button" size="sm" className="mt-1" onClick={() => setEditorTarget({})}>
+              <Plus /> Add answers
+            </Button>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-grey-mid">
             One card per champion you might face, and what the team has noted as good picks
-            into them. Click a card to edit the whole list.
+            into them.
+            {!readOnly && " Click a card to edit the whole list."}
           </p>
           {cards.length === 0 ? (
             <p className="panel-hex p-6 text-center text-sm text-grey-mid">
@@ -183,26 +192,41 @@ export function CounterBrowser({
                       be the enemy. Three cues, none of them subtle on their
                       own: a larger portrait, a white name against the list's
                       grey, and the rule below. */}
-                  <button
-                    type="button"
-                    onClick={() => setEditorTarget({ championId: champion.championId })}
-                    aria-haspopup="dialog"
-                    aria-label={`Edit answers to ${champion.name}`}
-                    className="-mx-1 flex items-center gap-2 rounded-sm px-1 py-1 text-left hover:bg-bg-tertiary/40"
-                  >
-                    <ChampionAvatar champion={champion} version={version} size="md" />
-                    <span className="truncate font-medium text-white">{champion.name}</span>
-                    <span className="ml-auto shrink-0 text-[10px] tracking-wide text-grey-mid uppercase">
-                      {rows.length} {rows.length === 1 ? "answer" : "answers"}
-                    </span>
-                  </button>
+                  {(() => {
+                    const heading = (
+                      <>
+                        <ChampionAvatar champion={champion} version={version} size="md" />
+                        <span className="truncate font-medium text-white">{champion.name}</span>
+                        <span className="ml-auto shrink-0 text-[10px] tracking-wide text-grey-mid uppercase">
+                          {rows.length} {rows.length === 1 ? "answer" : "answers"}
+                        </span>
+                      </>
+                    );
+                    return readOnly ? (
+                      <div className="-mx-1 flex items-center gap-2 rounded-sm px-1 py-1">
+                        {heading}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditorTarget({ championId: champion.championId })}
+                        aria-haspopup="dialog"
+                        aria-label={`Edit answers to ${champion.name}`}
+                        className="-mx-1 flex items-center gap-2 rounded-sm px-1 py-1 text-left hover:bg-bg-tertiary/40"
+                      >
+                        {heading}
+                      </button>
+                    );
+                  })()}
                   <div aria-hidden className="my-2 h-px bg-border" />
                   <CounterList
                     rows={rows}
                     championById={championById}
                     version={version}
                     otherSideOf={(row) => row.counter_champion_id}
-                    onOpen={() => setEditorTarget({ championId: champion.championId })}
+                    onOpen={
+                      readOnly ? undefined : () => setEditorTarget({ championId: champion.championId })
+                    }
                     emptyLabel="Nothing noted."
                   />
                 </div>
@@ -212,7 +236,7 @@ export function CounterBrowser({
         </div>
       )}
 
-      {editorTarget && (
+      {!readOnly && editorTarget && (
         <CounterGroupEditor
           key={editorTarget.championId ?? "new"}
           champions={champions}

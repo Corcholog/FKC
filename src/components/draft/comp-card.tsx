@@ -43,6 +43,7 @@ export function CompCard({
   version,
   tagLabels,
   onEdit,
+  readOnly = false,
 }: {
   comp: DraftCompRow;
   championById: Map<number, Champion>;
@@ -50,6 +51,8 @@ export function CompCard({
   /** slug → label, so a card never has to render a raw slug. */
   tagLabels: Map<string, string>;
   onEdit: () => void;
+  /** Drops Edit and Delete. See ChampionProfileTable's prop for why this is safe. */
+  readOnly?: boolean;
 }) {
   const [notesOpen, setNotesOpen] = useState(false);
   const title = compTitle(comp, (id) => championById.get(id)?.name);
@@ -90,7 +93,7 @@ export function CompCard({
     </div>
   );
 
-  const controls = (
+  const controls = readOnly ? null : (
     <>
       <Button
         type="button"

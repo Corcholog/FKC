@@ -35,6 +35,7 @@ function PickSide({
   championMap,
   playerNames,
   durationSeconds,
+  basePath,
 }: {
   pick: ScrimPickRow | undefined;
   /** Enemy side: icon on the right, text right-aligned, so the two teams face off. */
@@ -43,6 +44,7 @@ function PickSide({
   championMap: Map<number, ChampionInfo>;
   playerNames: PlayerLookup;
   durationSeconds: number | null;
+  basePath: string;
 }) {
   if (!pick) {
     // Unreachable through the form (ten picks are required and the database
@@ -93,7 +95,7 @@ function PickSide({
             <>
               {roster ? (
                 <Link
-                  href={`/player/${roster.slug}`}
+                  href={`${basePath}/player/${roster.slug}`}
                   className="text-grey-light transition-colors hover:text-gold-bright"
                 >
                   {who}
@@ -171,6 +173,7 @@ export function DraftBoard({
   championMap,
   playerNames,
   ourName = "Us",
+  basePath = "",
 }: {
   game: ScrimGameView;
   version: string;
@@ -178,6 +181,8 @@ export function DraftBoard({
   /** Roster ids to the names and slugs used everywhere else on the site. */
   playerNames: PlayerLookup;
   ourName?: string;
+  /** "/demo" on the public copy — prefixes the link from a pick to its player. */
+  basePath?: string;
 }) {
   const byRole = (ally: boolean) =>
     new Map(
@@ -242,6 +247,7 @@ export function DraftBoard({
               championMap={championMap}
               playerNames={playerNames}
               durationSeconds={game.duration_seconds}
+              basePath={basePath}
             />
             <span className="text-center text-[10px] font-semibold tracking-wider text-grey-mid">
               {formatRoleShort(role)}
@@ -253,6 +259,7 @@ export function DraftBoard({
               championMap={championMap}
               playerNames={playerNames}
               durationSeconds={game.duration_seconds}
+              basePath={basePath}
             />
           </div>
         ))}
@@ -302,16 +309,22 @@ export function ScrimGameCard({
   notes,
   currentUserId,
   ourName,
+  basePath = "",
 }: {
   game: ScrimGameView;
   version: string;
   championMap: Map<number, ChampionInfo>;
   playerNames: PlayerLookup;
-  /** Newest first, replies attached. Omitted on surfaces that don't load notes. */
+  /**
+   * Newest first, replies attached. Omitted on surfaces that don't load notes —
+   * which includes the whole public demo: there is no demo view of
+   * scrim_game_notes, deliberately.
+   */
   notes?: ScrimNoteThread[];
   /** Whose notes carry Edit/Delete. Null for the shared viewer account. */
   currentUserId?: string | null;
   ourName?: string;
+  basePath?: string;
 }) {
   return (
     <div className="panel-hex p-3 sm:p-4">
@@ -326,6 +339,7 @@ export function ScrimGameCard({
           championMap={championMap}
           playerNames={playerNames}
           ourName={ourName}
+          basePath={basePath}
         />
         {/* Undefined means "this page doesn't do notes"; an empty array means
             "no notes yet", which still gets the composer. */}

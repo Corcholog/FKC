@@ -3,6 +3,7 @@ import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
 import { mainRole } from "@/lib/roles";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { loadOpponents } from "@/lib/scrims/queries";
+import { privateSource } from "@/lib/data-source";
 import { SCRIM_ROLES, type ScrimRole } from "@/lib/scrims/types";
 import { ScrimSeriesForm } from "@/components/scrims/scrim-series-form";
 
@@ -111,7 +112,7 @@ export default async function NewScrimPage() {
       .select("id, display_name")
       .order("display_name")
       .returns<RosterRow[]>(),
-    loadOpponents(supabase),
+    loadOpponents(privateSource(supabase)),
     getLatestVersion(),
   ]);
 

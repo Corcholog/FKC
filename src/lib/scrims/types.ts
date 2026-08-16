@@ -54,7 +54,8 @@ export type ScrimSeriesRow = {
   kind: ScrimKind;
   fearless: boolean;
   notes: string | null;
-  created_by: string | null;
+  /** Private only — who entered the series. Not selected on the demo, and not in its view. */
+  created_by?: string | null;
   created_at: string;
 };
 

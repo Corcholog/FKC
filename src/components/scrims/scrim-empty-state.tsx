@@ -10,7 +10,18 @@ import { cn } from "@/lib/utils";
  * everywhere else in this app data appears on its own, so an empty page with no
  * explanation reads as "the sync is broken", not "nobody has typed a game in".
  */
-export function ScrimEmptyState({ what = "No scrims recorded yet." }: { what?: string }) {
+export function ScrimEmptyState({
+  what = "No scrims recorded yet.",
+  canAdd = false,
+}: {
+  what?: string;
+  /**
+   * Shows the link to the entry form. Defaults to off so the public demo, which
+   * has no form to send anyone to, gets the safe version without having to
+   * remember anything.
+   */
+  canAdd?: boolean;
+}) {
   return (
     <div className="panel-hex flex flex-col items-center gap-3 p-10 text-center">
       <p className="text-sm text-grey-light">{what}</p>
@@ -19,10 +30,12 @@ export function ScrimEmptyState({ what = "No scrims recorded yet." }: { what?: s
         that carry them both need an approved production key. So drafts get typed in after the
         block. It takes a couple of minutes a game.
       </p>
-      <Link href="/scrims/new" className={cn(buttonVariants({ size: "sm" }), "mt-1")}>
-        <Plus />
-        Add a series
-      </Link>
+      {canAdd && (
+        <Link href="/scrims/new" className={cn(buttonVariants({ size: "sm" }), "mt-1")}>
+          <Plus />
+          Add a series
+        </Link>
+      )}
     </div>
   );
 }

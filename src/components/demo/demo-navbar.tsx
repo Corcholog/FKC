@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, LineChart, ListOrdered, Swords, Trophy } from "lucide-react";
+import { LayoutDashboard, LineChart, ListOrdered, Shield, Swords, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // The public demo's own chrome, deliberately not the app's Navbar.
@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   { href: "/demo/champions", label: "Champions", icon: Trophy },
   { href: "/demo/tierlists", label: "Tier Lists", icon: ListOrdered },
   { href: "/demo/insights", label: "Insights", icon: LineChart },
+  { href: "/demo/scrims", label: "Scrims", icon: Shield },
 ];
 
 function isActive(pathname: string, href: string): boolean {

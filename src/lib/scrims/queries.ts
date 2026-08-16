@@ -9,9 +9,9 @@
 // opponent list is ~20 rows that every series shares. Joining in JS is cheaper
 // than either.
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllByIds, fetchAllRows } from "@/lib/supabase/fetch-all";
 import { maybeRow } from "@/lib/supabase/read";
+import type { DataSource } from "@/lib/data-source";
 import type {
   ScrimGameRow,
   ScrimGameView,
@@ -21,7 +21,12 @@ import type {
 } from "@/lib/scrims/types";
 
 const OPPONENT_COLUMNS = "id, name, slug, notes, created_at";
-const SERIES_COLUMNS = "id, opponent_id, played_on, kind, fearless, notes, created_by, created_at";
+// created_by is asked for only privately: it is who entered the series, an auth
+// user id, and demo_scrim_series drops it. Nothing renders it — the write path
+// is its only reader — so the demo simply never selects it.
+const SERIES_BASE_COLUMNS = "id, opponent_id, played_on, kind, fearless, notes, created_at";
+const seriesColumns = (source: DataSource) =>
+  source.demo ? SERIES_BASE_COLUMNS : `${SERIES_BASE_COLUMNS}, created_by`;
 // No notes column — a game's notes are a thread, loaded by lib/scrims/notes.ts
 // only on the two pages that render them.
 const GAME_COLUMNS =
@@ -29,10 +34,10 @@ const GAME_COLUMNS =
 const PICK_COLUMNS =
   "id, game_id, ally, team_position, champion_id, champion_name, player_id, player_name, kills, deaths, assists, total_cs";
 
-export async function loadOpponents(supabase: SupabaseClient): Promise<ScrimOpponentRow[]> {
+export async function loadOpponents(source: DataSource): Promise<ScrimOpponentRow[]> {
   return fetchAllRows<ScrimOpponentRow>((from, to) =>
-    supabase
-      .from("scrim_opponents")
+    source.supabase
+      .from(source.table("scrim_opponents"))
       .select(OPPONENT_COLUMNS)
       .order("name")
       .order("id") // total order, so paging can't overlap — see loadScrimGames
@@ -42,15 +47,15 @@ export async function loadOpponents(supabase: SupabaseClient): Promise<ScrimOppo
 }
 
 export async function findOpponentBySlug(
-  supabase: SupabaseClient,
+  source: DataSource,
   slug: string,
 ): Promise<ScrimOpponentRow | null> {
   // A failed read here used to be indistinguishable from an unknown slug, and
   // every caller turns null into notFound() — so a blip claimed the opponent had
   // been deleted.
   return maybeRow(
-    await supabase
-      .from("scrim_opponents")
+    await source.supabase
+      .from(source.table("scrim_opponents"))
       .select(OPPONENT_COLUMNS)
       .eq("slug", slug)
       .maybeSingle<ScrimOpponentRow>(),
@@ -68,7 +73,7 @@ export async function findOpponentBySlug(
  * broken. Same reasoning as every soloq aggregate; see lib/supabase/fetch-all.ts.
  */
 export async function loadScrimGames(
-  supabase: SupabaseClient,
+  source: DataSource,
   options: { opponentId?: string; seriesId?: string } = {},
 ): Promise<ScrimGameView[]> {
   // Every paged query below ends on a column combination that is *unique*, and
@@ -78,7 +83,7 @@ export async function loadScrimGames(
   // one page it never shows; past a page it silently duplicates and drops
   // drafts. Same class of bug fetch-all.ts exists to prevent, one level down.
   const series = await fetchAllRows<ScrimSeriesRow>((from, to) => {
-    let q = supabase.from("scrim_series").select(SERIES_COLUMNS);
+    let q = source.supabase.from(source.table("scrim_series")).select(seriesColumns(source));
     if (options.opponentId) q = q.eq("opponent_id", options.opponentId);
     if (options.seriesId) q = q.eq("id", options.seriesId);
     return q
@@ -93,8 +98,8 @@ export async function loadScrimGames(
   const games = await fetchAllByIds<ScrimGameRow>(
     series.map((s) => s.id),
     (chunk, from, to) =>
-      supabase
-        .from("scrim_games")
+      source.supabase
+        .from(source.table("scrim_games"))
         .select(GAME_COLUMNS)
         .in("series_id", chunk)
         // unique (series_id, game_number) — a total order, and it matches
@@ -110,8 +115,8 @@ export async function loadScrimGames(
     fetchAllByIds<ScrimPickRow>(
       games.map((g) => g.id),
       (chunk, from, to) =>
-        supabase
-          .from("scrim_picks")
+        source.supabase
+          .from(source.table("scrim_picks"))
           .select(PICK_COLUMNS)
           .in("game_id", chunk)
           .order("game_id")
@@ -119,7 +124,7 @@ export async function loadScrimGames(
           .range(from, to)
           .returns<ScrimPickRow[]>(),
     ),
-    loadOpponents(supabase),
+    loadOpponents(source),
   ]);
 
   const seriesById = new Map(series.map((s) => [s.id, s]));
@@ -152,10 +157,10 @@ export async function loadScrimGames(
 
 /** The games of one series, in playing order. */
 export async function loadSeries(
-  supabase: SupabaseClient,
+  source: DataSource,
   seriesId: string,
 ): Promise<ScrimGameView[]> {
-  return loadScrimGames(supabase, { seriesId });
+  return loadScrimGames(source, { seriesId });
 }
 
 /**

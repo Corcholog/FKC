@@ -10,14 +10,15 @@ import { cn } from "@/lib/utils";
 // pathname, so it's the only client component in the section shell.
 
 const TABS = [
-  { href: "/scrims", label: "Overview" },
-  { href: "/scrims/history", label: "History" },
-  { href: "/scrims/drafts", label: "Drafts" },
-  { href: "/scrims/opponents", label: "Opponents" },
+  { href: "", label: "Overview" },
+  { href: "/history", label: "History" },
+  { href: "/drafts", label: "Drafts" },
+  { href: "/opponents", label: "Opponents" },
 ];
 
-export function ScrimTabs() {
+export function ScrimTabs({ basePath = "" }: { basePath?: string }) {
   const pathname = usePathname();
+  const root = `${basePath}/scrims`;
 
   return (
     // flex-wrap rather than overflow-x-auto. Setting overflow on one axis
@@ -28,18 +29,19 @@ export function ScrimTabs() {
     // scrolls anywhere else.
     <nav className="flex flex-wrap gap-1 border-b border-border">
       {TABS.map((tab) => {
+        const href = `${root}${tab.href}`;
         // Exact for the index, prefix for the rest — /scrims/opponents/uba has
         // to keep Opponents lit. /scrims/new and /scrims/[id] match none of
         // them, which is right: they aren't tabs.
         const active =
-          tab.href === "/scrims"
-            ? pathname === "/scrims"
-            : pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+          tab.href === ""
+            ? pathname === root
+            : pathname === href || pathname.startsWith(`${href}/`);
 
         return (
           <Link
-            key={tab.href}
-            href={tab.href}
+            key={href}
+            href={href}
             className={cn(
               "relative shrink-0 px-3 py-2 text-sm font-medium transition-colors",
               active ? "text-gold-bright" : "text-grey-light hover:text-white",

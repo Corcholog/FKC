@@ -170,6 +170,19 @@ combobox and role filter are what keep it usable; past a few hundred annotated c
 neither is enough. `/draft/champions` has the same shape but a fixed ceiling — there are only
 ~170 champions.
 
+**`/scrims/team` renders every matching game.** Same shape, one level worse: an unfiltered
+visit draws the entire archive as full draft cards. The filter is what keeps it usable, and
+the page is *for* filtering, so this is fine at a season's worth of games and won't be at
+five. The fix is the pagination `/matches` already has (ADR-024's `parsePage`), applied to
+the "Matching games" list only.
+
+**No scrim game records a patch, so the patch filter is inert.** `scrim_games.patch` is
+nullable and the entry form doesn't require it; every game entered to date has it null. The
+filter and the ordering (`comparePatch`) are correct and tested, and the UI states the
+untagged count rather than showing an empty menu — but "how did we look on this patch" is
+currently unanswerable. This is a data-entry gap, not a code one: defaulting the field to
+the current patch in `/scrims/new` would close it going forward.
+
 **The reference panel's two-column layout rests on an unenforced numeric coupling.** The
 sections switch to two columns at a container query of `@md` (28rem), which works only
 because the docked panel is `w-[30rem]` and the sheet below `xl` is `max-w-sm` (24rem). Narrow

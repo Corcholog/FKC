@@ -30,6 +30,7 @@ src/app/
     ├── scrims/               Section with its own layout + tab strip (see below)
     │   ├── layout.tsx        Heading, tabs, "New scrim" — wraps everything under it
     │   ├── page.tsx          /scrims                  Overview: records, players
+    │   ├── team/             /scrims/team             The filtered team view — §15
     │   ├── history/          /scrims/history          Every series, drafts rendered
     │   ├── drafts/           /scrims/drafts           Pick/ban aggregates
     │   ├── opponents/        /scrims/opponents        Teams; [slug] is the scouting page
@@ -918,3 +919,56 @@ Anonymization is not free and it is worth knowing what it costs before showing t
 The draft simulator survives intact because it is `sessionStorage` state, not a database
 read (ADR-033) — a signed-out visitor can pick and ban on the board exactly as a member
 can, which is the most convincing thing on the demo and cost nothing to expose.
+
+## 15. `/scrims/team` — the filter is the page
+
+The other four scrim tabs each answer one question over every game ever recorded. This one
+answers any of them over a subset, because that is what preparation looks like: not "how do
+we draft" but "how did we draft against this team, on this patch, when they had Maokai".
+
+So the page is a filter bar and then folds — record, draft order, game length, both
+champion pools, both ban lists, and the matching games themselves. Every section reads the
+same `applyScrimFilter(games, filter)` array.
+
+### The filter lives in the URL
+
+`TeamFilterBar` is a client component whose every control does one thing: `router.push` a
+new query string. The page re-renders on the server with new `searchParams`, and the
+aggregation stays where the rest of this codebase keeps it — in pure functions, on the
+server, over rows the page already had.
+
+The alternative (filter state in the component, aggregates recomputed in the browser) would
+have meant shipping every game's picks to the client and duplicating the fold. It would
+also have made a filtered view unlinkable, and a filtered view is precisely the thing you
+send to somebody: *"look at our last three officials on red side"*.
+
+Two consequences worth knowing:
+
+- **Nothing re-queries.** `loadScrimGames` already returns the section's entire dataset for
+  every tab, and the demo copy reads it from the same `"scrim-games"` cache entry the other
+  demo scrim pages share. A filtered view costs no extra read on either version.
+- **The filter is applied in JavaScript, not pushed into PostgREST.** Consistent with
+  ADR-015, and here it is not even a trade: a champion filter is a predicate over ten picks
+  per game, which SQL would need a join to express, and the dataset is one season of
+  hand-entered games.
+
+### Champion pickers search all of DDragon, not just what was played
+
+`champions` comes from the DDragon map rather than from the games. *"Have we ever faced
+Ambessa"* is worth being able to ask and get **no** to; a list built from the games
+themselves can only ever answer yes.
+
+Adding a champion that is already applied is greyed rather than hidden, the same rule the
+draft board uses — a vanishing list entry reads as a bug.
+
+`ChampionChips` is declared at module scope, and not only because `react-hooks/static-components`
+says so: a component created during render is a new type each time, so React remounts it,
+which would wipe the combobox's typed text on every keystroke that changed the parent. The
+deliberate remount (bumping `pickerKey` to clear the box after a pick) only means something
+if the accidental one isn't also happening.
+
+### The empty state names the filter, not the data
+
+"No games" on a page whose entire job is narrowing reads as an empty database. The message
+says no game matches *every one of these filters*, and points at the per-option counts —
+which are over the unfiltered set precisely so they can be read as a way out.

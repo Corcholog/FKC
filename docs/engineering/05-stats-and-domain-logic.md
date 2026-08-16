@@ -505,6 +505,8 @@ read path and the only part that touches Supabase.
 | `team-stats.ts` | Overall record, blue/red split, by series type, head-to-head per opponent, per-player aggregates |
 | `draft-stats.ts` | Pick and ban frequency per side, per-role pools, presence, the fearless pool |
 | `opponents.ts` | An opponent's roster and pools, derived from nicknames |
+| `filters.ts` | Which subset of games a question is about — see §11b |
+| `team-splits.ts` | Game length and draft order at team level, adapting §9b's modules |
 | `validate.ts` | What a submitted series must satisfy before it's written |
 
 **These reuse the soloq helpers rather than re-deriving them**, which is the whole reason
@@ -560,3 +562,52 @@ champion banned in game 1 and never played can be picked or banned again in game
 `components/scrims/draft-form-state.ts`) implement this, and must agree — if they drift, the
 form greys a champion that a saved series says is legal. Both exclude bans; `usedInGame` is
 the within-game one and includes them.
+
+## 11b. The scouting query (`filters.ts`, `team-splits.ts`)
+
+Every module above answers one question over *every* recorded game. Preparation asks the
+same questions over a subset — this patch, this opponent, officials only, games where they
+had Maokai — so `filters.ts` is a `ScrimFilter` plus a predicate, and `/scrims/team`
+(§15 of [07](07-frontend.md)) folds each aggregate over the filtered array.
+
+**Champion filters are AND, and over picks only.** "We faced K'Sante *and* Maokai" is a
+question about a composition; OR would return the union, which is nearly every game and
+therefore no answer. Bans are excluded because a banned champion was never on the map, so
+counting one as *faced* would attach a result to a game it took no part in.
+
+**Options come from the unfiltered set, with unfiltered counts.** A dropdown rebuilt from
+the current results is a dead end: choosing "official" would leave "official" as the only
+kind and there would be no way back except editing the URL. Carrying each option's count
+also makes an empty result legible as a combination that never happened rather than as a
+broken page.
+
+**A game with no patch recorded is excluded by a patch filter, not treated as a wildcard.**
+"How did we look on 15.3" must not be answered partly with games nobody dated. That makes
+the untagged count worth showing, and today it is the whole dataset — no recorded scrim
+carries a patch, so the patch filter is currently inert. The UI says so under the dropdown
+instead of offering an empty menu with no explanation.
+
+**A backwards date range is swapped, not rejected.** There is no reading of "from December
+to January" that means the empty set, and silently matching nothing is the worst of the
+three available behaviours.
+
+`comparePatch` compares segment by segment as numbers, because `"15.10".localeCompare("15.9")`
+is negative — a patch dropdown whose top entry is not the newest patch is wrong in a way
+nobody checks. A non-numeric segment falls back to text so the comparison stays total
+rather than collapsing to `NaN` and reporting equal.
+
+### `team-splits.ts` — what scrims have that soloq doesn't
+
+`scrimDurationSplit` and `firstPickSplit` adapt §9b's modules rather than reimplementing
+them, and the adaptation is the interesting part:
+
+- **`scrim_games.duration_seconds` is nullable** (it is typed by hand and often skipped)
+  and scrims have **no 15-minute floor**, unlike soloq where migration 007 deleted
+  everything shorter. `aggregateByDuration` silently drops both. So the wrapper counts them
+  as `untimed` and `tooShort`, and the caption states what the split is actually over. A
+  length split over 40 games that quietly describes 26 is exactly the failure this codebase
+  spends its comments avoiding.
+- **Side means something else here.** In soloq it is assigned, which is why
+  `MIN_SIDE_GAMES` is 100 and the caption calls it a curiosity. In a scrim it comes out of
+  a draft the team prepared for, and blue picks first — so `firstPickSplit` reports the
+  same partition under the name that makes it actionable: the first-pick record.

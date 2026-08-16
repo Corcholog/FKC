@@ -1032,3 +1032,47 @@ Publishing calls `revalidateTag("demo", "max")`. Without it the 1-hour data cach
 ADR-036 means a freshly published summary appears on some pages and not others depending on
 when each was last read — which is how the unreviewed-publication bug was noticed in the
 first place.
+
+---
+
+## ADR-040 — The team view's filter is a URL, and it narrows in JavaScript
+
+**Context.** Team statistics were asked for as "a section with its own picks and stats
+together, and its own history with its filter". The filter is the requirement: every
+existing scrim page already answers a question over *every* recorded game, and preparation
+asks the same questions over a subset — this opponent, this patch, officials only, games
+where they had a particular champion on the map.
+
+Two independent choices fall out of that: where the filter state lives, and where the
+narrowing happens.
+
+**Decision.** The filter is `searchParams`, parsed by a pure `parseScrimFilter`, and applied
+by a pure predicate over the array `loadScrimGames` already returned. `TeamFilterBar` is a
+client component whose only job is to `router.push` a new query string.
+
+**Consequences.** A filtered view is linkable, which is most of its value — *"look at our
+last three officials on red side"* is a thing you send to somebody, and a filter held in
+component state cannot be sent. It also keeps every aggregate on the server in a pure
+function, which is the convention the whole `lib/` layer rests on; the alternative would
+have shipped every game's picks to the browser and duplicated the folds there.
+
+Narrowing in JavaScript is consistent with ADR-015 and here it is not even a trade. The
+section's pages all load the same complete dataset already, the demo copy shares one cache
+entry with them, and a champion filter is a predicate over ten picks per game that SQL
+would need a join to express. A filtered view therefore costs no extra read on either
+version.
+
+The costs, both real:
+
+- **Every matching game renders.** There is no pagination, so a narrow filter is fast and
+  a bare `/scrims/team` grows with the archive. Same shape as `/draft/counters` and listed
+  in [10](10-known-gaps.md).
+- **The champion filters are AND, and over picks only.** That is the right default — "we
+  faced K'Sante *and* Maokai" is a question about a composition, and OR returns nearly
+  every game — but it means there is no way to ask an either/or question, and no way to ask
+  about a champion that was *banned*. Both are additions to `filters.ts` rather than
+  redesigns, and neither was worth guessing at before somebody wanted it.
+
+No migration. `scrim_series.kind` has distinguished `'scrim' | 'friendly' | 'official'`
+since migration 012, which is the axis a tier-2 team actually needs — practice separated
+from the games that counted — so the filter this ADR is about needed no new column.

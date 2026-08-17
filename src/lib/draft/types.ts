@@ -128,10 +128,18 @@ export const DRAFT_COMP_KIND_LABELS: Record<DraftCompKind, string> = {
  * nullable. `winConditions` is likewise a product call about what a form asks
  * for rather than a fact about the data, so it lives in validateDraftComp and
  * nothing has to migrate if it changes.
+ *
+ * `graph` is the same sort of call. Synergies overlap — one champion turns up in
+ * six of them and a pair extends into a trio — and that structure is invisible
+ * on a wall of cards, which is what the graph view exists to draw. Comps don't
+ * have it: every comp is five champions, so nothing properly contains anything,
+ * the graph would be one detached region per row and no lines at all, and the
+ * "which champions recur" read is what /scrims/drafts already answers over real
+ * games rather than over saved plans.
  */
-export const DRAFT_COMP_SHAPE: Record<DraftCompKind, { winConditions: boolean }> = {
-  comp: { winConditions: true },
-  synergy: { winConditions: false },
+export const DRAFT_COMP_SHAPE: Record<DraftCompKind, { winConditions: boolean; graph: boolean }> = {
+  comp: { winConditions: true, graph: false },
+  synergy: { winConditions: false, graph: true },
 };
 
 /** How many champions this kind takes, as `[min, max]`. */

@@ -46,7 +46,8 @@ src/app/
     │   ├── page.tsx          /draft                   Board + reference panel (Phases 4-7)
     │   ├── champions/        /draft/champions         Lane roles + function tags (Phase 1)
     │   ├── comps/            /draft/comps             Saved five-champion sides (Phase 3)
-    │   ├── synergies/        /draft/synergies         Saved 2-4 champion combos (Phase 3)
+    │   ├── synergies/        /draft/synergies         Saved 2-4 champion combos (Phase 3),
+    │   │                                              cards or graph — §16
     │   └── counters/         /draft/counters          Who answers whom (Phase 2)
     ├── settings/             Roster CRUD, Riot key, AI context, logins
     └── account/page.tsx      Password change
@@ -980,3 +981,138 @@ added to this one.
 "No games" on a page whose entire job is narrowing reads as an empty database. The message
 says no game matches *every one of these filters*, and points at the per-option counts —
 which are over the unfiltered set precisely so they can be read as a way out.
+
+## 16. The synergy graph — `/draft/synergies`
+
+Saved synergies overlap in ways a wall of cards cannot show. One champion turns up in six
+of them and his portrait appears in six unrelated boxes; a saved pair extends into a saved
+trio and the two cards sit next to each other with nothing linking them; and the pool as a
+whole has a *shape* — one dense web plus a handful of pairs attached to nothing — that no
+amount of scrolling reveals. `Cards | Graph` is a second drawing of the same filtered rows.
+
+The capability is `DRAFT_COMP_SHAPE.graph`, beside `winConditions`, so the toggle is a fact
+about the kind rather than a `kind === "synergy"` in the list. Comps don't get one: every
+comp is five champions, so nothing properly contains anything and the drawing would be one
+detached region per row with no lines at all.
+
+### A synergy is a hyperedge, and drawing it as a clique would be a lie
+
+This is the load-bearing decision in `lib/draft/synergy-graph.ts` and the reason the file
+exists rather than the view calling `champion_ids.flatMap(pairs)` inline.
+
+A two-champion synergy is an edge and draws as a line. A three- or four-champion synergy is
+**one saved row about all of them at once**, and the obvious rendering — a line between each
+pair — is wrong in a way nobody would catch. `{Skarner, Syndra, Viktor}` drawn as a triangle
+is pixel-identical to three separately saved pairs, and the live pool contains both shapes
+inside the same cluster. A reader would take "Skarner + Syndra is a saved synergy" straight
+off the screen and it isn't one.
+
+So `edges` holds pairs only, `groups` holds everything larger, and a group draws as a single
+enclosing region. The legend says *"one saved synergy of 3–4, **not three pairs**"* for the
+same reason. This is the [§13](#13-the-draft-reference-panel) standard applied to a picture:
+the failure mode has to be an obviously empty section, never a confident specific wrong one.
+
+`clusters` asks a different question and therefore uses a different structure — connected
+components over *co-membership*, every pair inside every row, groups included. "Is Skarner
+related to Viktor at all" is a genuine yes; only "is there a saved pair Skarner + Viktor" is
+a no. Conflating the two is the same bug from the other end.
+
+### The layout is a static picture, computed synchronously
+
+A plain force simulation, run to completion in a `useMemo`. No animation loop, no
+`requestAnimationFrame`, no state churn — 27 champions and 22 synergies lay out in ~12ms,
+which is less than the page spends on the toolbar above it.
+
+- **Per cluster, then shelf-packed** — not one simulation over the whole graph. A force sim
+  has no answer for disconnected components: with no centering force they drift apart
+  forever, with one they pile into the middle and read as a single tangle. Laying each out
+  alone is what makes "these four have nothing to do with the other sixteen" visible.
+- **Seeded, so it's reproducible.** Filtering re-runs the layout, and one that reshuffled on
+  every keystroke would be unreadable. The seed is the cluster's own membership, so a
+  cluster keeps its shape when a different one gains a champion.
+- **Groups pull toward their own centroid**, never toward each other — a hyperedge has no
+  pairwise structure to model, and giving it one here would put back the clique above.
+- **Non-members are pushed clear of a group's region.** A champion drifting inside a hull it
+  isn't a member of is indistinguishable from one that is, which is the one misreading this
+  rendering can still produce. Cheap to prevent, so it is prevented.
+- **Hard separation runs last**, after the forces. Overlapping portraits don't read as a
+  dense cluster, they read as a rendering bug.
+- **Shelf width is derived, not fixed.** Clusters are all laid out first, then packed to a
+  width of `sqrt(area × PACK_ASPECT)` — floored at the widest single cluster, which cannot
+  be broken up. A drawing that comes out square gets letterboxed on a wide canvas and opens
+  at half the scale it could have. `PACK_ASPECT` is a constant rather than the canvas's real
+  aspect, which the view knows and could pass in: threading it through would relayout on
+  every window resize, and a graph that reshuffles when you drag the window edge is worse
+  than one that is occasionally a little tall.
+
+**Corners are rounded, not mitered.** The bisector reach is `pad / cos(half-angle)`, which
+runs away as a corner sharpens — and three champions laid out near-collinear is two very
+sharp corners. On real data that drew a hundred-pixel cyan spike across the graph. Clamping
+the miter trades the spike for a chisel; the rounded offset (the region within `pad` of the
+hull) has no bad case, and it folds in the degenerate shapes for free — a hull that came back
+as a bare segment rounds into a capsule, so the view gets a fillable ring whatever the hull
+was and no branch has to know the difference.
+
+Hub portraits are drawn bigger and carry their count from three up, because *"this champion
+is in six of these"* is the fact the card list cannot show and the one the view exists for.
+`nodeRadius` is exported so the layout and the view can't disagree about how much room a
+portrait takes.
+
+### The canvas is a map, and the controls are a rail beside it
+
+The first version was an `overflow-x-auto` box holding an SVG scaled to the container width,
+with the filters in a row above it. That was wrong at both ends. A big graph had to be
+scrolled to be seen at all; and a filtered-down one — two synergies, a layout a few hundred
+pixels across — was **stretched to fill the panel until two portraits were the size of
+playing cards**, so the view stopped looking like itself exactly when it got simplest.
+
+Now:
+
+- **The canvas is a fixed viewport** (`clamp(32rem, 78vh, 56rem)`), and the graph opens at
+  whatever scale fits inside it — `min(w/lw, h/lh, 1)`. The cap at 1 is the whole fix for the
+  upscaling: a small result sits small and centred, drawn at exactly the size `nodeRadius`
+  asked for.
+- **Wheel zooms about the cursor, drag pans**, no modifier and no click to arm either. The
+  wheel listener is attached natively with `{ passive: false }` rather than through `onWheel`,
+  because **React registers its root wheel listener as passive and `preventDefault` inside a
+  passive listener does nothing** — the page would scroll out from under the zoom. Zoom
+  buttons and a Fit button carry the same thing for the keyboard.
+- **A drag past `DRAG_SLOP` suppresses the click** it would otherwise end with, so panning
+  off a champion doesn't also pin that champion.
+- **The user's transform is tagged with the layout it was made against**, and compared by
+  identity. `layout` is memoised on `graph`, which is memoised on `comps` — so a new set of
+  rows is a new object, the stored transform stops applying, and the view refits. No effect,
+  no cleanup, and no render where a transform belonging to a graph of twenty-eight champions
+  is applied to one of four.
+- **`touch-action: pan-y`**, not `none`. A phone still scrolls the page past a canvas filling
+  most of it, which `none` would trap; a horizontal drag still pans. The mouse, which is what
+  this view is really for, is unaffected either way.
+
+The **controls move into a rail down the left** in graph mode — the view toggle, the search,
+the champion filter, then the legend, the zoom controls, the readout and the summary. One
+definition of those controls, parameterised by `railed`, rather than two copies to keep in
+step; only the widths and the flow direction differ. `railed` is false while either empty
+state is showing, since a rail of filters pinned to the left of a blank page is worse than a
+row above one — and the toggle has to stay reachable to get back to Cards.
+
+The **readout names the partner sets in text** — the highlight alone is unreadable to anyone
+not looking at the screen, and hard to read anyway once a hub's six partners are spread across
+a cluster. Tabbing to a champion **pans it into view** if it is off-screen; at the opening
+scale everything fits so this never fires, but once somebody has zoomed in, focus landing
+several screens away would light up nothing anyone can see.
+
+Colours are literal hexes, for the reason at the top of `charts/chart-theme.ts`: these land
+in SVG presentation attributes. Portraits are SVG `<image>`, so `next/image` has nothing to
+offer; `crossOrigin` is not load-bearing here the way it is on `ChampionAvatar` (nothing
+exports this view) but it keeps them sharing DDragon's cache entries with the rest of the app.
+
+### The card view answers the containment half
+
+`relateComps` is both readings of one relation, built once — named after `CounterIndex`'s
+`counters` / `counteredBy` for that reason. A pair reads *"also saved with Gnar"* and names
+only what the bigger row **adds**, since the champions they share are the portraits directly
+above the line; the trio reads *"extends Wukong + Orianna"*.
+
+It's computed over **every** row, not over the filtered ones: that a pair extends into a trio
+is a fact about what's saved, not about what the search box is showing, and recomputing per
+filter would blink the note out of a card whose own contents hadn't changed.

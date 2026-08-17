@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil } from "lucide-react";
+import { CornerDownRight, Pencil } from "lucide-react";
 import type { ChampionInfo } from "@/lib/ddragon";
 import { formatRoleShort } from "@/lib/roles";
 import { COMP_SIZE, compTitle, DRAFT_ROLES, type DraftCompRow } from "@/lib/draft/types";
+import { extraChampions, type CompRelations } from "@/lib/draft/synergy-graph";
 import { ChampionAvatar } from "@/components/champion-avatar";
 import { DeleteCompButton } from "@/components/draft/delete-comp-button";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +43,7 @@ export function CompCard({
   championById,
   version,
   tagLabels,
+  relations,
   onEdit,
   readOnly = false,
 }: {
@@ -50,11 +52,18 @@ export function CompCard({
   version: string;
   /** slug → label, so a card never has to render a raw slug. */
   tagLabels: Map<string, string>;
+  /**
+   * The saved rows this one sits inside or contains, from `relateComps`.
+   * Omitted where the caller hasn't computed them; there is nothing to draw
+   * for a kind whose rows are all the same size.
+   */
+  relations?: CompRelations;
   onEdit: () => void;
   /** Drops Edit and Delete. See ChampionProfileTable's prop for why this is safe. */
   readOnly?: boolean;
 }) {
   const [notesOpen, setNotesOpen] = useState(false);
+  const nameOf = (id: number) => championById.get(id)?.name ?? `#${id}`;
   const title = compTitle(comp, (id) => championById.get(id)?.name);
 
   // A five-champion comp is one champion per role, and the stored order is the
@@ -138,6 +147,40 @@ export function CompCard({
             <Badge key={slug} variant="outline">
               {tagLabels.get(slug) ?? slug}
             </Badge>
+          ))}
+        </div>
+      )}
+
+      {/* Where this row sits among the others.
+          `{Wukong, Orianna}` and `{Gnar, Wukong, Orianna}` are two cards with
+          nothing linking them, and the second is the first plus a champion —
+          which is the thing you want to know while looking at either one. The
+          bigger row names only what it *adds*, since the champions it shares are
+          the portraits directly above the line.
+
+          The arrow is inline rather than a flex sibling, so a line that wraps
+          reflows under it and gets the card's full width back. At two portraits
+          the card is ~88px, where a 12px icon in its own column costs a fifth of
+          every line after the first. */}
+      {relations && (relations.containedBy.length > 0 || relations.contains.length > 0) && (
+        <div className="flex w-0 min-w-full flex-col gap-0.5 text-[11px] text-grey-mid">
+          {relations.containedBy.map((bigger) => (
+            <p key={bigger.id}>
+              <CornerDownRight aria-hidden className="mr-1 inline size-3 align-text-bottom" />
+              also saved with{" "}
+              <span className="text-grey-light">
+                {extraChampions(comp, bigger).map(nameOf).join(" + ")}
+              </span>
+            </p>
+          ))}
+          {relations.contains.map((smaller) => (
+            <p key={smaller.id}>
+              <CornerDownRight aria-hidden className="mr-1 inline size-3 align-text-bottom" />
+              extends{" "}
+              <span className="text-grey-light">
+                {smaller.champion_ids.map(nameOf).join(" + ")}
+              </span>
+            </p>
           ))}
         </div>
       )}

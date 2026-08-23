@@ -62,7 +62,11 @@ export function DashboardView({
   intro: React.ReactNode;
   /** The sync card. Private only — the demo has no business reading `sync_state`. */
   syncStatus?: React.ReactNode;
-  /** The clan recap. Private only until the demo has a published team summary. */
+  /**
+   * The clan recap. Both versions pass one, but they are different rows written
+   * in different voices: nightly from `team_ai_summary` on the private side,
+   * published by hand out of `demo_text` on the public one.
+   */
   recap?: React.ReactNode;
   /** Builds one row's note thread. Omitted on the demo, which renders rows collapsed. */
   notesFor?: (entry: MatchEntry) => MatchRowNotes;

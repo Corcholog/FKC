@@ -49,8 +49,8 @@ It is used in six places, and each has a reason:
 1. `/api/sync` — Vercel Cron has no user session.
 2. `/api/summaries` — same, plus it writes summaries for *every* player, not the caller's.
 3. `/api/weekly` — same, for the weekly Discord recap.
-4. `/api/demo-summaries` — writes demo drafts for every aliased player, and reads
-   `demo_aliases`, which has no policy for the signed-in role (§10).
+4. `/api/demo-summaries` — writes demo drafts for every aliased player and for the clan
+   recap, and reads `demo_aliases`, which has no policy for the signed-in role (§10).
 5. `settings/actions.ts` — creating/deleting `auth.users`, writing `players.user_id`
    (which the `authenticated` role is not granted), and publishing demo text.
 6. `settings/page.tsx` — reading `demo_aliases` / `demo_text` for the review UI.
@@ -387,10 +387,17 @@ curl "$URL/rest/v1/demo_text?select=body"                  -H "apikey: $PUBLISHA
 
 curl "$URL/rest/v1/demo_players?select=riot_game_name"     -H "apikey: $PUBLISHABLE_KEY"
 # → 42703 column does not exist      ← layer 1, proven rather than assumed
+
+curl "$URL/rest/v1/demo_team_summary?select=source"        -H "apikey: $PUBLISHABLE_KEY"
+# → 42703 column does not exist      ← same, for the recap's projection
 ```
 
-The last one is the check worth keeping: it proves the column is *absent*, not merely
-unselected.
+The last two are the checks worth keeping: they prove a column is *absent*, not merely
+unselected. `demo_team_summary` (migration 021) is the sharpest case — it is a view over
+`demo_text`, the one table that must never be public, and it publishes exactly one row of
+it. Leaving `source` and `row_id` out of the select list is what makes that "exactly one"
+structural: with them exposed, a filter on the querystring would reach every draft and every
+override in the table.
 
 ### Free text is opt-in, never filtered
 

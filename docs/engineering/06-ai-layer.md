@@ -360,6 +360,35 @@ they are.
 [09, ADR-039](09-decision-log.md) — that split exists because the first version didn't have
 it and three summaries went live unreviewed.
 
+### The clan recap gets the same treatment, one row instead of nine
+
+The demo's dashboard renders the same recap card the private one does, off a different row:
+`demo_text` under `source = 'team_summary'`, `row_id = '1'` — the singleton it mirrors is
+`team_ai_summary.id = 1`. Migration 021 projects it as `demo_team_summary`.
+
+The anonymization is again in what the prompt is built from. `gatherTeamPromptData` is
+shared by both recaps and **resolves every name once, inside itself**: given an `AliasMap`
+it returns aliases and drops any player who doesn't have one, so a duo or a head-to-head
+involving an unaliased player disappears rather than falling back to a real name. The
+builders downstream see names and never ids, which means `buildAnalystTeamPrompt` has
+nothing to substitute and no way to reach a `display_name`.
+
+It also has no way to reach `clan_profile.context`. The private recap opens with
+`clanContextBlock(aiContext)` — the group's own blurb about itself, capped at 4000 chars of
+nicknames and running jokes, and the single most identifying string in the database. The
+gatherer never loads it, so there is no variable in the analyst path holding it; this is the
+same "cannot leak what it was never shown" property the player profile has, not a prompt
+instruction not to mention it.
+
+Output is **3–5 sentences of prose**, not the player profile's bullets: it lands in the same
+narrow sidebar card the private recap does and answers one question rather than five. Same
+`temperature: 0.4`, and `ANALYST_DEMO_TEAM_VOICE` swaps the player profile's *"do not call
+them anything but {alias}"* clause for its group equivalent — only the names given above.
+
+`/api/demo-summaries` writes it first in a run, for the reason `/api/summaries` orders the
+private one first: it is the one on the front page. Sending `{ team: true }` regenerates
+only it; a plain run writes it only if its draft is missing.
+
 `/api/demo-summaries` is also **not on the cron**, which is the one place this differs
 structurally from everything else in this document. §1's whole argument is that AI work
 belongs in a scheduled batch. It still does — for text that only the group reads. Text on a
@@ -408,7 +437,8 @@ that produce *plausible* output are the expensive kind.
 `ai-context.ts` holds two levels of free text, answering different questions:
 
 - **`clan_profile.context`** — who the *group* is. Inside jokes, slang, nicknames, running
-  bits. Capped at 4000 chars into the prompt. **Team recap only.**
+  bits. Capped at 4000 chars into the prompt. **The private team recap only** — the demo's
+  recap is built by a gatherer that never reads it (§6b).
 - **`players.ai_context`** — who *one person* is. Their reputation, habits, the thing
   everyone gives them grief about. Capped at 600 chars. Goes to both.
 

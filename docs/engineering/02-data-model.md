@@ -567,9 +567,9 @@ default. The default has to be the safe one, because the unsafe one is silent.
 surface's id cast to text (the ids it points at are variously `uuid`, `integer` and
 `text`). The views `left join` it, so **a row with no override renders no text at all**.
 Current sources: `champion_profile`, `counter`, `comp`, `comp_label`, `opponent`,
-`series`, `player_summary`, `player_summary_draft`.
+`series`, `player_summary`, `player_summary_draft`, `team_summary`, `team_summary_draft`.
 
-The last two are the same text in two states — see §14 below.
+The last four are two texts in two states each — see §14 below.
 
 ### The views, and the criterion for a column
 
@@ -600,6 +600,7 @@ migration recreates the view. Recreating one is the moment to re-check what it e
 | `demo_scrim_games` | — (already clean) | — |
 | `demo_scrim_picks` | ally alias, or a positional label | the typed nickname |
 | `demo_player_summaries` | `public_id` | everything else — it is a projection of `demo_text` |
+| `demo_team_summary` | — (no identity in the row) | `source` and `row_id`, so no other `demo_text` row is reachable through it |
 
 Four of those are worth the reasoning:
 
@@ -661,3 +662,20 @@ This needed no schema change — `source` was already half the primary key — a
 only reason the review step in `/settings` is real rather than decorative. The
 `length(btrim(body)) > 0` filter means clearing the published row is a valid operation:
 it takes the card off the demo instead of rendering an empty one.
+
+Migration 021 applies the same shape to the clan recap, which is one row rather than one per
+player:
+
+```sql
+create or replace view public.demo_team_summary as
+select t.body as summary_text, t.updated_at as generated_at
+from public.demo_text t
+where t.source = 'team_summary' and t.row_id = '1'
+  and length(btrim(t.body)) > 0;
+```
+
+`row_id = '1'` because the private row it mirrors is the singleton `team_ai_summary.id = 1`.
+No alias join, because there is no identity in the row to resolve — and note what the select
+list leaves out: neither `source` nor `row_id` is a column of the view, so no other
+`demo_text` row (a champion note, an opponent blurb, the *draft* recap) can be selected out
+of it by changing a filter.

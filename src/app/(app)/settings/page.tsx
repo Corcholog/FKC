@@ -1,7 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { maybeRow, optional, rows } from "@/lib/supabase/read";
-import { DEMO_SUMMARY_DRAFT_SOURCE, DEMO_SUMMARY_SOURCE } from "@/lib/summary-analyst";
+import {
+  DEMO_SUMMARY_DRAFT_SOURCE,
+  DEMO_SUMMARY_SOURCE,
+  DEMO_TEAM_SUMMARY_DRAFT_SOURCE,
+  DEMO_TEAM_SUMMARY_ROW_ID,
+  DEMO_TEAM_SUMMARY_SOURCE,
+} from "@/lib/summary-analyst";
 import {
   DemoSummariesForm,
   type DemoSummaryDraft,
@@ -63,7 +69,12 @@ export default async function SettingsPage() {
     admin
       .from("demo_text")
       .select("source, row_id, body, updated_at")
-      .in("source", [DEMO_SUMMARY_SOURCE, DEMO_SUMMARY_DRAFT_SOURCE]),
+      .in("source", [
+        DEMO_SUMMARY_SOURCE,
+        DEMO_SUMMARY_DRAFT_SOURCE,
+        DEMO_TEAM_SUMMARY_SOURCE,
+        DEMO_TEAM_SUMMARY_DRAFT_SOURCE,
+      ]),
   ]);
 
   const rowsBySource = (source: string) =>
@@ -78,22 +89,46 @@ export default async function SettingsPage() {
   const draftRows = rowsBySource(DEMO_SUMMARY_DRAFT_SOURCE);
   const publishedRows = rowsBySource(DEMO_SUMMARY_SOURCE);
 
-  const demoDrafts: DemoSummaryDraft[] = (aliasRows ?? []).map((r) => {
-    const playerId = r.player_id as string;
-    const draft = draftRows.get(playerId);
-    const published = publishedRows.get(playerId);
-    return {
-      playerId,
-      alias: r.alias as string,
-      // The draft is the working copy. Falling back to the published text
-      // covers rows published before drafts existed as a separate thing — and,
-      // generally, an editor that opened empty on top of live text would be a
-      // trap: pressing Publish would blank the demo.
-      body: draft?.body ?? published?.body ?? "",
-      updatedAt: draft?.updatedAt ?? published?.updatedAt ?? null,
-      publishedBody: published?.body ?? "",
-    };
+  // The draft is the working copy. Falling back to the published text covers
+  // rows published before drafts existed as a separate thing — and, generally,
+  // an editor that opened empty on top of live text would be a trap: pressing
+  // Publish would blank the demo.
+  const toDraft = (
+    kind: DemoSummaryDraft["kind"],
+    rowId: string,
+    label: string,
+    draft?: { body: string; updatedAt: string | null },
+    published?: { body: string; updatedAt: string | null },
+  ): DemoSummaryDraft => ({
+    kind,
+    playerId: rowId,
+    alias: label,
+    body: draft?.body ?? published?.body ?? "",
+    updatedAt: draft?.updatedAt ?? published?.updatedAt ?? null,
+    publishedBody: published?.body ?? "",
   });
+
+  // The recap leads the list, the way it leads a generation run: it's the one on
+  // /demo's front page, and it's the only row here that isn't about one person.
+  const demoDrafts: DemoSummaryDraft[] = [
+    toDraft(
+      "team",
+      DEMO_TEAM_SUMMARY_ROW_ID,
+      "Clan recap",
+      rowsBySource(DEMO_TEAM_SUMMARY_DRAFT_SOURCE).get(DEMO_TEAM_SUMMARY_ROW_ID),
+      rowsBySource(DEMO_TEAM_SUMMARY_SOURCE).get(DEMO_TEAM_SUMMARY_ROW_ID),
+    ),
+    ...(aliasRows ?? []).map((r) => {
+      const playerId = r.player_id as string;
+      return toDraft(
+        "player",
+        playerId,
+        r.alias as string,
+        draftRows.get(playerId),
+        publishedRows.get(playerId),
+      );
+    }),
+  ];
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">

@@ -10,7 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
 export type DemoSummaryDraft = {
-  /** The real player id — demo_text is keyed on it; the alias is what's shown. */
+  /**
+   * Which pair of demo_text sources this row publishes through. The action maps
+   * it to a source pair server-side; the form never names a source itself.
+   */
+  kind: "player" | "team";
+  /**
+   * The demo_text row id: a real player id for a player summary, the recap's
+   * constant for the recap. The alias beside it is what's shown.
+   */
   playerId: string;
   alias: string;
   /** The working copy: the draft row, or the published text if there is no draft. */
@@ -50,7 +58,7 @@ async function runGeneration(payload: Record<string, unknown>): Promise<RunResul
       };
     }
     if ((data.written ?? 0) === 0) {
-      return { message: "Nothing missing — every player already has a draft." };
+      return { message: "Nothing missing — the recap and every player already have a draft." };
     }
     return { message: `Wrote ${wrote}. Read them before publishing.` };
   } catch {
@@ -103,6 +111,7 @@ function SummaryRow({
       </div>
 
       <form action={action} className="flex flex-col gap-2">
+        <input type="hidden" name="kind" value={draft.kind} />
         <input type="hidden" name="playerId" value={draft.playerId} />
         <Textarea
           name="body"
@@ -110,7 +119,9 @@ function SummaryRow({
           onChange={(e) => setBody(e.target.value)}
           rows={5}
           placeholder="Nothing generated yet. Generate drafts above, or write this one by hand."
-          aria-label={`Demo summary for ${draft.alias}`}
+          aria-label={
+            draft.kind === "team" ? "Demo clan recap" : `Demo summary for ${draft.alias}`
+          }
           className="text-sm"
         />
 
@@ -135,7 +146,11 @@ function SummaryRow({
             variant="ghost"
             onClick={onRegenerate}
             disabled={busy}
-            title={`Rewrite ${draft.alias}'s draft from scratch`}
+            title={
+              draft.kind === "team"
+                ? "Rewrite the clan recap draft from scratch"
+                : `Rewrite ${draft.alias}'s draft from scratch`
+            }
           >
             {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
             Regenerate
@@ -166,7 +181,9 @@ export function DemoSummariesForm({ drafts }: { drafts: DemoSummaryDraft[] }) {
     router.refresh();
   }
 
-  if (drafts.length === 0) {
+  // Keyed on the player rows, not on `drafts`: the recap row is always present,
+  // and with nobody aliased there is no demo roster for it to be about either.
+  if (!drafts.some((d) => d.kind === "player")) {
     return (
       <p className="text-sm text-grey-mid">
         No demo aliases assigned yet — these are keyed off demo_aliases.
@@ -178,10 +195,10 @@ export function DemoSummariesForm({ drafts }: { drafts: DemoSummaryDraft[] }) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <p className="text-sm text-grey-light">
-          Scouting bullets for the public demo, written from the same data as the private
-          summaries but with aliases, no match notes and no clan context. Generating writes
-          drafts into a separate row; nothing reaches <span className="text-white">/demo</span>{" "}
-          until you press Publish on it.
+          Scouting bullets for the public demo, plus the clan recap on its front page —
+          written from the same data as the private versions, but with aliases, no match
+          notes and no clan context. Generating writes drafts into a separate row; nothing
+          reaches <span className="text-white">/demo</span> until you press Publish on it.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -203,14 +220,21 @@ export function DemoSummariesForm({ drafts }: { drafts: DemoSummaryDraft[] }) {
       </div>
 
       <div className="flex flex-col gap-3">
-        {drafts.map((draft) => (
-          <SummaryRow
-            key={draft.playerId}
-            draft={draft}
-            busy={busy === draft.playerId}
-            onRegenerate={() => run(draft.playerId, { playerId: draft.playerId })}
-          />
-        ))}
+        {drafts.map((draft) => {
+          // The recap's row id is a constant, so the busy key carries the kind
+          // as well — a player id and a row id are not the same namespace.
+          const key = `${draft.kind}:${draft.playerId}`;
+          return (
+            <SummaryRow
+              key={key}
+              draft={draft}
+              busy={busy === key}
+              onRegenerate={() =>
+                run(key, draft.kind === "team" ? { team: true } : { playerId: draft.playerId })
+              }
+            />
+          );
+        })}
       </div>
     </div>
   );

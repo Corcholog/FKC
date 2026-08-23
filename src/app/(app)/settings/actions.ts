@@ -8,7 +8,12 @@ import { getPuuidByRiotId, describeRiotError } from "@/lib/riot";
 import { backfillPlayerHistory, refetchMatchDetails, RiotKeyInvalidError } from "@/lib/sync";
 import { MAX_CLAN_CONTEXT_CHARS, MAX_PLAYER_CONTEXT_CHARS } from "@/lib/ai-context";
 import { playerSlug } from "@/lib/slug";
-import { DEMO_SUMMARY_DRAFT_SOURCE, DEMO_SUMMARY_SOURCE } from "@/lib/summary-analyst";
+import {
+  DEMO_SUMMARY_DRAFT_SOURCE,
+  DEMO_SUMMARY_SOURCE,
+  DEMO_TEAM_SUMMARY_DRAFT_SOURCE,
+  DEMO_TEAM_SUMMARY_SOURCE,
+} from "@/lib/summary-analyst";
 
 import type { PlayerFormState } from "./form-state";
 
@@ -522,6 +527,19 @@ export async function removePlayerLogin(playerId: string): Promise<void> {
 // ------------------------------------------------------------
 
 /**
+ * The two kinds of demo prose this action can publish, and the only two.
+ *
+ * The form posts a `kind`, not a source. A source string straight off a form
+ * would let this write *any* demo_text row — including a champion note or an
+ * opponent's blurb, published under the wrong id, from a field nobody validates.
+ * A closed map means an unrecognised kind is an error rather than a write.
+ */
+const DEMO_TEXT_KINDS = {
+  player: { published: DEMO_SUMMARY_SOURCE, draft: DEMO_SUMMARY_DRAFT_SOURCE },
+  team: { published: DEMO_TEAM_SUMMARY_SOURCE, draft: DEMO_TEAM_SUMMARY_DRAFT_SOURCE },
+} as const;
+
+/**
  * Saves one reviewed demo summary, or clears it.
  *
  * Separate from generation on purpose. /api/demo-summaries writes drafts; this
@@ -529,9 +547,10 @@ export async function removePlayerLogin(playerId: string): Promise<void> {
  * being separate is what keeps unattended output off a page with no login in
  * front of it.
  *
- * An empty body is a legitimate save, not a no-op: demo_player_summaries
- * filters out blank bodies, so clearing this box unpublishes that player's card
- * without deleting the row someone might want to edit back.
+ * An empty body is a legitimate save, not a no-op: demo_player_summaries and
+ * demo_team_summary both filter out blank bodies, so clearing this box
+ * unpublishes that card without deleting the row someone might want to edit
+ * back.
  */
 export async function saveDemoSummary(
   _prevState: PlayerFormState,
@@ -540,6 +559,12 @@ export async function saveDemoSummary(
   try {
     await requireSession();
 
+    const kind = (formData.get("kind") as string) ?? "player";
+    const sources = DEMO_TEXT_KINDS[kind as keyof typeof DEMO_TEXT_KINDS];
+    if (!sources) return { error: `Unknown summary kind "${kind}".` };
+
+    // The recap's row id is a constant rather than a player id, but demo_text is
+    // keyed the same way either way, so the write below doesn't branch.
     const playerId = (formData.get("playerId") as string) ?? "";
     if (!playerId) return { error: "Missing player." };
     const body = ((formData.get("body") as string) ?? "").trim();
@@ -555,7 +580,7 @@ export async function saveDemoSummary(
     const { error } = await createAdminClient()
       .from("demo_text")
       .upsert(
-        [DEMO_SUMMARY_SOURCE, DEMO_SUMMARY_DRAFT_SOURCE].map((source) => ({
+        [sources.published, sources.draft].map((source) => ({
           source,
           row_id: playerId,
           body,

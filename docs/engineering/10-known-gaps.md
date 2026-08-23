@@ -241,6 +241,14 @@ describing a roster state that has since moved. As long as the app keeps syncing
 numbers on `/demo/player/x` drift away from the prose above them, and only a person
 re-reading the page would notice.
 
+**The demo dashboard has no clan recap.** Every other panel on `/` has a public
+counterpart; the team summary doesn't, because `demo_text` has a `'team_summary'` source
+reserved but nothing writes it, no view projects it, and `/settings` offers no row to
+review and publish. The card is simply not rendered there, so the demo's front page shows
+the tool's numbers without the one panel that shows its writing. Closing it is the same
+three pieces the player summaries already have: a generation pass in the analyst voice, a
+draft row, and a Publish button ([07, §14](07-frontend.md)).
+
 **A new column on a base table does not reach the demo, and a new demo page has to be
 remembered.** The first is the safe direction and is the point of ADR-034. The second is
 not: nothing structurally prevents adding `/demo/foo` that reads through the wrong client.

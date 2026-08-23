@@ -1124,3 +1124,37 @@ other piece of prose on that page reaches it through `demo_text`. So saving a pl
 `revalidateTag("demo", "max")`, exactly as publishing a demo summary does (ADR-039).
 Without it the save would sit behind the hour-long cache from ADR-036 and read as not
 having worked.
+
+---
+
+## ADR-042 — The demo's front page is the dashboard, and its recap is missing on purpose
+
+**Context.** `/demo` opened on the roster grid — `/team`'s page, not `/`'s. That was the
+shape the demo was built in: the roster is the cheapest page to anonymize, and the dashboard
+was the one page still reading Supabase inline in a 760-line `page.tsx`, so it was the
+expensive one to share. The result was a public demo whose landing page was a page the
+private app doesn't land on, missing the award tiles, the streaks and the activity feed —
+the parts a stranger would actually be shown to explain what the tool is.
+
+**Decision.** Split the dashboard the way every other page is split — `fetchDashboardRows`
++ `buildDashboard` in `loaders/dashboard.ts`, `DashboardView` in `components/dashboard/` —
+and give `/demo` the dashboard. The roster grid moved to `/demo/team`, so the public nav is
+the private nav with a `/demo` prefix and the two are compared like for like.
+
+**Consequences.** The demo's most expensive read (the whole participant history, for the
+award tiles) is now on its landing page. That is what ADR-036's data cache is for: one read
+an hour rather than one per visitor, and it is the same read `/demo/insights` already paid.
+
+Three panels of `/` are absent, each by *not passing a slot* rather than by a branch inside
+the view (§14): the sync card, match notes, and the clan recap. Only the last one is a
+loss rather than a non-thing, and it is deliberate. Publishing a team summary would mean
+publishing prose nobody reviewed, which ADR-039 exists to prevent — public text lands in a
+draft row and a person presses Publish. The player summaries have that path; the team recap
+doesn't, so the demo shows no recap at all rather than a cron writing to the internet. The
+gap is recorded in [10, §7](10-known-gaps.md) instead of being papered over with the
+private text.
+
+The route move is the one externally visible change: a link to `/demo` that somebody has
+already sent lands on the dashboard now, not the roster. Nothing 404s — `/demo/team` is a
+real route with its own `loading.tsx` — and the dashboard is a better first thing to see,
+which is why it is the front page in the private app too.

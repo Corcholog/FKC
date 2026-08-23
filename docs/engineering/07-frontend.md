@@ -10,9 +10,9 @@ src/app/
 ├── demo/                     Public, read-only, anonymized. A *sibling* of (app), so
 │   │                         none of the private chrome or queries can reach in. §14
 │   ├── layout.tsx            DemoNavbar + a permanent, non-dismissible banner
-│   ├── page.tsx              /demo                    Roster grid + what the tool is
+│   ├── page.tsx              /demo                    Dashboard + what the tool is
 │   ├── player/[alias]/       /demo/player/x           Mirrors /player/[slug]
-│   ├── matches/, champions/, tierlists/, insights/
+│   ├── team/, matches/, champions/, tierlists/, insights/
 │   ├── scrims/               Own layout — *not* the private one, which carries the
 │   │                         "New scrim" button that is the door to the write path
 │   └── draft/                Board + reference panel, minus every save action
@@ -901,6 +901,25 @@ function, falls back to the read-only list rather than losing the section.
 `/demo/scrims` gets its own `layout.tsx` rather than reusing the private one for exactly
 this reason: that layout's "New scrim" button is the entrance to the whole write path.
 
+### The dashboard is the demo's front page, and it has three slots
+
+`/demo` renders the same `DashboardView` as `/`, off the same
+`fetchDashboardRows` + `buildDashboard`. The roster grid that used to live at `/demo` is
+`/demo/team`, where `/team` is — so the public nav is now the private nav with a prefix,
+and someone comparing the two is comparing the same thing.
+
+The private page passes three slots the demo doesn't: `syncStatus`, `recap` and `notesFor`.
+`sync_state` is operational detail with no demo view, notes have no `demo_match_notes` to
+read, and the recap is the interesting one — **there is no `demo_team_summary`.** Player
+summaries reach the demo through `demo_text` and are published by hand after a person reads
+them (ADR-039); the team recap has no such review path, and a nightly job that rewrites
+public prose unattended is exactly what that ADR exists to prevent. Until someone builds it,
+the card is absent rather than empty.
+
+Splitting the dashboard out is also what closed the last page that read Supabase inline: it
+was 760 lines, and its award tiles, streaks and activity feed are now a loader like every
+other page's.
+
 ### Tier labels are relabelled, not hidden
 
 `/tierlists` rows are named by the person who made the list, and those names are group
@@ -917,6 +936,7 @@ Anonymization is not free and it is worth knowing what it costs before showing t
 
 | Surface | Lost |
 |---|---|
+| `/demo` (the dashboard) | the sync card, and the clan recap — no `demo_team_summary` |
 | `/demo/draft/champions` | nothing — 96 profiles, 0 notes |
 | `/demo/draft/counters` | 4 notes |
 | `/demo/draft/comps`, `/synergies` | 1 label, 5 notes |

@@ -10,6 +10,7 @@ import {
   Shield,
   Swords,
   Trophy,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +28,8 @@ import { cn } from "@/lib/utils";
 // and a nav entry would need a player to point at. Icons match the private
 // navbar's, so the two versions are recognisably the same tool.
 const NAV_ITEMS = [
-  { href: "/demo", label: "Roster", icon: LayoutDashboard },
+  { href: "/demo", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/demo/team", label: "Team", icon: Users },
   { href: "/demo/matches", label: "Matches", icon: Swords },
   { href: "/demo/champions", label: "Champions", icon: Trophy },
   { href: "/demo/tierlists", label: "Tier Lists", icon: ListOrdered },
@@ -47,7 +49,7 @@ export function DemoNavbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-bg-secondary/95 backdrop-blur">
       {/* Full-bleed, like the private navbar, rather than capped at the pages'
-          max-w-4xl. Seven labelled links simply do not fit in 896px, and the
+          max-w-4xl. Eight labelled links simply do not fit in 896px, and the
           first version of this header capped the row and then reached for
           `overflow-x-auto` to cope — which put a scrollbar across a sticky
           header at every width above a phone. Setting overflow on one axis also
@@ -71,7 +73,7 @@ export function DemoNavbar() {
             breakpoint the private navbar collapses at.
 
             No sheet: that is state, a portal and a focus trap, and this header
-            has seven read-only links and no menu to hide. */}
+            has eight read-only links and no menu to hide. */}
         <nav className="order-last flex w-full flex-wrap items-center gap-1 sm:order-none sm:w-auto sm:flex-1">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const active = isActive(pathname, href);

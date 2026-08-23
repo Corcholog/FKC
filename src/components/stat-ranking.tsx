@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { avatarTint } from "@/lib/avatar-tint";
 import { cn } from "@/lib/utils";
 
 // The answer to "why didn't I win that award?".
@@ -67,7 +68,7 @@ function RankingRow({
       {showAvatar && (
         <Avatar size="sm">
           {row.avatarUrl && <AvatarImage src={row.avatarUrl} alt="" />}
-          <AvatarFallback className="text-[10px]">
+          <AvatarFallback className="text-[10px]" style={avatarTint(row.name)}>
             {row.name.slice(0, 2).toUpperCase()}
           </AvatarFallback>
         </Avatar>

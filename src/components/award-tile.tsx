@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { StatRankingDialog, type RankRow, type RankTone } from "@/components/stat-ranking";
+import { avatarTint } from "@/lib/avatar-tint";
 import { cn } from "@/lib/utils";
 
 export type AwardPlayer = {
@@ -58,7 +59,7 @@ export function AwardTile({
         <div className="flex shrink-0 flex-col items-center gap-1">
           <Avatar className="size-12">
             {player.avatar_url && <AvatarImage src={player.avatar_url} alt="" />}
-            <AvatarFallback className="text-sm">
+            <AvatarFallback className="text-sm" style={avatarTint(player.display_name)}>
               {player.display_name.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>

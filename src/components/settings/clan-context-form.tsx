@@ -6,17 +6,21 @@ import { Loader2 } from "lucide-react";
 import { updateClanContext } from "@/app/(app)/settings/actions";
 import { emptyPlayerFormState } from "@/app/(app)/settings/form-state";
 import { MAX_CLAN_CONTEXT_CHARS } from "@/lib/ai-context";
-import { formatRelativeTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 export function ClanContextForm({
   initialContext,
-  lastGeneratedAt,
+  lastGeneratedAgo,
 }: {
   initialContext: string | null;
-  lastGeneratedAt: string | null;
+  /**
+   * Formatted server-side, not an ISO string, so this component never reads the
+   * clock during render — see the header of SyncStatusSection for the hydration
+   * mismatch that caused. Null when the team summary has never been generated.
+   */
+  lastGeneratedAgo: string | null;
 }) {
   const router = useRouter();
   const [saveState, saveAction, saving] = useActionState(updateClanContext, emptyPlayerFormState);
@@ -97,8 +101,8 @@ export function ClanContextForm({
           change straight away instead of waiting.
         </p>
         <p className="text-xs text-grey-mid">
-          {lastGeneratedAt
-            ? `Team summary last generated ${formatRelativeTime(lastGeneratedAt)}.`
+          {lastGeneratedAgo
+            ? `Team summary last generated ${lastGeneratedAgo}.`
             : "The team summary hasn't been generated yet."}{" "}
           Each run spends Gemini free-tier quota, which is capped per day and resets at midnight
           Pacific.

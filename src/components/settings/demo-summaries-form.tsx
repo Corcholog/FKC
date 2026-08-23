@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { saveDemoSummary } from "@/app/(app)/settings/actions";
 import { emptyPlayerFormState } from "@/app/(app)/settings/form-state";
-import { formatRelativeTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -23,9 +22,28 @@ export type DemoSummaryDraft = {
   alias: string;
   /** The working copy: the draft row, or the published text if there is no draft. */
   body: string;
-  updatedAt: string | null;
+  /**
+   * Formatted server-side, not an ISO string, so this component never reads the
+   * clock during render — see the header of SyncStatusSection for the hydration
+   * mismatch that caused. Null when nothing has been written yet.
+   */
+  updatedAgo: string | null;
   /** What /demo is actually serving right now. Empty means no card there. */
   publishedBody: string;
+  /**
+   * Roster games recorded since this row's text was *published*, or null when
+   * nothing is live to be stale. Only the recap carries it: it is the row that
+   * dates fastest (it is about this week's games and current streaks) and the
+   * one on /demo's front page. See 10-known-gaps.md §7.
+   */
+  gamesSincePublished: number | null;
+  /**
+   * Whether that count has passed the threshold the private recap rewrites
+   * itself at. Decided on the server so this component doesn't import the
+   * constant — it lives in lib/summary.ts, next to Gemini and the Supabase
+   * clients, none of which belong in a browser bundle.
+   */
+  worthRewriting: boolean;
 };
 
 type RunResult = { error?: string; message?: string };
@@ -82,13 +100,23 @@ function SummaryRow({
     <div className="flex flex-col gap-2 border-t border-border pt-3 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="text-sm font-medium text-white">{draft.alias}</span>
-        {draft.updatedAt ? (
-          <span className="text-xs text-grey-mid">
-            written {formatRelativeTime(draft.updatedAt)}
-          </span>
+        {draft.updatedAgo ? (
+          <span className="text-xs text-grey-mid">written {draft.updatedAgo}</span>
         ) : (
           <span className="text-xs text-grey-mid">nothing yet</span>
         )}
+
+        {/* The staleness nudge. Nothing regenerates this on a schedule — that is
+            the price of the review gate (ADR-039) — so the only thing that can
+            prompt a rewrite is seeing, here, how much has happened since. */}
+        {draft.gamesSincePublished ? (
+          <span
+            title="Roster games recorded since this text was published. The private recap rewrites itself after five."
+            className={`text-xs ${draft.worthRewriting ? "text-warning" : "text-grey-mid"}`}
+          >
+            {draft.gamesSincePublished} game{draft.gamesSincePublished === 1 ? "" : "s"} since
+          </span>
+        ) : null}
         {/* Reads publishedBody, never the box. The box is a draft — text can
             sit in it for as long as you like without /demo changing, and the
             whole point of the two rows behind this is that those are different

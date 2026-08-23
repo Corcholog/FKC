@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { maybeRow, optional, rows } from "@/lib/supabase/read";
+import { countRosterGamesSince, MIN_NEW_GAMES } from "@/lib/summary";
+import { formatRelativeTime } from "@/lib/format";
 import {
   DEMO_SUMMARY_DRAFT_SOURCE,
   DEMO_SUMMARY_SOURCE,
@@ -16,7 +18,7 @@ import { AddPlayerForm } from "@/components/settings/add-player-form";
 import { PlayerRow } from "@/components/settings/player-row";
 import { RefetchDetailsForm } from "@/components/settings/refetch-details-form";
 import { ClanContextForm } from "@/components/settings/clan-context-form";
-import { SyncStatusSection } from "@/components/settings/sync-status-section";
+import { SyncStatusSection, type SyncState } from "@/components/settings/sync-status-section";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function SettingsPage() {
@@ -39,7 +41,10 @@ export default async function SettingsPage() {
       .from("sync_state")
       .select("riot_key_valid, last_sync_status, last_sync_finished_at, last_error")
       .eq("id", 1)
-      .single(),
+      // Typed, unlike before: `optional(..., null)` over an untyped read inferred
+      // the row as `null`, so `syncState` narrowed to `never` inside the guard
+      // below and every field access on it was a type error waiting to be tried.
+      .single<SyncState>(),
     "sync state",
     null,
   );
@@ -89,24 +94,51 @@ export default async function SettingsPage() {
   const draftRows = rowsBySource(DEMO_SUMMARY_DRAFT_SOURCE);
   const publishedRows = rowsBySource(DEMO_SUMMARY_SOURCE);
 
+  const teamPublished = rowsBySource(DEMO_TEAM_SUMMARY_SOURCE).get(DEMO_TEAM_SUMMARY_ROW_ID);
+
+  // How far the live recap has drifted from the roster it describes.
+  //
+  // Nothing regenerates it on a schedule — public prose is written by a person
+  // (ADR-039) — so the only thing that can prompt a rewrite is seeing the number
+  // here. Counted only for the recap: it is the row that dates fastest, being
+  // about this week's games and current streaks, and the one on /demo's front
+  // page. Nothing live to be stale means nothing to show.
+  //
+  // A count, not a fetch, so it costs no rows; nine of these (one per player)
+  // would be a different conversation, which is why the players don't get one.
+  const gamesSinceRecap =
+    teamPublished && teamPublished.body.trim() && teamPublished.updatedAt
+      ? await countRosterGamesSince(admin, teamPublished.updatedAt)
+      : null;
+
   // The draft is the working copy. Falling back to the published text covers
   // rows published before drafts existed as a separate thing — and, generally,
   // an editor that opened empty on top of live text would be a trap: pressing
   // Publish would blank the demo.
+  //
+  // `updatedAgo` is formatted here rather than in the form because the form is a
+  // client component: formatting there runs once on the server and again at
+  // hydration, off two different clocks, which is the mismatch SyncStatusSection
+  // documents.
   const toDraft = (
     kind: DemoSummaryDraft["kind"],
     rowId: string,
     label: string,
     draft?: { body: string; updatedAt: string | null },
     published?: { body: string; updatedAt: string | null },
-  ): DemoSummaryDraft => ({
-    kind,
-    playerId: rowId,
-    alias: label,
-    body: draft?.body ?? published?.body ?? "",
-    updatedAt: draft?.updatedAt ?? published?.updatedAt ?? null,
-    publishedBody: published?.body ?? "",
-  });
+  ): DemoSummaryDraft => {
+    const updatedAt = draft?.updatedAt ?? published?.updatedAt ?? null;
+    return {
+      kind,
+      playerId: rowId,
+      alias: label,
+      body: draft?.body ?? published?.body ?? "",
+      updatedAgo: updatedAt ? formatRelativeTime(updatedAt) : null,
+      publishedBody: published?.body ?? "",
+      gamesSincePublished: kind === "team" ? gamesSinceRecap : null,
+      worthRewriting: kind === "team" && (gamesSinceRecap ?? 0) >= MIN_NEW_GAMES,
+    };
+  };
 
   // The recap leads the list, the way it leads a generation run: it's the one on
   // /demo's front page, and it's the only row here that isn't about one person.
@@ -116,7 +148,7 @@ export default async function SettingsPage() {
       DEMO_TEAM_SUMMARY_ROW_ID,
       "Clan recap",
       rowsBySource(DEMO_TEAM_SUMMARY_DRAFT_SOURCE).get(DEMO_TEAM_SUMMARY_ROW_ID),
-      rowsBySource(DEMO_TEAM_SUMMARY_SOURCE).get(DEMO_TEAM_SUMMARY_ROW_ID),
+      teamPublished,
     ),
     ...(aliasRows ?? []).map((r) => {
       const playerId = r.player_id as string;
@@ -145,7 +177,14 @@ export default async function SettingsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <SyncStatusSection state={syncState} />
+            <SyncStatusSection
+              state={syncState}
+              lastSyncAgo={
+                syncState.last_sync_finished_at
+                  ? formatRelativeTime(syncState.last_sync_finished_at)
+                  : null
+              }
+            />
           </CardContent>
         </Card>
       )}
@@ -159,7 +198,11 @@ export default async function SettingsPage() {
         <CardContent>
           <ClanContextForm
             initialContext={(clanProfile?.context as string | null) ?? null}
-            lastGeneratedAt={(teamSummary?.generated_at as string | null) ?? null}
+            lastGeneratedAgo={
+              teamSummary?.generated_at
+                ? formatRelativeTime(teamSummary.generated_at as string)
+                : null
+            }
           />
         </CardContent>
       </Card>

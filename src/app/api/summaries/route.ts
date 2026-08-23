@@ -2,7 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { loadAiContext } from "@/lib/ai-context";
-import { generatePlayerSummary, generateTeamSummary, MIN_NEW_GAMES } from "@/lib/summary";
+import {
+  countRosterGamesSince,
+  generatePlayerSummary,
+  generateTeamSummary,
+  MIN_NEW_GAMES,
+} from "@/lib/summary";
 import { describeGeminiError, geminiLimiter } from "@/lib/gemini";
 import { postDailyStandings } from "@/lib/standings";
 
@@ -22,20 +27,9 @@ const CALL_BUDGET_MS = 8_000;
 // Supabase count, which is free, to decide whether to spend a Gemini request,
 // which is not.
 
-// Roster-wide games since the clan recap was written. A match two of them
-// played together counts twice, because it is two tracked players' games —
-// the same basis generateTeamSummary's own weekly count uses.
-async function countRosterGamesSince(
-  admin: ReturnType<typeof createAdminClient>,
-  since: string,
-): Promise<number> {
-  const { count } = await admin
-    .from("match_participants")
-    .select("id, matches!inner(game_creation)", { count: "exact", head: true })
-    .not("player_id", "is", null)
-    .gt("matches.game_creation", since);
-  return count ?? 0;
-}
+// countRosterGamesSince moved to lib/summary.ts, beside the MIN_NEW_GAMES it is
+// compared against: /settings now shows the same count next to the demo recap,
+// and two copies of "how much has happened since" would be two thresholds.
 
 // Gemini's free tier meters requests per day, so this endpoint is the whole
 // AI budget: one call per player with new data, plus one for the team. It

@@ -62,6 +62,33 @@ const MAX_NOTES = 40;
 // saying nothing. Enforced in src/app/api/summaries/route.ts.
 export const MIN_NEW_GAMES = 5;
 
+/**
+ * Roster-wide games recorded since a timestamp.
+ *
+ * A match two of them played together counts twice, because it is two tracked
+ * players' games — the same basis `gatherTeamPromptData`'s own weekly count
+ * uses. `head: true` sends no rows back, so this costs a count and nothing else,
+ * which is the whole point: it decides whether to spend a metered Gemini
+ * request, and it is what `/settings` shows beside the demo recap to say how far
+ * that text has drifted from the roster it describes.
+ *
+ * Compares against `game_creation` — when Riot says the game started, not when
+ * it was synced. A game played before the timestamp but synced after it
+ * therefore doesn't count. That undercount is the right way round: it can only
+ * delay a rewrite, never trigger one for a game the text already described.
+ */
+export async function countRosterGamesSince(
+  supabase: SupabaseClient,
+  since: string,
+): Promise<number> {
+  const { count } = await supabase
+    .from("match_participants")
+    .select("id, matches!inner(game_creation)", { count: "exact", head: true })
+    .not("player_id", "is", null)
+    .gt("matches.game_creation", since);
+  return count ?? 0;
+}
+
 export const MAX_CHAMPION_LINES = 10;
 export const MAX_MATCHUP_LINES = 6;
 

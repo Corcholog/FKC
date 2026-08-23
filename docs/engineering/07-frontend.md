@@ -908,13 +908,21 @@ this reason: that layout's "New scrim" button is the entrance to the whole write
 `/demo/team`, where `/team` is — so the public nav is now the private nav with a prefix,
 and someone comparing the two is comparing the same thing.
 
-The private page passes three slots the demo doesn't: `syncStatus`, `recap` and `notesFor`.
-`sync_state` is operational detail with no demo view, notes have no `demo_match_notes` to
-read, and the recap is the interesting one — **there is no `demo_team_summary`.** Player
-summaries reach the demo through `demo_text` and are published by hand after a person reads
-them (ADR-039); the team recap has no such review path, and a nightly job that rewrites
-public prose unattended is exactly what that ADR exists to prevent. Until someone builds it,
-the card is absent rather than empty.
+The private page passes two slots the demo doesn't: `syncStatus` and `notesFor`. `sync_state`
+is operational detail with no demo view, and notes have no `demo_match_notes` to read.
+
+The third slot, `recap`, both versions pass — but they are **different rows written in
+different voices**. The private one is `team_ai_summary`, rewritten nightly in the group's
+own voice off `clan_profile.context`. The demo's is `demo_text` under
+`source = 'team_summary'`, written in the analyst voice by a prompt that never loads the
+clan blurb, and published by a person pressing a button (ADR-039, ADR-043). The demo page
+passes no card at all until one is published, rather than the private page's *"nothing yet —
+the recap is written once a day"* empty state, which isn't true there.
+
+That read is `optional()`, not `maybeRow()` — a recap that fails to load costs the reader a
+card, not the page. It is also what decouples the deploy from migration 021: before the
+migration runs the view doesn't exist, the read is a `42P01` in the log, and the dashboard
+renders whole without it.
 
 Splitting the dashboard out is also what closed the last page that read Supabase inline: it
 was 760 lines, and its award tiles, streaks and activity feed are now a loader like every
@@ -936,7 +944,7 @@ Anonymization is not free and it is worth knowing what it costs before showing t
 
 | Surface | Lost |
 |---|---|
-| `/demo` (the dashboard) | the sync card, and the clan recap — no `demo_team_summary` |
+| `/demo` (the dashboard) | the sync card. The clan recap is rewritten, not dropped — a different row in a different voice |
 | `/demo/draft/champions` | nothing — 96 profiles, 0 notes |
 | `/demo/draft/counters` | 4 notes |
 | `/demo/draft/comps`, `/synergies` | 1 label, 5 notes |

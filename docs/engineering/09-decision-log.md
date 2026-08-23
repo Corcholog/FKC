@@ -1158,3 +1158,46 @@ The route move is the one externally visible change: a link to `/demo` that some
 already sent lands on the dashboard now, not the roster. Nothing 404s — `/demo/team` is a
 real route with its own `loading.tsx` — and the dashboard is a better first thing to see,
 which is why it is the front page in the private app too.
+
+---
+
+## ADR-043 — The demo's recap is a second prompt profile, and the anonymising happens in the gatherer
+
+**Context.** ADR-042 shipped the demo dashboard without its recap card, and said why: the
+private recap is written nightly in the group's own voice, opening with
+`clan_profile.context` — 4000 characters of nicknames, in-jokes and running bits, the single
+most identifying string in the database. There is no version of "publish that with the names
+swapped" that is safe.
+
+**Decision.** Do for the recap exactly what ADR-038 and ADR-039 did for the player
+summaries: a second prompt profile (`buildAnalystTeamPrompt`), written to a draft row in
+`demo_text`, published by a person. Migration 021 projects the published row as
+`demo_team_summary`.
+
+The load-bearing part is *where* the anonymising happens. `gatherTeamPromptData` is shared
+by both recaps and **resolves every name inside itself**: handed an `AliasMap` it returns
+aliases, and it drops any player who doesn't have one — so a duo or a head-to-head involving
+an unaliased player disappears rather than falling back to a real name, the same inner-join
+rule `demo_players` follows. What comes out is names, never ids, and no `AiContext` at all.
+
+**Consequences.** `buildAnalystTeamPrompt` has nothing to substitute and no variable holding
+the clan blurb. It cannot leak a name it was never given, which is the same property the
+player profile has and is stronger than any instruction in the prompt. It also means the
+private prompt kept its exact text through the refactor — the only thing that moved was
+where the lines get built.
+
+The view is the sharpest projection in the demo, and worth reading twice: it is a view over
+`demo_text`, the one table that must never be public. `source` and `row_id` are **filtered
+on but not selected**, so "exactly one row" is structural rather than a promise — with
+either column exposed, a querystring filter would reach every draft and every override in
+the table.
+
+Two smaller calls:
+
+- **Prose, not the player profile's bullets.** It lands in the same narrow sidebar card the
+  private recap does and answers one question rather than five.
+- **The demo page reads it with `optional()`, not `maybeRow()`.** A recap that fails to load
+  costs the reader a card, not the page — the case `read.ts` describes. It also decoupled
+  the deploy from the migration: before 021 ran, the view didn't exist, the read was a
+  `42P01` in the log, and the dashboard rendered whole without it. That was verified in that
+  order rather than assumed.

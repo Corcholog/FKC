@@ -6,6 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 // read here — nothing on this page triggers generation, because Gemini's free
 // tier is metered per day and a dashboard everyone opens is the worst possible
 // place to spend that from.
+//
+// /demo renders the same card off a different row: an analyst-voice recap
+// published by hand from Settings (migration 021). The empty state below is
+// private-only in practice — the demo page passes no card at all until one is
+// published, since "the recap is written once a day" is not true there.
 export function TeamSummaryCard({
   summary,
   generatedAt,

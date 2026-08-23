@@ -263,6 +263,15 @@ Nothing reaches `/demo` until you press **Publish** on that player's row, and th
 line on each row reads the *published* text, not the box — "live, but not this version"
 means the box has been edited since. An empty box plus Publish takes the card down.
 
+**The first row is the clan recap**, not a player — the one on `/demo`'s front page. It
+behaves like the others (generate, read, Publish, or clear and Publish to take it down) and
+is written first in a run, so a run that hits the 60s ceiling has still done the most
+visible one. Its Regenerate button rewrites only it.
+
+It needs migration 021 (`demo_team_summary`) to have been run. Until then Publish writes the
+row fine and `/demo` simply shows no card, with a `42P01` in the function logs — the read is
+deliberately non-fatal, so a missed migration costs a card rather than the page.
+
 This is the one AI path with no cron behind it, on purpose ([06 §6b](06-ai-layer.md)).
 
 ## 6. Cost and capacity

@@ -24,13 +24,16 @@ import { NOTABLE_STREAK } from "@/lib/streaks";
 import {
   detailLine,
   gatherPlayerPromptData,
+  gatherTeamPromptData,
   pct,
   sessionBlock,
+  teamPromptBlocks,
   trendBlock,
   MAX_CHAMPION_LINES,
   MAX_MATCHUP_LINES,
   type AliasMap,
   type PlayerPromptData,
+  type TeamPromptData,
 } from "@/lib/summary";
 
 /**
@@ -49,11 +52,32 @@ import {
 export const DEMO_SUMMARY_SOURCE = "player_summary";
 export const DEMO_SUMMARY_DRAFT_SOURCE = "player_summary_draft";
 
+/**
+ * The same two states for the clan recap, which is one row rather than one per
+ * player.
+ *
+ * `row_id` is "1" because the private recap it mirrors is the singleton
+ * `team_ai_summary.id = 1`, and demo_text.row_id is that surface's id as text.
+ * demo_team_summary (migration 021) reads the published source only, exactly as
+ * demo_player_summaries does.
+ */
+export const DEMO_TEAM_SUMMARY_SOURCE = "team_summary";
+export const DEMO_TEAM_SUMMARY_DRAFT_SOURCE = "team_summary_draft";
+export const DEMO_TEAM_SUMMARY_ROW_ID = "1";
+
 // English, unlike the private summaries, which are Rioplatense Spanish because
 // the group is. The demo's entire chrome is English, and a Spanish paragraph
 // inside it reads as an untranslated leftover rather than as a choice. One
 // constant to flip if the audience turns out to prefer otherwise.
-const ANALYST_DEMO_VOICE = `Write in English. Neutral and factual — you are reading data, not judging a person. Do not mock, praise or editorialise, and do not try to be funny. Never state a number that does not appear in the data above; when you describe a pattern, name the numbers it rests on. Where a sample is small, say so rather than drawing a conclusion from it. Do not refer to the player by any name other than "${"{alias}"}". Do not speculate about who they are.`;
+const ANALYST_DEMO_BASE = `Write in English. Neutral and factual — you are reading data, not judging a person. Do not mock, praise or editorialise, and do not try to be funny. Never state a number that does not appear in the data above; when you describe a pattern, name the numbers it rests on. Where a sample is small, say so rather than drawing a conclusion from it.`;
+
+const ANALYST_DEMO_VOICE = `${ANALYST_DEMO_BASE} Do not refer to the player by any name other than "${"{alias}"}". Do not speculate about who they are.`;
+
+// The group version of the last clause. The recap names several people, so the
+// rule can't be a single alias — it's that the only names it may write are the
+// ones it was handed, which are aliases by construction (gatherTeamPromptData
+// drops anyone without one).
+const ANALYST_DEMO_TEAM_VOICE = `${ANALYST_DEMO_BASE} Refer to the players only by the names given above, and do not speculate about who any of them are.`;
 
 /**
  * Bullets rather than prose, which is the other half of what makes this a
@@ -167,4 +191,56 @@ export async function generateAnalystSummary(
   // reason: the failure mode of this prompt is an invented winrate, not a dull
   // sentence.
   return generateText(buildAnalystPrompt(data), apiKey, { temperature: 0.4 });
+}
+
+// ------------------------------------------------------------
+// The clan recap
+// ------------------------------------------------------------
+
+export function buildAnalystTeamPrompt(data: TeamPromptData): string {
+  const blocks = teamPromptBlocks(data);
+
+  // No clanContextBlock, and not by omitting a line: gatherTeamPromptData never
+  // reads the clan profile at all, so there is no variable here holding the
+  // group's own blurb about itself. That text is theirs, it names people, and it
+  // is the one thing on the private recap that a projection could never
+  // anonymise.
+  return `You are writing a short read on a League of Legends solo queue roster, for a coaching staff evaluating a performance tracker. The players are anonymised and are referred to only by the names below.
+
+Roster, best rank first:
+${blocks.roster}
+
+Games in the last 7 days: ${data.weekGames} (${data.weekWins}W ${data.weekGames - data.weekWins}L across everyone)
+
+Duos (games where two of them were on the same team):
+${blocks.duos || "Nobody has duoed enough games together for this to mean anything yet."}
+
+Games where two of them were matched against each other:
+${blocks.civilWars || "No games where two of them were on opposite teams."}
+
+Current streaks:
+${blocks.streaks || "Nobody is on a notable streak."}
+
+Write 3 to 5 sentences about this roster as a whole: how much it is playing, where it sits, and any group-level pattern the numbers above support — a duo that works, a head-to-head, somebody clearly carrying or sliding. Do not list every player's record one by one; the page this appears on already shows those. ${ANALYST_DEMO_TEAM_VOICE}`;
+}
+
+/**
+ * Generates the demo's clan recap and returns it *without* writing.
+ *
+ * Prose rather than the bullets a player summary gets, because this lands in the
+ * same narrow sidebar card the private recap does and answers one question
+ * rather than five. Returns null when there is nothing to summarise — no
+ * aliased player has any history.
+ */
+export async function generateAnalystTeamSummary(
+  supabase: SupabaseClient,
+  aliases: AliasMap,
+): Promise<string | null> {
+  const data = await gatherTeamPromptData(supabase, { aliases });
+  if (data === null) return null;
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set.");
+
+  return generateText(buildAnalystTeamPrompt(data), apiKey, { temperature: 0.4 });
 }

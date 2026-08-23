@@ -2,10 +2,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { describeGeminiError, geminiLimiter } from "@/lib/gemini";
-import { generateAnalystSummary, DEMO_SUMMARY_DRAFT_SOURCE } from "@/lib/summary-analyst";
+import {
+  generateAnalystSummary,
+  generateAnalystTeamSummary,
+  DEMO_SUMMARY_DRAFT_SOURCE,
+  DEMO_TEAM_SUMMARY_DRAFT_SOURCE,
+  DEMO_TEAM_SUMMARY_ROW_ID,
+} from "@/lib/summary-analyst";
 import type { AliasMap } from "@/lib/summary";
 
-// One Gemini call per aliased player, paced by the shared limiter. Same 60s
+// One Gemini call per aliased player, plus one for the clan recap, paced by the
+// shared limiter. Same 60s
 // ceiling and the same budget shape as /api/summaries, for the same reason:
 // Hobby kills the invocation at 60s regardless, so the run should end cleanly
 // and report what it wrote rather than be cut mid-write.
@@ -37,12 +44,14 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Both optional. `playerId` regenerates exactly one; `regenerate` rewrites
-  // everyone. With neither, the run fills in whatever is still missing — which
-  // is what makes pressing the button twice finish the job instead of redoing
-  // the first few players until the clock runs out.
+  // All optional. `playerId` regenerates exactly one player; `team` regenerates
+  // only the clan recap; `regenerate` rewrites everything. With none of them,
+  // the run fills in whatever is still missing — which is what makes pressing
+  // the button twice finish the job instead of redoing the first few players
+  // until the clock runs out.
   const body = await request.json().catch(() => ({}));
   const onlyPlayerId = typeof body?.playerId === "string" ? body.playerId : null;
+  const onlyTeam = body?.team === true;
   const regenerateAll = body?.regenerate === true;
 
   // Service role: demo_aliases and demo_text are both authenticated-only, and
@@ -55,10 +64,17 @@ export async function POST(request: NextRequest) {
   const result = { written: 0, skipped: 0, partial: false, remaining: 0 };
 
   try {
-    const [{ data: aliasRows, error }, { data: existingRows }] = await Promise.all([
-      admin.from("demo_aliases").select("player_id, alias").order("alias"),
-      admin.from("demo_text").select("row_id, body").eq("source", DEMO_SUMMARY_DRAFT_SOURCE),
-    ]);
+    const [{ data: aliasRows, error }, { data: existingRows }, { data: teamDraftRow }] =
+      await Promise.all([
+        admin.from("demo_aliases").select("player_id, alias").order("alias"),
+        admin.from("demo_text").select("row_id, body").eq("source", DEMO_SUMMARY_DRAFT_SOURCE),
+        admin
+          .from("demo_text")
+          .select("body")
+          .eq("source", DEMO_TEAM_SUMMARY_DRAFT_SOURCE)
+          .eq("row_id", DEMO_TEAM_SUMMARY_ROW_ID)
+          .maybeSingle(),
+      ]);
     if (error) throw new Error(error.message);
 
     // The map covers the whole roster, not just the player being written about:
@@ -79,9 +95,49 @@ export async function POST(request: NextRequest) {
 
     let queue = [...aliases.keys()];
     if (onlyPlayerId) queue = queue.filter((id) => id === onlyPlayerId);
+    else if (onlyTeam) queue = [];
     else if (!regenerateAll) queue = queue.filter((id) => !written.has(id));
 
-    result.remaining = queue.length;
+    // Same "missing means missing a draft" rule as the players above, applied to
+    // the single recap row.
+    const teamDraftMissing = ((teamDraftRow?.body as string) ?? "").trim().length === 0;
+    const wantsTeam = onlyTeam || (!onlyPlayerId && (regenerateAll || teamDraftMissing));
+
+    result.remaining = queue.length + (wantsTeam ? 1 : 0);
+
+    // The recap first, for the reason /api/summaries orders it first: it is the
+    // one on the front page. If the budget runs out after it, every player page
+    // still shows whatever was published last.
+    if (wantsTeam) {
+      if (!hasRoom()) {
+        result.partial = true;
+        result.skipped += 1;
+      } else {
+        const startedAt = Date.now();
+        const recap = await generateAnalystTeamSummary(admin, aliases);
+        callEstimateMs = Math.max(callEstimateMs, Date.now() - startedAt);
+
+        if (recap === null) {
+          // No aliased player has any history. Nothing to write, nothing to fix.
+          result.skipped += 1;
+          result.remaining -= 1;
+        } else {
+          const { error: writeError } = await admin.from("demo_text").upsert(
+            {
+              source: DEMO_TEAM_SUMMARY_DRAFT_SOURCE,
+              row_id: DEMO_TEAM_SUMMARY_ROW_ID,
+              body: recap,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "source,row_id" },
+          );
+          if (writeError) throw new Error(`Writing the clan recap: ${writeError.message}`);
+
+          result.written += 1;
+          result.remaining -= 1;
+        }
+      }
+    }
 
     for (const playerId of queue) {
       if (!hasRoom()) {

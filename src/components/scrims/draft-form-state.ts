@@ -167,6 +167,52 @@ export function otherSide(side: ScrimSide): ScrimSide {
   return side === "blue" ? "red" : "blue";
 }
 
+/**
+ * The same game with the two drafts the other way round — for when the wrong
+ * team was entered as ours.
+ *
+ * The side toggle only relabels the columns, so correcting a mixed-up game
+ * meant retyping twenty fields. This is the correction: sides flip, bans trade
+ * places, and every champion and stat line moves across with them.
+ *
+ * The one thing that stays put is who is in each of our seats. The roster
+ * dropdowns say which of *our players* held top, jungle and so on, which is
+ * true whichever side of the map we were on — so the performances move and the
+ * lineup doesn't. Free-text names travel with the performance they describe,
+ * since they were only ever labels for those numbers.
+ *
+ * Swapping twice leaves the game exactly as it was. That is worth keeping:
+ * anything else would make the button destructive to click twice, on a form
+ * whose whole point is that a wrong guess can be undone.
+ */
+export function swapTeams(game: GameState): GameState {
+  const swapRole = (role: ScrimRole) => {
+    const ours = game.ally[role];
+    const theirs = game.enemy[role];
+    return [
+      { ...theirs, playerId: ours.playerId },
+      { ...ours, playerId: theirs.playerId },
+    ] as const;
+  };
+
+  const swapped = SCRIM_ROLES.map((role) => [role, swapRole(role)] as const);
+
+  return {
+    ...game,
+    side: otherSide(game.side),
+    allyBans: game.enemyBans,
+    enemyBans: game.allyBans,
+    ally: Object.fromEntries(swapped.map(([role, [ours]]) => [role, ours])) as Record<
+      ScrimRole,
+      PickState
+    >,
+    enemy: Object.fromEntries(swapped.map(([role, [, theirs]]) => [role, theirs])) as Record<
+      ScrimRole,
+      PickState
+    >,
+  };
+}
+
 // ------------------------------------------------------------
 // Duration
 // ------------------------------------------------------------

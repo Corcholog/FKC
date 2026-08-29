@@ -36,10 +36,14 @@ import {
   emptyGame,
   formSignature,
   otherSide,
+  swapTeams,
   usedEarlierInSeries,
   type GameState,
   type SeriesFormState,
 } from "@/components/scrims/draft-form-state";
+import { ReplayDropzone, partitionReplays, sortReplaysByPlayOrder } from "@/components/scrims/replay-drop";
+import { fillGameFromReplay, type ReplayContext } from "@/components/scrims/replay-prefill";
+import { RoflError, readRoflFile, type RoflReplay } from "@/lib/scrims/rofl";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 import { cn } from "@/lib/utils";
 
@@ -134,8 +138,137 @@ export function ScrimSeriesForm({
     [champions],
   );
 
+  // What a replay needs to be turned into form state: champions by the codename
+  // Riot writes into the file, and our players by the Riot ID they appear under.
+  const replayContext = useMemo<ReplayContext>(
+    () => ({
+      championIdByKey: new Map(champions.map((c) => [c.ddragonId.toLowerCase(), c.championId])),
+      rosterByRiotId: new Map(
+        roster.map((p) => [`${p.riot_game_name}#${p.riot_tag_line}`.toLowerCase(), p.id]),
+      ),
+    }),
+    [champions, roster],
+  );
+
+  const [reading, setReading] = useState(false);
+
   function patchGame(index: number, patch: Partial<GameState>) {
     setGames((prev) => prev.map((game, i) => (i === index ? { ...game, ...patch } : game)));
+  }
+
+  // ----------------------------------------------------------
+  // Filling the form in from replays
+  // ----------------------------------------------------------
+
+  /**
+   * Reads every dropped file, in the order they were played.
+   *
+   * One bad file doesn't stop the rest: a block is four or five replays and
+   * losing the good ones because one was truncated would be the wrong trade.
+   * Whatever went wrong comes back as a sentence to show.
+   */
+  async function readAll(files: File[]): Promise<{ replays: RoflReplay[]; problems: string[] }> {
+    const { replays: candidates, ignored } = partitionReplays(files);
+    const problems = ignored.map((name) => `${name} isn't a .rofl replay, so I skipped it.`);
+    const replays: RoflReplay[] = [];
+
+    for (const file of sortReplaysByPlayOrder(candidates)) {
+      try {
+        replays.push(await readRoflFile(file));
+      } catch (error) {
+        problems.push(
+          error instanceof RoflError ? error.message : `${file.name} couldn't be read.`,
+        );
+      }
+    }
+    return { replays, problems };
+  }
+
+  /** Anything the import wants to mention, as one toast rather than a stack of them. */
+  function reportProblems(problems: string[]) {
+    if (problems.length === 0) return;
+    const shown = problems.slice(0, 3);
+    const rest = problems.length - shown.length;
+    toast.warning(shown.join(" ") + (rest > 0 ? ` …and ${rest} more.` : ""));
+  }
+
+  /** Fills games 1..n from n replays, adding games if the series is short of them. */
+  async function importReplays(files: File[]) {
+    setReading(true);
+    try {
+      const { replays, problems } = await readAll(files);
+      if (replays.length === 0) {
+        reportProblems(problems.length > 0 ? problems : ["No replays in what you dropped."]);
+        return;
+      }
+
+      const next = [...games];
+      // Grows as games are read, so a later game whose accounts we don't
+      // recognise still lands the right way round — the same five people play
+      // every game of a block.
+      const known = new Set<string>();
+      const usable = replays.slice(0, MAX_GAMES_PER_SERIES);
+
+      for (const [index, replay] of usable.entries()) {
+        const previous = next[index - 1];
+        const base =
+          next[index] ??
+          emptyGame(
+            previous ? otherSide(previous.side) : "blue",
+            defaultLineup,
+            previous?.patch ?? currentPatch,
+          );
+
+        const filled = fillGameFromReplay(
+          base,
+          replay,
+          replayContext,
+          known,
+          `Game ${index + 1}`,
+        );
+        for (const id of filled.allyRiotIds) known.add(id);
+        problems.push(...filled.warnings);
+        next[index] = filled.game;
+      }
+
+      if (replays.length > usable.length) {
+        problems.push(`A series holds ${MAX_GAMES_PER_SERIES} games, so I stopped there.`);
+      }
+
+      setGames(next);
+      toast.success(
+        `Filled ${usable.length} game${usable.length === 1 ? "" : "s"}. Bans aren't in a replay — add those yourself.`,
+      );
+      reportProblems(problems);
+    } finally {
+      setReading(false);
+    }
+  }
+
+  /** The same, for one game somebody wants redone on its own. */
+  async function importGame(index: number, file: File) {
+    setReading(true);
+    try {
+      const { replays, problems } = await readAll([file]);
+      const replay = replays[0];
+      if (!replay) {
+        reportProblems(problems);
+        return;
+      }
+
+      const filled = fillGameFromReplay(
+        games[index],
+        replay,
+        replayContext,
+        new Set(),
+        `Game ${index + 1}`,
+      );
+      setGames((prev) => prev.map((game, i) => (i === index ? filled.game : game)));
+      toast.success(`Game ${index + 1} filled from ${replay.fileName}.`);
+      reportProblems([...problems, ...filled.warnings]);
+    } finally {
+      setReading(false);
+    }
   }
 
   function addGame() {
@@ -298,6 +431,10 @@ export function ScrimSeriesForm({
         </div>
       </div>
 
+      {/* Above the games, because it's how a block gets entered: drop the
+          replays, then correct the handful of things a replay can't know. */}
+      <ReplayDropzone onFiles={importReplays} busy={reading} />
+
       {games.map((game, index) => (
         // Keyed on the game's own id, not the index: removing game 2 of 3 would
         // otherwise shift game 3 into its slot and leave the champion fields
@@ -315,8 +452,13 @@ export function ScrimSeriesForm({
           // A saved game's notes are an authored thread on the series page, so
           // the entry-time note box would be a field that writes nothing here.
           showNotes={!editing}
+          replayBusy={reading}
           onChange={(patch) => patchGame(index, patch)}
           onRemove={() => removeGame(index)}
+          onReplay={(file) => importGame(index, file)}
+          onSwap={() =>
+            setGames((prev) => prev.map((g, i) => (i === index ? swapTeams(g) : g)))
+          }
         />
       ))}
 

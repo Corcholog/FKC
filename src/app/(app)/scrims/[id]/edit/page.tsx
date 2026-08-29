@@ -13,7 +13,13 @@ import { ScrimSeriesForm } from "@/components/scrims/scrim-series-form";
 // updateScrimSeries for why an edit rewrites the games in place instead of
 // replacing them: their note threads hang off the game rows.
 
-type RosterRow = { id: string; display_name: string };
+type RosterRow = {
+  id: string;
+  display_name: string;
+  /** Only used to recognise our team inside an imported replay. */
+  riot_game_name: string;
+  riot_tag_line: string;
+};
 
 /**
  * Who to preselect if a game is added to *this* series — its own game 1.
@@ -49,7 +55,7 @@ export default async function EditScrimSeriesPage({
     loadSeries(privateSource(supabase), id),
     supabase
       .from("players")
-      .select("id, display_name")
+      .select("id, display_name, riot_game_name, riot_tag_line")
       .order("display_name")
       .returns<RosterRow[]>(),
     loadOpponents(privateSource(supabase)),

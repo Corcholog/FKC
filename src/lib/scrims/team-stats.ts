@@ -4,7 +4,7 @@
 // no I/O, so the pages fetch once and fold many times.
 
 import { byGamesThenRecord, type ChampionStatInput } from "@/lib/champion-stats";
-import type { ScrimGameView, ScrimKind, ScrimSide } from "@/lib/scrims/types";
+import { nicknameOf, type ScrimGameView, type ScrimKind, type ScrimSide } from "@/lib/scrims/types";
 
 export type Record_ = { games: number; wins: number };
 
@@ -147,7 +147,10 @@ export function aggregateAllyPlayers(
     for (const pick of game.picks) {
       if (!pick.ally) continue;
 
-      const key = pick.player_id ?? `name:${(pick.player_name ?? "").toLowerCase()}`;
+      // A substitute has no roster id, so their name is their identity — and
+      // an import writes it as a full Riot ID where a person would have typed
+      // just the nickname. Group on the nickname, show what was stored.
+      const key = pick.player_id ?? `name:${nicknameOf(pick.player_name ?? "").toLowerCase()}`;
       const name =
         (pick.player_id ? displayNames.get(pick.player_id) : null) ??
         pick.player_name ??
@@ -209,9 +212,12 @@ export function toChampionStatInput(
       .map((pick) => ({
         // Enemies have no roster id; key them by nickname so an opponent's
         // pool still groups per person rather than collapsing into one bucket.
+        // Tag lines are dropped from the key for the same reason they are in
+        // deriveOpponentRoster: "Peluca" typed by hand and "Peluca#LAS" written
+        // by a replay import are one player, not two.
         player_id: wantAlly
           ? pick.player_id
-          : `${game.opponent.id}:${pick.team_position}:${(pick.player_name ?? "").toLowerCase()}`,
+          : `${game.opponent.id}:${pick.team_position}:${nicknameOf(pick.player_name ?? "").toLowerCase()}`,
         champion_id: pick.champion_id,
         champion_name: pick.champion_name,
         // A pick's result is its team's result, and `win` on the game is ours.

@@ -5,6 +5,7 @@ import { formatRoleShort } from "@/lib/roles";
 import {
   BANS_PER_SIDE,
   SCRIM_ROLES,
+  nicknameOf,
   type ScrimGameView,
   type ScrimPickRow,
   type ScrimRole,
@@ -54,7 +55,12 @@ function PickSide({
   }
 
   const roster = pick.player_id ? playerNames.get(pick.player_id) : undefined;
-  const who = roster?.display_name ?? pick.player_name ?? null;
+  // An imported pick stores the whole Riot ID, but this line is tight enough
+  // that CS/min gets dropped on a narrow screen to buy the name room — spending
+  // that back on "#LAS" five times over would be a poor trade. The tag is on
+  // hover instead, and in full on the scouting page where there's space.
+  const storedName = pick.player_name?.trim() || null;
+  const who = roster?.display_name ?? (storedName && nicknameOf(storedName));
   const champion = championDisplayName(
     pick.champion_id,
     championMap,
@@ -101,7 +107,9 @@ function PickSide({
                   {who}
                 </Link>
               ) : (
-                <span className="text-grey-light">{who}</span>
+                <span className="text-grey-light" title={storedName ?? undefined}>
+                  {who}
+                </span>
               )}
               <span className="mx-1 opacity-50">·</span>
             </>

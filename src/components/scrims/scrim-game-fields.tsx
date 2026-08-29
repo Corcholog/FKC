@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { ArrowLeftRight, Trash2 } from "lucide-react";
 import { formatRole } from "@/lib/roles";
 import { BANS_PER_SIDE, SCRIM_ROLES, type ScrimRole } from "@/lib/scrims/types";
 import type { ChampionInfo } from "@/lib/ddragon";
@@ -17,11 +17,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { ReplayGameButton } from "@/components/scrims/replay-drop";
 import { otherSide, usedInGame, type GameState, type PickState } from "./draft-form-state";
 
 export type PickableChampion = ChampionInfo & { championId: number };
 
-export type RosterOption = { id: string; display_name: string };
+/**
+ * The Riot ID rides along for the replay import: it's the only way to tell
+ * which team in a replay was ours. Snake_case because it's selected straight
+ * off the `players` row.
+ */
+export type RosterOption = {
+  id: string;
+  display_name: string;
+  riot_game_name: string;
+  riot_tag_line: string;
+};
 
 /** The value the "not on the roster" option carries — "" is the empty select. */
 const OTHER_PLAYER = "__other__";
@@ -186,8 +197,11 @@ export function ScrimGameFields({
   fearlessUsed,
   canRemove,
   showNotes = true,
+  replayBusy,
   onChange,
   onRemove,
+  onReplay,
+  onSwap,
 }: {
   game: GameState;
   index: number;
@@ -204,8 +218,14 @@ export function ScrimGameFields({
    * second place to type something that goes nowhere.
    */
   showNotes?: boolean;
+  /** A replay is being read somewhere in the form; every picker waits for it. */
+  replayBusy: boolean;
   onChange: (patch: Partial<GameState>) => void;
   onRemove: () => void;
+  /** Refill just this game from one .rofl. */
+  onReplay: (file: File) => void;
+  /** Trade the two drafts over, for a game entered from the wrong point of view. */
+  onSwap: () => void;
 }) {
   // Anything already in this game's draft, plus anything a fearless series
   // burned in an earlier game. Each field re-allows its own current pick, so
@@ -298,6 +318,26 @@ export function ScrimGameFields({
           aria-label={`Game ${index + 1} patch`}
           className="h-8 w-16 text-sm"
         />
+
+        <ReplayGameButton
+          onFile={onReplay}
+          busy={replayBusy}
+          label={`Replay for game ${index + 1}`}
+        />
+
+        {/* The side toggle above only relabels the two columns. This is what
+            actually moves the drafts, which is what a game entered — or
+            imported — from the wrong point of view needs. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={onSwap}
+          title="Swap our team and theirs"
+          aria-label={`Swap teams in game ${index + 1}`}
+        >
+          <ArrowLeftRight />
+        </Button>
 
         {canRemove && (
           <Button

@@ -118,6 +118,29 @@ export type ScrimGameView = ScrimGameRow & {
 export const isAlly = (p: ScrimPickRow) => p.ally;
 export const isEnemy = (p: ScrimPickRow) => !p.ally;
 
+/**
+ * The name half of a stored `player_name`: `"Peluca#LAS"` → `"Peluca"`.
+ *
+ * A replay import writes the full Riot ID, because that is an identity — the
+ * same account across a season, immune to the typo that splits one scouted
+ * player into two. Hand entry writes whatever somebody typed, usually just the
+ * nickname.
+ *
+ * So both forms are in the column, and everything that *identifies* a person
+ * has to fold them together while everything that *displays* one can show the
+ * full thing where it fits. A Riot game name can't itself contain a `#`, which
+ * is what makes the split unambiguous.
+ */
+export function nicknameOf(playerName: string): string {
+  const hash = playerName.indexOf("#");
+  return hash > 0 ? playerName.slice(0, hash) : playerName;
+}
+
+/** Whether a stored name carries a tag line, and so is the more specific of two spellings. */
+export function hasRiotTag(playerName: string): boolean {
+  return playerName.indexOf("#") > 0;
+}
+
 /** Their side, given ours. Draft analysis cares which one had first pick. */
 export function enemySide(ourSide: ScrimSide): ScrimSide {
   return ourSide === "blue" ? "red" : "blue";

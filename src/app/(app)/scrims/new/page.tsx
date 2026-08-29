@@ -7,7 +7,13 @@ import { privateSource } from "@/lib/data-source";
 import { SCRIM_ROLES, type ScrimRole } from "@/lib/scrims/types";
 import { ScrimSeriesForm } from "@/components/scrims/scrim-series-form";
 
-type RosterRow = { id: string; display_name: string };
+type RosterRow = {
+  id: string;
+  display_name: string;
+  /** Only used to recognise our team inside an imported replay. */
+  riot_game_name: string;
+  riot_tag_line: string;
+};
 
 type LineupPickRow = { team_position: string; player_id: string | null };
 
@@ -109,7 +115,7 @@ export default async function NewScrimPage() {
   const [{ data: roster }, opponents, version] = await Promise.all([
     supabase
       .from("players")
-      .select("id, display_name")
+      .select("id, display_name, riot_game_name, riot_tag_line")
       .order("display_name")
       .returns<RosterRow[]>(),
     loadOpponents(privateSource(supabase)),

@@ -13,10 +13,13 @@
 
 import { byGamesThenRecord } from "@/lib/champion-stats";
 import type { ChampionPickAgg } from "@/lib/scrims/draft-stats";
-import type { ScrimGameView } from "@/lib/scrims/types";
+import { hasRiotTag, nicknameOf, type ScrimGameView } from "@/lib/scrims/types";
 
 export type OpponentPlayer = {
-  /** The nickname as first seen, with its original casing. */
+  /**
+   * The nickname as first seen, with its original casing — or the full Riot ID
+   * if any of their picks carried one.
+   */
   name: string;
   teamPosition: string;
   games: number;
@@ -45,7 +48,11 @@ export function deriveOpponentRoster(games: ScrimGameView[]): OpponentPlayer[] {
       const nickname = pick.player_name?.trim();
       if (!nickname) continue;
 
-      const key = `${pick.team_position}:${nickname.toLowerCase()}`;
+      // Keyed on the nickname alone, so the same person groups whether they
+      // were typed in as "Peluca" before the replay import existed or written
+      // as "Peluca#LAS" by it. Keying on the whole string would have made every
+      // opponent scouted before this feature into a second, parallel player.
+      const key = `${pick.team_position}:${nicknameOf(nickname).toLowerCase()}`;
       const bucket: Bucket = byKey.get(key) ?? {
         name: nickname,
         teamPosition: pick.team_position,
@@ -56,6 +63,11 @@ export function deriveOpponentRoster(games: ScrimGameView[]): OpponentPlayer[] {
         assists: 0,
         champions: new Map(),
       };
+
+      // A tagged spelling wins the label: it names an account rather than a
+      // person somebody remembered, and one game entered from a replay is
+      // enough to upgrade a player scouted by hand for a season.
+      if (hasRiotTag(nickname) && !hasRiotTag(bucket.name)) bucket.name = nickname;
 
       bucket.games += 1;
       if (theyWon) bucket.wins += 1;

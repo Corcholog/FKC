@@ -115,3 +115,22 @@ export const SOLOQ_PARTICIPANTS = "soloq_participants";
  * ripples into its row types.
  */
 export const SOLOQ_PARTICIPANTS_EMBED = `match_participants:${SOLOQ_PARTICIPANTS}!inner`;
+
+const QUEUE_SCOPES: QueueScope[] = ["solo", "flex", "ranked"];
+
+/**
+ * `?queue=flex`, falling back to solo.
+ *
+ * Same discipline as parseScope and parsePage: an unrecognised value becomes
+ * the reading that changes nothing, rather than an error page or an empty one.
+ */
+export function parseQueueScope(value: string | string[] | undefined): QueueScope {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw && (QUEUE_SCOPES as string[]).includes(raw) ? (raw as QueueScope) : "solo";
+}
+
+export const QUEUE_SCOPE_LABELS: Record<QueueScope, string> = {
+  solo: "SoloQ",
+  flex: "FlexQ",
+  ranked: "Both",
+};

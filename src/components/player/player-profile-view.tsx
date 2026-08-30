@@ -40,6 +40,7 @@ export function PlayerProfileView({
   basePath = "",
   summary,
   recentForm,
+  scopeSwitch,
 }: {
   profile: PlayerProfile;
   version: string;
@@ -48,6 +49,13 @@ export function PlayerProfileView({
   basePath?: string;
   summary?: React.ReactNode;
   recentForm: React.ReactNode;
+  /**
+   * Which games this page is counting. A slot rather than a prop the view
+   * builds, for the same reason `summary` is: the demo has no scope switch —
+   * it publishes one reading of the data — and a flag here would render it
+   * unless somebody remembered to pass false.
+   */
+  scopeSwitch?: React.ReactNode;
 }) {
   const {
     player,
@@ -123,6 +131,8 @@ export function PlayerProfileView({
           </div>
         </CardContent>
       </Card>
+
+      {scopeSwitch}
 
       {summary}
 

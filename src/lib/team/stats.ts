@@ -227,7 +227,10 @@ export function toChampionStatInput(
         deaths: pick.deaths,
         assists: pick.assists,
         total_cs: pick.total_cs,
-        damage_dealt_to_champions: 0,
+        // Null, not 0. A team match records no damage at all, and 0 is a real
+        // figure that would drag a dmg/min average down; null keeps the game out
+        // of the damage clock entirely (see champion-stats.ts).
+        damage_dealt_to_champions: null,
         game_duration_seconds: game.duration_seconds ?? 0,
       })),
   );

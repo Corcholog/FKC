@@ -81,7 +81,7 @@ export function ChampionTierList({
                     {formatPerMinute(champ.totalCs, champ.totalDurationSeconds)} CS/min
                   </span>
                   <span className="tabular-nums">
-                    {formatPerMinute(champ.totalDamage, champ.totalDurationSeconds)} dmg/min
+                    {formatPerMinute(champ.totalDamage, champ.damageDurationSeconds)} dmg/min
                   </span>
                 </div>
               </div>

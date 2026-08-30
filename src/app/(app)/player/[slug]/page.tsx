@@ -4,22 +4,45 @@ import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { notesByParticipant } from "@/lib/match-notes";
 import { privateSource } from "@/lib/data-source";
+import { needsTeamMatches, parseScope, queueScopeFor } from "@/lib/scope";
 import { buildPlayerProfile, fetchPlayerProfileRows } from "@/lib/loaders/player";
+import { fetchPlayerTeamRows } from "@/lib/loaders/player-team-rows";
 import { groupParticipantsByMatch, loadMatchRowParticipants } from "@/lib/match-rows";
 import { AiSummaryCard } from "@/components/ai-summary-card";
 import { PlayerProfileView } from "@/components/player/player-profile-view";
+import { ScopeSwitch } from "@/components/player/scope-switch";
 import { RecentForm } from "@/components/player/recent-form";
 
-export default async function PlayerDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function PlayerDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ scope?: string }>;
+}) {
   const { slug } = await params;
+  const scope = parseScope((await searchParams).scope);
   const supabase = await createClient();
-  const source = privateSource(supabase);
+
+  // The Riot half is a source swap and nothing more: every query in the loader
+  // is unchanged, and reads soloq_participants or ranked_participants depending
+  // on which one it was handed.
+  const source = privateSource(supabase, queueScopeFor(scope));
+
+  // Two passes, because the team rows are keyed by player id and the id comes
+  // from the first read. Only paid for when the scope asks for them.
+  const firstPass = await fetchPlayerProfileRows(source, slug);
+  if (!firstPass) notFound();
 
   const [profileRows, version] = await Promise.all([
-    fetchPlayerProfileRows(source, slug),
+    needsTeamMatches(scope)
+      ? fetchPlayerTeamRows(privateSource(supabase), firstPass.player.id).then((teamRows) => ({
+          ...firstPass,
+          teamRows,
+        }))
+      : Promise.resolve(firstPass),
     getLatestVersion(),
   ]);
-  if (!profileRows) notFound();
 
   const profile = buildPlayerProfile(profileRows);
   const championMap = await getChampionMap(version);
@@ -46,6 +69,13 @@ export default async function PlayerDetailPage({ params }: { params: Promise<{ s
       profile={profile}
       version={version}
       championMap={championMap}
+      scopeSwitch={
+        <ScopeSwitch
+          active={scope}
+          basePath={`/player/${profile.player.slug}`}
+          sample={profile.sampleLabel}
+        />
+      }
       summary={
         // Opt-in per player (migration 009). Nothing is generated for anyone
         // without the flag, so rendering the card would promise a summary that

@@ -7,7 +7,8 @@ export type ChampionStatInput = {
   deaths: number;
   assists: number;
   total_cs: number;
-  damage_dealt_to_champions: number;
+  /** Null when the source doesn't record it — a team match. Never null on Riot. */
+  damage_dealt_to_champions: number | null;
   game_duration_seconds: number;
 };
 
@@ -21,6 +22,12 @@ export type ChampionAgg = {
   assists: number;
   totalCs: number;
   totalDamage: number;
+  /**
+   * The duration of the games that reported damage, which is not always every
+   * game. dmg/min divides by this, so a pool holding team matches reports the
+   * rate its Riot games actually had rather than one diluted by the rest.
+   */
+  damageDurationSeconds: number;
   totalDurationSeconds: number;
 };
 
@@ -73,6 +80,7 @@ export function topChampionsByPlayer(rows: ChampionStatInput[], limit = 5): Map<
       assists: 0,
       totalCs: 0,
       totalDamage: 0,
+      damageDurationSeconds: 0,
       totalDurationSeconds: 0,
     };
     agg.games += 1;
@@ -81,7 +89,10 @@ export function topChampionsByPlayer(rows: ChampionStatInput[], limit = 5): Map<
     agg.deaths += row.deaths;
     agg.assists += row.assists;
     agg.totalCs += row.total_cs;
-    agg.totalDamage += row.damage_dealt_to_champions;
+    if (typeof row.damage_dealt_to_champions === "number") {
+      agg.totalDamage += row.damage_dealt_to_champions;
+      agg.damageDurationSeconds += row.game_duration_seconds;
+    }
     agg.totalDurationSeconds += row.game_duration_seconds;
     champMap.set(row.champion_id, agg);
     byPlayer.set(row.player_id, champMap);

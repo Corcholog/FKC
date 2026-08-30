@@ -51,7 +51,7 @@ function ChampionChip({
         {formatPerMinute(champ.totalCs, champ.totalDurationSeconds)} CS/min
       </p>
       <p className="hidden tabular-nums text-[10px] text-grey-light sm:block">
-        {formatPerMinute(champ.totalDamage, champ.totalDurationSeconds)} dmg/min
+        {formatPerMinute(champ.totalDamage, champ.damageDurationSeconds)} dmg/min
       </p>
     </div>
   );

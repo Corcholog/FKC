@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { privateSource } from "@/lib/data-source";
+import { parseQueueScope, privateSource } from "@/lib/data-source";
 import {
   buildChampionPool,
   fetchChampionRows,
@@ -15,10 +15,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 export default async function ChampionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ player?: string }>;
+  searchParams: Promise<{ player?: string; queue?: string }>;
 }) {
-  const { player: playerParam } = await searchParams;
-  const source = privateSource(await createClient());
+  const { player: playerParam, queue: queueParam } = await searchParams;
+  const queue = parseQueueScope(queueParam);
+  const source = privateSource(await createClient(), queue);
 
   // Note what the empty state below now means. Before the read helper it covered
   // both "no players tracked" and "the roster read failed", and told you the first.

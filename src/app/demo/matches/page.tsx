@@ -67,9 +67,12 @@ export default async function DemoMatchesPage({
             </p>
           </div>
         </div>
+        {/* Fixed rather than offered: the demo publishes one reading of the
+            data, and every other surface on it is soloQ. */}
         <MatchesFilter
           players={players}
           selectedId={selectedPlayer?.slug ?? null}
+          queue="solo"
           basePath="/demo"
         />
       </div>

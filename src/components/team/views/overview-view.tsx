@@ -4,6 +4,9 @@ import { formatKdaRatio } from "@/lib/format";
 import { formatRole, mainRole } from "@/lib/roles";
 import { avatarTint } from "@/lib/avatar-tint";
 import { groupBySeries } from "@/lib/team/queries";
+import type { TeamOverviewFlex } from "@/lib/loaders/team-overview";
+import { FULL_STACK } from "@/lib/flex-team";
+import { playerWinRate, kdaRatio } from "@/lib/player-stats";
 import {
   aggregateAllyPlayers,
   overallRecord,
@@ -22,7 +25,17 @@ import { WinrateRing } from "@/components/winrate-ring";
 import { MetaChip, SeriesScore, winRateTone } from "@/components/team/ui";
 import { cn } from "@/lib/utils";
 
-// The scrim section's front page — /team and its demo.
+// The team section's front page — /team and its demo.
+//
+// Two sources, counted together and shown apart. Team matches (scrims,
+// friendlies, officials) have an opponent and a draft; flex is a Riot queue
+// with none of that, but a full-stack flex game is the same five people
+// playing the same game, so it belongs in the same record.
+//
+// Flex is optional rather than required, and that is deliberate: it is a second
+// query, and a page that renders without it is still a correct page about team
+// matches. Passing null says "not loaded", which reads differently from a
+// record of 0-0.
 //
 // The roster it takes is only ever used to put a face and a link on a name that
 // the aggregate already resolved, so both versions pass the same shape: on the
@@ -81,13 +94,145 @@ function RecordBar({
   );
 }
 
+/**
+ * Ranked flex: the record, and who actually turns up for it.
+ *
+ * The record is over full-stack games only. Everything else flex produces gets
+ * counted and named rather than folded in, because each is a different claim:
+ * a three-stack is some of the roster playing flex, and a civil war has no team
+ * result at all. lib/flex-team.ts is where that split lives.
+ */
+function FlexSection({
+  flex,
+  roster,
+  basePath,
+}: {
+  flex: TeamOverviewFlex;
+  roster: Map<string, TeamRosterRow>;
+  basePath: string;
+}) {
+  const { record, split, byPlayer, appearances } = flex;
+
+  if (record.games === 0 && split.partial.length === 0 && split.civilWars.length === 0) {
+    return (
+      <section className="flex flex-col gap-3">
+        <h2 className="font-heading text-lg font-semibold text-white">Flex queue</h2>
+        <p className="panel-hex p-5 text-sm text-grey-mid">
+          No flex games recorded yet. They arrive with the next sync — flex is tracked from
+          June, and the first backfill takes a few runs.
+        </p>
+      </section>
+    );
+  }
+
+  // Most flex first, then best record. Somebody with two games shouldn't lead
+  // the list of who plays flex just because both went well.
+  const players = [...byPlayer.entries()]
+    .map(([playerId, agg]) => ({ playerId, agg, stacks: appearances.get(playerId) ?? 0 }))
+    .sort((a, b) => b.agg.games - a.agg.games || b.agg.wins - a.agg.wins);
+
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="font-heading text-lg font-semibold text-white">Flex queue</h2>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+        <div className="panel-hex panel-hex-clip flex items-center gap-4 p-5">
+          <WinrateRing percentage={record.winRate} size={64} strokeWidth={6} />
+          <div className="min-w-0">
+            <p className="font-heading text-2xl leading-none font-semibold tabular-nums text-white">
+              {record.wins}
+              <span className="text-grey-mid">–</span>
+              {record.losses}
+            </p>
+            <p className="mt-1 text-sm text-grey-light">
+              {record.games} game{record.games === 1 ? "" : "s"} as a full {FULL_STACK}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {split.partial.length > 0 && (
+                <MetaChip>{split.partial.length} part-stack</MetaChip>
+              )}
+              {split.civilWars.length > 0 && (
+                <MetaChip>{split.civilWars.length} civil war</MetaChip>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="panel-hex overflow-x-auto">
+          <table className="w-full min-w-md text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-[10px] tracking-wider text-grey-mid uppercase">
+                <th className="px-4 py-2 font-medium">Player</th>
+                <th className="px-4 py-2 text-right font-medium">Games</th>
+                <th className="px-4 py-2 text-right font-medium">Full {FULL_STACK}</th>
+                <th className="px-4 py-2 text-right font-medium">Win rate</th>
+                <th className="px-4 py-2 text-right font-medium">KDA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {players.map(({ playerId, agg, stacks }) => {
+                const player = roster.get(playerId);
+                return (
+                  <tr
+                    key={playerId}
+                    className="border-b border-border transition-colors last:border-b-0 hover:bg-bg-tertiary/40"
+                  >
+                    <td className="px-4 py-2">
+                      {player ? (
+                        <Link
+                          href={`${basePath}/player/${player.slug}`}
+                          className="text-white transition-colors hover:text-gold-bright"
+                        >
+                          {player.display_name}
+                        </Link>
+                      ) : (
+                        <span className="text-grey-light">Unknown</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-grey-light">
+                      {agg.games}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-grey-light">{stacks}</td>
+                    <td
+                      className={cn(
+                        "px-4 py-2 text-right tabular-nums",
+                        winRateTone(playerWinRate(agg)),
+                      )}
+                    >
+                      {playerWinRate(agg)}%
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-grey-light">
+                      {formatKdaRatio(kdaRatio(agg))}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Said out loud because the two numbers in this section count different
+          things, and a reader who assumes otherwise gets a wrong answer rather
+          than a confusing one. */}
+      <p className="text-xs text-grey-mid">
+        The record counts games the full {FULL_STACK} played together. The table counts every
+        flex game each player was in.
+      </p>
+    </section>
+  );
+}
+
 export function TeamOverviewView({
   games,
   roster,
+  flex = null,
   basePath = "",
 }: {
   games: TeamGameView[];
   roster: TeamRosterRow[];
+  /** Null when flex wasn't loaded — see the header. */
+  flex?: TeamOverviewFlex | null;
   basePath?: string;
 }) {
   const rosterById = new Map(roster.map((p) => [p.id, p]));
@@ -101,20 +246,34 @@ export function TeamOverviewView({
   const allSeries = groupBySeries(games);
   const recentSeries = allSeries.slice(0, 5);
 
+  // The combined record: team matches plus the flex games the full roster
+  // played. Partial stacks and civil wars are deliberately out — see
+  // lib/flex-team.ts for why each would be a different claim.
+  const combinedGames = overall.games + (flex?.record.games ?? 0);
+  const combinedWins = overall.wins + (flex?.record.wins ?? 0);
+  const combinedWinRate =
+    combinedGames === 0 ? 0 : Math.round((combinedWins / combinedGames) * 100);
+
   return (
     <div className="flex flex-col gap-8">
       {/* Headline: the record, then the split that explains it. */}
       <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
         <div className="panel-hex panel-hex-clip flex items-center gap-4 p-5">
-          <WinrateRing percentage={overall.winRate} size={72} strokeWidth={6} />
+          <WinrateRing
+            percentage={flex ? combinedWinRate : overall.winRate}
+            size={72}
+            strokeWidth={6}
+          />
           <div className="min-w-0">
             <p className="font-heading text-3xl leading-none font-semibold tabular-nums text-white">
-              {overall.wins}
+              {flex ? combinedWins : overall.wins}
               <span className="text-grey-mid">–</span>
-              {overall.losses}
+              {flex ? combinedGames - combinedWins : overall.losses}
             </p>
             <p className="mt-1 text-sm text-grey-light">
-              {overall.games} game{overall.games === 1 ? "" : "s"} across {allSeries.length} series
+              {flex
+                ? `${combinedGames} game${combinedGames === 1 ? "" : "s"} as a team`
+                : `${overall.games} game${overall.games === 1 ? "" : "s"} across ${allSeries.length} series`}
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {kinds.map(({ kind, record }) => (
@@ -122,6 +281,11 @@ export function TeamOverviewView({
                   {TEAM_MATCH_KIND_LABELS[kind]} {record.wins}–{record.losses}
                 </MetaChip>
               ))}
+              {flex && flex.record.games > 0 && (
+                <MetaChip>
+                  Flex {flex.record.wins}–{flex.record.losses}
+                </MetaChip>
+              )}
             </div>
           </div>
         </div>
@@ -129,8 +293,16 @@ export function TeamOverviewView({
         <div className="panel-hex flex flex-col justify-center gap-4 p-5">
           <RecordBar label="Blue side" record={sides.blue} tone="blue" />
           <RecordBar label="Red side" record={sides.red} tone="red" />
+          {/* Team matches only. In flex the side is assigned, so folding it in
+              would dilute the one split in this app where side is a choice the
+              team prepared for — the argument side-stats.ts makes at length. */}
+          {flex && flex.record.games > 0 && (
+            <p className="text-xs text-grey-mid">Team matches only — flex sides are assigned.</p>
+          )}
         </div>
       </section>
+
+      {flex && <FlexSection flex={flex} roster={rosterById} basePath={basePath} />}
 
       <section className="flex flex-col gap-3">
         <h2 className="font-heading text-lg font-semibold text-white">Players</h2>

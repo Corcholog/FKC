@@ -10,6 +10,8 @@ import { fetchAllByIds, fetchAllRows } from "@/lib/supabase/fetch-all";
 import { maybeRow, optional, rows } from "@/lib/supabase/read";
 import type { DataSource } from "@/lib/data-source";
 import { aggregateByRole, type PlayerAgg } from "@/lib/player-stats";
+import { describeSample, fromParticipant, type UnifiedRow } from "@/lib/unified";
+import { QUEUE_FLEX } from "@/lib/queues";
 import { topChampionsByPlayer, type ChampionAgg } from "@/lib/champion-stats";
 import { computeStreak, formatStreak, type Streak } from "@/lib/streaks";
 import { matchupsForPlayer, nemesis, type MatchupAgg, type MatchupInput } from "@/lib/matchups";
@@ -64,6 +66,7 @@ export type MatchListRow = {
 type OwnRow = MatchupInput & {
   total_cs: number;
   damage_dealt_to_champions: number;
+  queue_id: number;
   matches: { game_creation: string; game_duration_seconds: number } | null;
 };
 
@@ -89,6 +92,13 @@ export type AiSummaryRow = {
 
 export type PlayerProfileRows = {
   player: PlayerRecord;
+  /**
+   * Team-match picks as unified rows, when the scope asks for them.
+   *
+   * Empty rather than absent when the scope is Riot-only, so every consumer
+   * folds the same array either way instead of branching.
+   */
+  teamRows: UnifiedRow[];
   matchList: MatchListRow[];
   historyRows: HistoryRow[];
   /** All ten participants of every match in the history — enemies included. */
@@ -98,8 +108,10 @@ export type PlayerProfileRows = {
   aiSummary: AiSummaryRow | null;
 };
 
+// queue_id rides along because a ranked scope holds both queues, and a row
+// that cannot say which one it came from cannot be labelled or split.
 const OWN_ROW_COLUMNS =
-  "match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions";
+  "match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, queue_id";
 
 // gold_earned, total_cs and damage_dealt_to_champions ride along for the lane
 // differentials: they are the enemy laner's copies of columns the player's own
@@ -111,6 +123,14 @@ const ALL_PARTICIPANT_COLUMNS =
 export async function fetchPlayerProfileRows(
   source: DataSource,
   slug: string,
+  /**
+   * Team-match rows to fold in, already scoped to this player by the caller.
+   *
+   * Passed in rather than fetched here because loading them needs the whole
+   * team-match read path (lib/team/queries.ts), and this module deliberately
+   * knows only about the Riot tables.
+   */
+  teamRows: UnifiedRow[] = [],
 ): Promise<PlayerProfileRows | null> {
   const player = maybeRow(
     await source.supabase
@@ -205,6 +225,7 @@ export async function fetchPlayerProfileRows(
 
   return {
     player,
+    teamRows,
     matchList: rows(matchListResult, "recent matches"),
     historyRows,
     allHistoryParticipants,
@@ -241,6 +262,16 @@ export type PlayerProfile = {
   laneDiff: LaneDiffAgg;
   totalGames: number;
   winRatePct: number;
+  /**
+   * Every game in scope, in one shape — Riot rows and team picks together.
+   *
+   * The aggregates below that a team match can honestly answer are folded over
+   * this; the ones that need something only Riot records are not, and say so on
+   * the page. See lib/unified.ts.
+   */
+  scopedRows: UnifiedRow[];
+  /** "12 soloQ, 4 flex, 6 team" — the sample the mixed numbers came from. */
+  sampleLabel: string;
 };
 
 /** Pure. Rows in, everything the view renders out. */
@@ -248,7 +279,20 @@ export function buildPlayerProfile(data: PlayerProfileRows): PlayerProfile {
   const { player, historyRows, allHistoryParticipants, aiSummary } = data;
   const id = player.id;
 
-  const streak = computeStreak(historyRows);
+  // Riot rows and team picks in one shape. queue_id is what lets a row say
+  // which queue it was, now that a scope can hold both.
+  const scopedRows: UnifiedRow[] = [
+    ...historyRows.map((row) =>
+      fromParticipant(row, row.queue_id === QUEUE_FLEX ? "flexq" : "soloq"),
+    ),
+    ...data.teamRows,
+  ];
+
+  // Streaks read the scoped rows, and computeStreak sorts its own input — which
+  // matters more here than it did: a team match is dated to a day, not a
+  // moment, so mixed history is only day-accurate and an unsorted read would be
+  // silently wrong rather than obviously so.
+  const streak = computeStreak(scopedRows);
 
   const lpPoints: LpPoint[] = [];
   for (const point of data.rankHistory) {
@@ -262,7 +306,13 @@ export function buildPlayerProfile(data: PlayerProfileRows): PlayerProfile {
   const durationByMatch = new Map(historyRows.map((r) => [r.match_id, r.game_duration_seconds]));
 
   const summaryGeneratedAt = aiSummary?.generated_at ?? null;
-  const totalGames = (player.wins ?? 0) + (player.losses ?? 0);
+
+  // players.wins/losses is the soloQ record specifically — the sync counts it
+  // through soloq_participants — so it can only stand in for the total when
+  // soloQ is all that is in scope. Anything wider is counted from the rows.
+  const soloqOnly = scopedRows.every((row) => row.source === "soloq");
+  const totalGames = soloqOnly ? (player.wins ?? 0) + (player.losses ?? 0) : scopedRows.length;
+  const wins = soloqOnly ? (player.wins ?? 0) : scopedRows.filter((row) => row.win).length;
   const survivalPoints = winRatePastMinute(historyRows);
   const matchups = matchupsForPlayer(allHistoryParticipants, id);
 
@@ -276,12 +326,23 @@ export function buildPlayerProfile(data: PlayerProfileRows): PlayerProfile {
       ? historyRows.filter((r) => r.game_creation > summaryGeneratedAt).length
       : historyRows.length,
 
-    roleSplit: aggregateByRole(historyRows),
-    // Same rows as the role split — historyRows already carries every column
+    scopedRows,
+    sampleLabel: describeSample(scopedRows),
+
+    // Role and champions are folded over every source: which lane somebody
+    // plays and what they play there is a question a scrim scoreboard answers
+    // as well as Riot does.
+    roleSplit: aggregateByRole(scopedRows),
+    // Same rows as the role split — a unified row already carries every column
     // ChampionStatInput needs, so the champion strip costs no extra query.
-    topChampions: topChampionsByPlayer(historyRows, TOP_CHAMPION_COUNT).get(id) ?? [],
+    topChampions: topChampionsByPlayer(scopedRows, TOP_CHAMPION_COUNT).get(id) ?? [],
     streak,
     streakLabel: formatStreak(streak),
+    // Everything from here down reads historyRows, not scopedRows, and that is
+    // the line the page has to be honest about: a team match has no LP, no
+    // kickoff time finer than a date, no enemy laner resolved to an account and
+    // no reliable duration. Folding it in would not widen these numbers, it
+    // would corrupt them.
     timeStats: aggregateByTime(historyRows),
     lpPoints,
     matchups,
@@ -292,6 +353,6 @@ export function buildPlayerProfile(data: PlayerProfileRows): PlayerProfile {
     sideSplit: aggregateBySide(historyRows),
     laneDiff: laneDiffForPlayer(allHistoryParticipants, id, durationByMatch),
     totalGames,
-    winRatePct: totalGames === 0 ? 0 : Math.round(((player.wins ?? 0) / totalGames) * 100),
+    winRatePct: totalGames === 0 ? 0 : Math.round((wins / totalGames) * 100),
   };
 }

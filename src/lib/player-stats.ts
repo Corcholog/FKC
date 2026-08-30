@@ -8,7 +8,15 @@ export type PlayerStatInput = {
   deaths: number;
   assists: number;
   total_cs: number;
-  damage_dealt_to_champions: number;
+  /**
+   * Null when the source doesn't record it — a team match, which is typed in
+   * from a scoreboard that has no damage column. Never null on a Riot row.
+   *
+   * Null rather than 0, and the distinction is the whole point: 0 is a real
+   * damage figure and would drag an average down, where null means the game
+   * simply doesn't answer the question.
+   */
+  damage_dealt_to_champions: number | null;
   game_duration_seconds: number;
 
   // Added by migration 005. Null on every row synced before it, and on any
@@ -30,7 +38,14 @@ export type PlayerAgg = {
   kills: number;
   deaths: number;
   assists: number;
+  // Damage has its own clock for the same reason CS does, one step further on:
+  // CS excludes support games, damage excludes whole *sources*. A team match
+  // records no damage at all, so counting its minutes in the denominator would
+  // divide a real numerator by a duration that never contributed to it — DPM
+  // quietly halved on any mixed aggregate, with the number still rendering.
+  damageGames: number;
   totalDamage: number;
+  damageDurationSeconds: number;
   totalDurationSeconds: number;
   // CS accumulates over non-support games only, with its own game count and
   // duration: support CS/min is structurally low, so folding those games in
@@ -63,7 +78,9 @@ function emptyAgg(): PlayerAgg {
     kills: 0,
     deaths: 0,
     assists: 0,
+    damageGames: 0,
     totalDamage: 0,
+    damageDurationSeconds: 0,
     totalDurationSeconds: 0,
     csGames: 0,
     totalCs: 0,
@@ -89,7 +106,11 @@ function accumulate(agg: PlayerAgg, row: PlayerStatInput) {
   agg.kills += row.kills;
   agg.deaths += row.deaths;
   agg.assists += row.assists;
-  agg.totalDamage += row.damage_dealt_to_champions;
+  if (typeof row.damage_dealt_to_champions === "number") {
+    agg.damageGames += 1;
+    agg.totalDamage += row.damage_dealt_to_champions;
+    agg.damageDurationSeconds += row.game_duration_seconds;
+  }
   agg.totalDurationSeconds += row.game_duration_seconds;
 
   if (!isSupport(row.team_position)) {
@@ -239,7 +260,9 @@ export function csPerMinute(agg: PlayerAgg): number {
 }
 
 export function damagePerMinute(agg: PlayerAgg): number {
-  return agg.totalDurationSeconds <= 0 ? 0 : agg.totalDamage / (agg.totalDurationSeconds / 60);
+  return agg.damageDurationSeconds <= 0
+    ? 0
+    : agg.totalDamage / (agg.damageDurationSeconds / 60);
 }
 
 // ------------------------------------------------------------

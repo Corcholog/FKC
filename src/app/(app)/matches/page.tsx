@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 import { notesByParticipant } from "@/lib/match-notes";
-import { privateSource } from "@/lib/data-source";
+import { parseQueueScope, privateSource } from "@/lib/data-source";
 import { avatarTint } from "@/lib/avatar-tint";
 import { buildMatchesPage, fetchMatchesPageRows, parsePage } from "@/lib/loaders/matches";
 import { MatchesList } from "@/components/matches-list";
@@ -14,14 +14,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 export default async function MatchesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ player?: string; page?: string }>;
+  searchParams: Promise<{ player?: string; page?: string; queue?: string }>;
 }) {
-  const { player: playerFilter, page: pageParam } = await searchParams;
+  const { player: playerFilter, page: pageParam, queue: queueParam } = await searchParams;
+  const queue = parseQueueScope(queueParam);
   const page = parsePage(pageParam);
   const supabase = await createClient();
 
   const [pageRows, version] = await Promise.all([
-    fetchMatchesPageRows(privateSource(supabase), {
+    fetchMatchesPageRows(privateSource(supabase, queue), {
       playerSlug: playerFilter ?? null,
       page,
     }),
@@ -71,7 +72,11 @@ export default async function MatchesPage({
             </p>
           </div>
         </div>
-        <MatchesFilter players={players} selectedId={selectedPlayer?.slug ?? null} />
+        <MatchesFilter
+          players={players}
+          selectedId={selectedPlayer?.slug ?? null}
+          queue={queue}
+        />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -96,6 +101,7 @@ export default async function MatchesPage({
         totalPages={totalPages}
         totalMatches={totalMatches}
         playerSlug={selectedPlayer?.slug ?? null}
+        queue={queue}
       />
     </main>
   );

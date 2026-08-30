@@ -530,6 +530,37 @@ asks for, and `SCOPE_CAPTIONS` names them. A team match has no LP, no kickoff ti
 than a date, no enemy laner resolved to an account and an often-missing duration — folding
 it in would not widen those numbers, it would corrupt them.
 
+## 10c. One row per game: `lib/team/history.ts`
+
+§10b mixes sources to produce a *number*. This mixes the same sources to produce
+a *list*, and the hard part is different.
+
+`flex_participants` stores one row per player per game, so the roster's five-stack
+arrives as five rows describing one game. The squad-wide feed at `/matches` renders those
+as five rows and is right to: that list is told from a player's point of view, and each of
+the five is somebody's game. `/team/matches` is told from the team's, so it folds them
+into one entry — **the team played it once**.
+
+Both records are flattened into a `HistoryEntry`, which carries only what the row shows:
+two compositions, a result, a duration and a label. What differs between a scrim and a flex
+game survives as three fields rather than as two code paths — `win` is `null` on a civil
+war (the roster both won and lost it), `riotMatchId` is what a flex row links out with, and
+`game` is the `TeamGameView` the panel opens in place.
+
+**Ordering across the two is the subtle part.** A team match has no clock, only a date, so
+it sorts at the midday key `teamMatchTimestamp` produces — the same one `fromTeamPick`
+writes into `game_creation`, which is why it became a function rather than staying a
+template literal in one file. And the merge relies on `sort` being **stable**: every game
+of one series shares that single timestamp, so the incoming order is what keeps a
+best-of-three contiguous and in playing order.
+
+**`CompareBoard` is the reason the panel needed no second layout.** The role-paired board
+under a draft was written against `TeamGameView`; it now takes two plain champion arrays,
+so a hand-entered scrim and a Riot flex game render through the same component. It pairs by
+role where a role is known and appends the leftovers rather than dropping them — Riot
+returns an empty `team_position` often enough that a silently four-man composition is a
+real outcome, and it looks like a plausible four-man composition rather than an error.
+
 ## 11. Team-match stats (`lib/team/`)
 
 Same convention as everything above: pure, I/O-free functions over plain rows, called from

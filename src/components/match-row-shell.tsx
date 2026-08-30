@@ -21,7 +21,12 @@ export function MatchRowShell({
   panel,
   children,
 }: {
-  win: boolean;
+  /**
+   * Null means no result belongs to this row and the accent stays neutral.
+   * The only thing that produces it today is a flex game the roster played
+   * against itself, which it both won and lost — see lib/flex-team.ts.
+   */
+  win: boolean | null;
   noteCount: number;
   /**
    * The notes UI, only mounted while open so a 50-row page isn't 50 live forms.
@@ -39,7 +44,7 @@ export function MatchRowShell({
   const shellClass = cn(
     "panel-hex @container border-l-4",
     panel && "is-interactive",
-    win ? "border-l-win" : "border-l-loss",
+    win === null ? "border-l-border" : win ? "border-l-win" : "border-l-loss",
   );
 
   if (!panel) {

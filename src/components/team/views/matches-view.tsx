@@ -1,21 +1,78 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
-import { formatRelativeTime } from "@/lib/format";
 import type { ChampionInfo } from "@/lib/ddragon";
 import type { TeamNoteThread } from "@/lib/team/notes";
-import { groupBySeries } from "@/lib/team/queries";
-import { seriesLabel, type TeamGameView } from "@/lib/team/types";
-import { TeamGameCard, type PlayerLookup } from "@/components/team/draft-board";
-import { MetaChip, SeriesScore } from "@/components/team/ui";
+import {
+  HISTORY_VIEWS,
+  HISTORY_VIEW_LABELS,
+  historyRecord,
+  type HistoryEntry,
+  type HistoryView,
+} from "@/lib/team/history";
+import type { PlayerLookup } from "@/components/team/compare-board";
+import { TeamHistoryRow } from "@/components/team/history-row";
+import { winRateTone } from "@/components/team/ui";
+import { cn } from "@/lib/utils";
 
-// Every series with every draft — /team/matches and its demo.
+// The team's match history — /team/matches and its demo.
 //
-// `notesFor` is the slot, same shape as MatchesList's. Returning undefined for a
-// game is what tells TeamGameCard "this surface doesn't do notes", and the demo
-// passes no function at all: there is no demo view of team_game_notes, so there
-// is nothing for the public copy to read even if it asked.
+// One row per game, whatever kind of game it was. That is the whole point of
+// the page and it is the one thing the squad-wide soloQ feed at /matches
+// cannot do: that list is told from a player's point of view, so a game five
+// tracked players were in is five rows there, correctly. Here the subject is
+// the team, and the team played it once.
+//
+// `notesFor` is a slot rather than a flag, same shape as MatchesList's.
+// Returning undefined for a game is what tells the row "this surface doesn't do
+// notes", and the demo passes no function at all: there is no demo view of
+// team_game_notes, so there is nothing for the public copy to read even if it
+// asked.
+
+function ViewTabs({
+  active,
+  counts,
+  basePath,
+}: {
+  active: HistoryView;
+  counts: Record<HistoryView, number>;
+  basePath: string;
+}) {
+  // Counts come from the unfiltered stream, and a view with no games is left
+  // out entirely rather than offered as an empty one — a roster that has never
+  // played a friendly should not be asked whether it wants to see them. "All"
+  // always shows, so there is always a way back.
+  const views = HISTORY_VIEWS.filter((view) => view === "all" || counts[view] > 0);
+  if (views.length <= 2) return null;
+
+  return (
+    <nav className="flex flex-wrap gap-1">
+      {views.map((view) => {
+        const isActive = view === active;
+        return (
+          <Link
+            key={view}
+            // The default drops the parameter rather than spelling it out, so
+            // the plain URL stays the canonical one.
+            href={view === "all" ? `${basePath}/team/matches` : `${basePath}/team/matches?view=${view}`}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+              isActive
+                ? "bg-gold-muted text-white"
+                : "text-grey-light hover:bg-bg-tertiary hover:text-white",
+            )}
+          >
+            {HISTORY_VIEW_LABELS[view]}
+            <span className="ml-1.5 tabular-nums opacity-60">{counts[view]}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
 export function TeamHistoryView({
-  games,
+  entries,
+  counts,
+  view,
   version,
   championMap,
   playerNames,
@@ -23,68 +80,63 @@ export function TeamHistoryView({
   notesFor,
   currentUserId,
 }: {
-  games: TeamGameView[];
+  /** Already filtered to `view`, newest first. */
+  entries: HistoryEntry[];
+  /** Over the whole history, not the filtered slice — see ViewTabs. */
+  counts: Record<HistoryView, number>;
+  view: HistoryView;
   version: string;
   championMap: Map<number, ChampionInfo>;
   playerNames: PlayerLookup;
   basePath?: string;
-  notesFor?: (game: TeamGameView) => TeamNoteThread[];
+  notesFor?: (entry: HistoryEntry) => TeamNoteThread[] | undefined;
   currentUserId?: string | null;
 }) {
-  const series = groupBySeries(games);
+  const record = historyRecord(entries);
 
   return (
-    <div className="flex flex-col gap-8">
-      {series.map((entry) => {
-        const wins = entry.games.filter((g) => g.win).length;
-
-        return (
-          <section key={entry.series.id} className="flex flex-col gap-3">
-            {/* The series header is the anchor for a block of game cards, so it
-                carries the identifying facts and the cards carry none of them. */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <Link
-                href={`${basePath}/team/matches/${entry.series.id}`}
-                className="group flex items-center gap-1.5"
-              >
-                <span className="font-heading text-lg font-semibold text-white transition-colors group-hover:text-gold-bright">
-                  {entry.opponent.name}
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ViewTabs active={view} counts={counts} basePath={basePath} />
+        <p className="text-xs tabular-nums text-grey-light">
+          {record.games === 0 ? (
+            <span className="text-grey-mid">No games</span>
+          ) : (
+            <>
+              {record.wins}–{record.losses}
+              <span className={cn("ml-1.5", winRateTone(record.winRate))}>{record.winRate}%</span>
+              {/* Named rather than folded in. A civil war is in the list and in
+                  the game count, and belongs in neither column of the record. */}
+              {record.undecided > 0 && (
+                <span className="ml-1.5 text-grey-mid">
+                  · {record.undecided} civil war{record.undecided === 1 ? "" : "s"}
                 </span>
-                <ChevronRight className="h-4 w-4 text-grey-mid transition-colors group-hover:text-gold-bright" />
-              </Link>
-              <SeriesScore wins={wins} losses={entry.games.length - wins} />
-              <MetaChip>{seriesLabel(entry.series, entry.competition)}</MetaChip>
-              {entry.series.fearless && <MetaChip>Fearless</MetaChip>}
-              <span className="ml-auto text-xs text-grey-mid">
-                {entry.series.played_on}
-                <span className="mx-1 opacity-50">·</span>
-                {formatRelativeTime(entry.series.created_at)}
-              </span>
-            </div>
+              )}
+            </>
+          )}
+        </p>
+      </div>
 
-            {entry.series.notes && (
-              <p className="border-l-2 border-border pl-3 text-sm whitespace-pre-wrap text-grey-light">
-                {entry.series.notes}
-              </p>
-            )}
-
-            <div className="flex flex-col gap-3">
-              {entry.games.map((game) => (
-                <TeamGameCard
-                  key={game.id}
-                  game={game}
-                  version={version}
-                  championMap={championMap}
-                  playerNames={playerNames}
-                  notes={notesFor?.(game)}
-                  currentUserId={currentUserId}
-                  basePath={basePath}
-                />
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      {entries.length === 0 ? (
+        <p className="text-sm text-grey-mid">
+          Nothing recorded under this filter yet.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {entries.map((entry) => (
+            <TeamHistoryRow
+              key={`${entry.source}-${entry.id}`}
+              entry={entry}
+              version={version}
+              championMap={championMap}
+              playerNames={playerNames}
+              basePath={basePath}
+              notes={notesFor?.(entry)}
+              currentUserId={currentUserId}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

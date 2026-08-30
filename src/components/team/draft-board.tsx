@@ -1,179 +1,25 @@
-import Link from "next/link";
-import { championDisplayName, type ChampionInfo } from "@/lib/ddragon";
-import { formatDuration, formatKDA } from "@/lib/format";
-import { formatRoleShort } from "@/lib/roles";
-import {
-  BANS_PER_SIDE,
-  TEAM_ROLES,
-  nicknameOf,
-  type TeamGameView,
-  type TeamPickRow,
-  type TeamRole,
-} from "@/lib/team/types";
+import { formatDuration } from "@/lib/format";
+import type { ChampionInfo } from "@/lib/ddragon";
+import { pickChampions } from "@/lib/team/history";
+import type { TeamGameView } from "@/lib/team/types";
 import type { TeamNoteThread } from "@/lib/team/notes";
-import { ChampionIcon } from "@/components/champion-icon";
+import { CompareBoard, type PlayerLookup } from "@/components/team/compare-board";
 import { TeamGameNotes } from "@/components/team/game-notes";
 import { MetaChip, ResultBadge, SideBadge } from "@/components/team/ui";
 import { cn } from "@/lib/utils";
 
-// Read-only view of one game's draft. Server component — no interactivity, and
-// keeping it off the client means the champion map isn't serialised into the
-// RSC payload for every game on the page.
+// Read-only view of one team match's draft. Server component — no
+// interactivity, and keeping it off the client means the champion map isn't
+// serialised into the RSC payload for every game on the page.
 //
-// Laid out as five *role-paired* rows rather than two independent team lists.
-// Two lists put a champion next to a role label and pushed its own K/D/A to the
-// far side of a greedy spacer, which is backwards: the champion and its stats
-// are one fact. Pairing also makes the lane matchup — the thing you actually
-// review a scrim for — readable straight down the middle, and halves the number
-// of role labels on screen.
+// The board itself lives in compare-board.tsx, because the team match history
+// renders the same two-composition layout for a flex game, which has picks but
+// no opponent row and no `TeamGameView` to hang them off. This file is what
+// turns a team match into that shape.
 
-export type PlayerLookup = Map<string, { display_name: string; slug: string }>;
-
-function PickSide({
-  pick,
-  mirrored,
-  version,
-  championMap,
-  playerNames,
-  durationSeconds,
-  basePath,
-}: {
-  pick: TeamPickRow | undefined;
-  /** Enemy side: icon on the right, text right-aligned, so the two teams face off. */
-  mirrored?: boolean;
-  version: string;
-  championMap: Map<number, ChampionInfo>;
-  playerNames: PlayerLookup;
-  durationSeconds: number | null;
-  basePath: string;
-}) {
-  if (!pick) {
-    // Unreachable through the form (ten picks are required and the database
-    // enforces one per role per side) but a half-written row shouldn't take the
-    // page down with it.
-    return <div className="h-10 rounded-sm bg-bg-tertiary/40" />;
-  }
-
-  const roster = pick.player_id ? playerNames.get(pick.player_id) : undefined;
-  // An imported pick stores the whole Riot ID, but this line is tight enough
-  // that CS/min gets dropped on a narrow screen to buy the name room — spending
-  // that back on "#LAS" five times over would be a poor trade. The tag is on
-  // hover instead, and in full on the scouting page where there's space.
-  const storedName = pick.player_name?.trim() || null;
-  const who = roster?.display_name ?? (storedName && nicknameOf(storedName));
-  const champion = championDisplayName(
-    pick.champion_id,
-    championMap,
-    pick.champion_name,
-  );
-  const csPerMin =
-    durationSeconds && durationSeconds > 0
-      ? pick.total_cs / (durationSeconds / 60)
-      : null;
-
-  return (
-    <div
-      className={cn(
-        "flex min-w-0 items-center gap-2",
-        mirrored && "flex-row-reverse",
-      )}
-    >
-      <ChampionIcon
-        championId={pick.champion_id}
-        championName={pick.champion_name}
-        version={version}
-        championMap={championMap}
-        size="md"
-        className="sm:h-10 sm:w-10"
-      />
-      <div className={cn("min-w-0 flex-1", mirrored && "text-right")}>
-        <p className="truncate text-sm leading-tight font-medium text-white">
-          {champion}
-        </p>
-        {/* Player and stats on one line directly under the champion: they
-            describe the same pick, so they belong in the same block.
-            Truncating rather than wrapping keeps all five rows the same
-            height — see the sm: guards below for what gets dropped first when
-            there isn't room, since truncation would otherwise eat the CS
-            number, which is the least droppable thing on the line. */}
-        <p className="truncate text-xs leading-tight text-grey-mid tabular-nums">
-          {who && (
-            <>
-              {roster ? (
-                <Link
-                  href={`${basePath}/player/${roster.slug}`}
-                  className="text-grey-light transition-colors hover:text-gold-bright"
-                >
-                  {who}
-                </Link>
-              ) : (
-                <span className="text-grey-light" title={storedName ?? undefined}>
-                  {who}
-                </span>
-              )}
-              <span className="mx-1 opacity-50">·</span>
-            </>
-          )}
-          <span className="text-grey-light">
-            {formatKDA(pick.kills, pick.deaths, pick.assists)}
-          </span>
-          <span className="mx-1 opacity-50">·</span>
-          {pick.total_cs} cs
-          {/* CS/min is the first thing to go on a narrow screen: it's derived
-              from the raw CS already shown, so dropping it loses nothing you
-              can't recompute, and it buys ~7 characters back for the name. */}
-          {csPerMin !== null && (
-            <span className="hidden sm:inline"> ({csPerMin.toFixed(1)})</span>
-          )}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function BanRow({
-  bans,
-  mirrored,
-  version,
-  championMap,
-}: {
-  bans: number[];
-  mirrored?: boolean;
-  version: string;
-  championMap: Map<number, ChampionInfo>;
-}) {
-  // Empty slots are rendered, not skipped: five boxes always means "five bans",
-  // so a series where somebody only recorded three is visibly incomplete rather
-  // than silently looking like a three-ban format.
-  const slots = Array.from(
-    { length: Math.max(BANS_PER_SIDE, bans.length) },
-    (_, i) => bans[i],
-  );
-
-  return (
-    <div
-      className={cn("flex items-center gap-1", mirrored && "flex-row-reverse")}
-    >
-      {slots.map((championId, i) =>
-        championId === undefined ? (
-          <span
-            key={`empty-${i}`}
-            className="h-6 w-6 shrink-0 rounded-sm border border-dashed border-border/60"
-          />
-        ) : (
-          <ChampionIcon
-            key={`${championId}-${i}`}
-            championId={championId}
-            version={version}
-            championMap={championMap}
-            size="sm"
-            banned
-          />
-        ),
-      )}
-    </div>
-  );
-}
+// Re-exported: every caller of DraftBoard imports the lookup type from here, and
+// the type belongs with the board rather than with the adapter.
+export type { PlayerLookup };
 
 export function DraftBoard({
   game,
@@ -192,87 +38,20 @@ export function DraftBoard({
   /** "/demo" on the public copy — prefixes the link from a pick to its player. */
   basePath?: string;
 }) {
-  const byRole = (ally: boolean) =>
-    new Map(
-      game.picks
-        .filter((p) => p.ally === ally)
-        .map((p) => [p.team_position, p]),
-    );
-  const allies = byRole(true);
-  const enemies = byRole(false);
-
-  // Row template is shared by the ban strip and every pick row so the centre
-  // column stays a true axis all the way down the card.
-  //
-  // TeamGameCard caps the measure this sits in. Without that cap, 1fr per side
-  // on a max-w-6xl page pins the two teams to opposite edges with a canyon
-  // between them — the opposite of a face-off, and the reason the champion felt
-  // stranded from its own stats.
-  const row =
-    "grid grid-cols-[1fr_2.25rem_1fr] items-center gap-2 sm:grid-cols-[1fr_3rem_1fr] sm:gap-3";
-
   return (
-    <div className="flex w-full flex-col gap-2">
-      <div className={cn(row, "text-xs")}>
-        <span className="truncate font-medium text-gold">{ourName}</span>
-        <span className="text-center text-[10px] font-semibold tracking-wider text-grey-mid uppercase">
-          vs
-        </span>
-        <span className="truncate text-right font-medium text-grey-light">
-          {game.opponent.name}
-        </span>
-      </div>
-
-      <div className={cn(row)}>
-        <BanRow
-          bans={game.ally_bans}
-          version={version}
-          championMap={championMap}
-        />
-        <span className="text-center text-[10px] font-semibold tracking-wider text-grey-mid uppercase">
-          Bans
-        </span>
-        <BanRow
-          bans={game.enemy_bans}
-          mirrored
-          version={version}
-          championMap={championMap}
-        />
-      </div>
-
-      <div className="flex flex-col gap-0.5 border-t border-border pt-2">
-        {TEAM_ROLES.map((role: TeamRole) => (
-          <div
-            key={role}
-            className={cn(
-              row,
-              "rounded-sm py-0.5 transition-colors hover:bg-bg-tertiary/40",
-            )}
-          >
-            <PickSide
-              pick={allies.get(role)}
-              version={version}
-              championMap={championMap}
-              playerNames={playerNames}
-              durationSeconds={game.duration_seconds}
-              basePath={basePath}
-            />
-            <span className="text-center text-[10px] font-semibold tracking-wider text-grey-mid">
-              {formatRoleShort(role)}
-            </span>
-            <PickSide
-              pick={enemies.get(role)}
-              mirrored
-              version={version}
-              championMap={championMap}
-              playerNames={playerNames}
-              durationSeconds={game.duration_seconds}
-              basePath={basePath}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
+    <CompareBoard
+      allies={pickChampions(game.picks, true)}
+      enemies={pickChampions(game.picks, false)}
+      allyBans={game.ally_bans}
+      enemyBans={game.enemy_bans}
+      ourName={ourName}
+      theirName={game.opponent.name}
+      durationSeconds={game.duration_seconds}
+      version={version}
+      championMap={championMap}
+      playerNames={playerNames}
+      basePath={basePath}
+    />
   );
 }
 

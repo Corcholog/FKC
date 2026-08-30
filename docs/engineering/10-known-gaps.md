@@ -286,10 +286,25 @@ therefore interleave a day's team games with that day's soloQ arbitrarily.
 `computeStreak` sorts its own input, so the result is stable rather than insertion-ordered
 — but it is day-accurate and no finer.
 
-**The demo publishes soloQ only, apart from the team overview.** Its `/matches` filter is
-fixed rather than offered, and there is no scope switch on `/demo/player/[alias]`. That is
-a choice — the demo publishes one reading of the data — but it means the demo's numbers and
-the private app's can differ for the same player without either being wrong.
+**The demo publishes soloQ only, apart from the team section.** `/demo/team` and
+`/demo/team/matches` both count flex; `/demo/matches` has a fixed queue filter rather than
+an offered one, and there is no scope switch on `/demo/player/[alias]`. That is a choice —
+the demo publishes one reading of the data — but it means the demo's numbers and the
+private app's can differ for the same player without either being wrong.
+
+**`demo_matches` has no ban columns, so the demo's flex rows show no draft.** Migration 024
+added `blue_bans`/`red_bans` to `matches`, and 018 had already created that view with an
+explicit column list — which is fixed at creation. The team match history selects them only
+when it is not on the demo (PostgREST fails the whole request on an unknown column, so a
+tolerant select would blank the page rather than the strip) and renders no ban strip when
+it has none, since five empty boxes would claim nobody banned. Publishing them is a
+one-line `create or replace view` whenever it's wanted; bans identify nobody.
+
+**A flex row in the team history links out rather than opening a scoreboard.** The ten
+participants are all in `match_participants` and the panel could render every one of them,
+but nine of those are strangers, and a full scoreboard is a step toward republishing a lobby
+this app deliberately doesn't. The board shows the compositions; League of Graphs has the
+rest.
 
 **A partial flex stack is counted in the per-player table and not in the record.** The
 caption says so, but the two numbers on that panel genuinely count different things and

@@ -13,10 +13,10 @@ export default function TeamLayout({ children }: { children: React.ReactNode }) 
         <div>
           <h1 className="font-heading text-2xl font-semibold text-white">Team</h1>
           <p className="text-sm text-grey-light">
-            Every game played as a team — scrims, friendlies and tournament officials —
+            Every game played as a team. Scrims, friendlies and tournament officials are
             entered by hand or read out of a replay, because Riot&apos;s API doesn&apos;t
-            serve custom games. Flex queue is counted here too and lives in the roster&apos;s
-            match history.
+            serve custom games; ranked flex comes from the API and sits beside them in the
+            match history, one row per game rather than one per player.
           </p>
         </div>
         <Link href="/team/matches/new" className={cn(buttonVariants({ size: "sm" }))}>

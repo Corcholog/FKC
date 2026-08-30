@@ -27,15 +27,16 @@ src/app/
     ├── player/[slug]/page.tsx  /player/x    Detail: LP chart, top champions, roles,
     │                                        matchups, heatmap, recent form
     ├── tierlists/            /tierlists     Hand-made rankings; [slug] is the editor
-    ├── scrims/               Section with its own layout + tab strip (see below)
-    │   ├── layout.tsx        Heading, tabs, "New scrim" — wraps everything under it
-    │   ├── page.tsx          /scrims                  Overview: records, players
-    │   ├── team/             /scrims/team             The filtered team view — §15
-    │   ├── history/          /scrims/history          Every series, drafts rendered
-    │   ├── drafts/           /scrims/drafts           Pick/ban aggregates
-    │   ├── opponents/        /scrims/opponents        Teams; [slug] is the scouting page
-    │   ├── new/              /scrims/new              The entry form
-    │   ├── [id]/             /scrims/x                One series
+    ├── team/                 Section with its own layout + tab strip (see below)
+    │   ├── layout.tsx        Heading, tabs, "New series" — wraps everything under it
+    │   ├── page.tsx          /team                    Overview: records, flex, players
+    │   ├── matches/          /team/matches            The match history — flex and team
+    │   │                                              matches, one row per game; [id] is
+    │   │                                              one series, plus new/ and [id]/edit
+    │   ├── scouting/         /team/scouting           The filtered game view — §15
+    │   ├── drafts/           /team/drafts             Pick/ban aggregates
+    │   ├── opponents/        /team/opponents          Teams; [slug] is the scouting page
+    │   ├── roster/           /team/roster             The nine players, as a grid
     │   └── actions.ts        Save / delete series, opponent notes, game-note CRUD
     ├── notes/                No page.tsx, so no route — just the note CRUD server
     │   ├── actions.ts        actions and their form-state type, shared by every
@@ -96,7 +97,7 @@ clip the underline that caused it. They wrap instead.
 
 ### Active state is prefix-matched
 
-`active={pathname === item.href}` meant `/scrims/history` lit nothing — and that had always
+`active={pathname === item.href}` meant `/team/matches/x` lit nothing — and that had always
 been true of `/player/[slug]` and `/tierlists/[slug]` too, it just wasn't noticed because
 those are leaf pages you arrive at by clicking through. `isActive()` special-cases `/`
 (every path starts with it) and prefix-matches the rest.
@@ -391,11 +392,15 @@ The general principle: **an aggregate that can't be decomposed invites distrust.
 roster-wide heatmap cell is exactly the shape of number someone looks at and thinks "that
 isn't me" — so let them check.
 
-## 11. The scrim draft board
+## 11. The draft board
 
-`components/team/draft-board.tsx` is the densest component in the app — twenty
+`components/team/compare-board.tsx` is the densest component in the app — twenty
 champions, ten stat lines and a result, per game — so its layout is load-bearing rather
 than decorative.
+
+It takes two plain arrays of champions rather than a game, which is what lets one board
+render a hand-entered scrim (`draft-board.tsx` is the adapter) and a ranked flex game in the
+match history, where there is no opponent row and no draft anybody typed.
 
 ### Role-paired rows, not two team lists
 
@@ -438,8 +443,8 @@ three-ban format.
 
 ### The note thread under the draft
 
-Every game card carries a thread (`components/team/scrim-game-notes.tsx`), on both
-`/scrims/history` and `/scrims/[id]`. Anyone can answer any note, **including a reply** — but
+Every game card carries a thread (`components/team/game-notes.tsx`), on both
+`/team/matches` — inside the expanded row — and `/team/matches/[id]`. Anyone can answer any note, **including a reply** — but
 the drawing stops at two levels however deep the conversation actually goes. Answers sit under
 the root behind a single left rule, in time order, and one whose target *isn't* the root prints
 `replying to <name>` above itself instead of earning another indent. Indenting per level inside

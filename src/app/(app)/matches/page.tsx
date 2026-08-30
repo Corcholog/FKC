@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
@@ -70,6 +71,21 @@ export default async function MatchesPage({
                 ? `${selectedPlayer.display_name}'s match history.`
                 : "Every tracked match across the squad."}
             </p>
+            {/* This list is told from a player's point of view — one row per
+                tracked player in a game — which is right for soloQ and reads as
+                repetition in flex, where five of them queued together on
+                purpose. The team's own view of those games is a different page,
+                so say where it is rather than quietly deduplicating here and
+                making the row count disagree with the game count. */}
+            {queue !== "solo" && !selectedPlayer && (
+              <p className="mt-1 text-xs text-grey-mid">
+                A flex game the roster five-stacked shows a row per player here.{" "}
+                <Link href="/team/matches" className="text-gold-bright hover:text-gold">
+                  The team match history
+                </Link>{" "}
+                shows it once, with both compositions.
+              </p>
+            )}
           </div>
         </div>
         <MatchesFilter

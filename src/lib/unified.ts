@@ -67,6 +67,22 @@ export type ParticipantInput = {
   game_duration_seconds: number;
 };
 
+/**
+ * The instant a team match sorts at, given the day it was played.
+ *
+ * Midday rather than midnight: a date-only value read back as a timestamp lands
+ * at 00:00 UTC, which is the previous evening in Buenos Aires — so a game would
+ * sort into the day before the one it was played.
+ *
+ * Every surface that puts team matches in time order with Riot games has to use
+ * this same key, or a scrim and that evening's flex game order by two different
+ * conventions. The result is a UTC ISO string, which compares lexicographically
+ * against the ones PostgREST returns.
+ */
+export function teamMatchTimestamp(playedOn: string): string {
+  return `${playedOn}T12:00:00Z`;
+}
+
 export function fromParticipant(
   row: ParticipantInput,
   source: "soloq" | "flexq",
@@ -132,10 +148,7 @@ export function fromTeamPick(
     deaths: pick.deaths,
     assists: pick.assists,
     total_cs: pick.total_cs,
-    // Midday rather than midnight: a date-only value read back as a timestamp
-    // lands at 00:00 UTC, which is the previous evening in Buenos Aires — so a
-    // game would sort into the day before the one it was played.
-    game_creation: `${series.played_on}T12:00:00Z`,
+    game_creation: teamMatchTimestamp(series.played_on),
     game_duration_seconds: game.duration_seconds ?? 0,
     damage_dealt_to_champions: null,
     gold_earned: null,

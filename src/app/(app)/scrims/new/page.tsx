@@ -3,7 +3,7 @@ import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
 import { mainRole } from "@/lib/roles";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { loadOpponents } from "@/lib/scrims/queries";
-import { privateSource } from "@/lib/data-source";
+import { privateSource, SOLOQ_PARTICIPANTS } from "@/lib/data-source";
 import { SCRIM_ROLES, type ScrimRole } from "@/lib/scrims/types";
 import { ScrimSeriesForm } from "@/components/scrims/scrim-series-form";
 
@@ -82,7 +82,7 @@ async function seedLineup(
   // No scrim history yet — fall back to what soloq says each player is.
   const positions = await fetchAllRows<SoloqPositionRow>((from, to) =>
     supabase
-      .from("match_participants")
+      .from(SOLOQ_PARTICIPANTS)
       .select("player_id, team_position")
       .not("player_id", "is", null)
       .range(from, to)

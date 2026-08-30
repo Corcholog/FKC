@@ -57,6 +57,11 @@ export async function addNote(
 
     // RLS enforces this too (notes_insert_own), but checking here turns a raw
     // policy violation into a readable message.
+    //
+    // Deliberately the base table, not soloq_participants like the reads in
+    // layout.tsx and summary.ts: this is an ownership check on one row by id,
+    // and a note on a flex game is still that player's note. Scoping it to a
+    // queue would reject the write with "not your game".
     const { data: participant } = await supabase
       .from("match_participants")
       .select("player_id")

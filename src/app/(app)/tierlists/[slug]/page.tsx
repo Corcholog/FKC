@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { SOLOQ_PARTICIPANTS } from "@/lib/data-source";
 import { maybeRow, rows } from "@/lib/supabase/read";
 import { getChampionMap, getLatestVersion, realChampions } from "@/lib/ddragon";
 import { allChampionsByPlayer, type ChampionStatInput } from "@/lib/champion-stats";
@@ -51,7 +52,7 @@ export default async function TierListEditorPage({
       .eq("player_id", player.id)
       .maybeSingle<{ tiers: unknown }>(),
     supabase
-      .from("match_participants")
+      .from(SOLOQ_PARTICIPANTS)
       .select(
         "player_id, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, matches!inner(game_duration_seconds)",
       )

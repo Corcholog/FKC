@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { SOLOQ_PARTICIPANTS } from "@/lib/data-source";
 import { createClient } from "@/lib/supabase/server";
 import { loadAiContext } from "@/lib/ai-context";
 import {
@@ -73,7 +74,7 @@ async function handle(request: NextRequest) {
   // game the previous summary already described.
   const newGamesSince = async (playerId: string, since: string) => {
     const { count } = await admin
-      .from("match_participants")
+      .from(SOLOQ_PARTICIPANTS)
       .select("id, matches!inner(game_creation)", { count: "exact", head: true })
       .eq("player_id", playerId)
       .gt("matches.game_creation", since);

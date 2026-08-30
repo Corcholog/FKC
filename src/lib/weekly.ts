@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { SOLOQ_PARTICIPANTS } from "@/lib/data-source";
 import { ladderPoints } from "@/lib/rank";
 import { aggregateDuoStats, duoWinRate, MIN_DUO_GAMES, type DuoInput } from "@/lib/duo-stats";
 import { groupIntoSessions, type SessionInput } from "@/lib/sessions";
@@ -190,7 +191,7 @@ export async function postWeeklyWrap(admin: SupabaseClient): Promise<void> {
       .returns<PlayerRow[]>(),
     fetchAllRows<WeekRow>((from, to) =>
       admin
-        .from("match_participants")
+        .from(SOLOQ_PARTICIPANTS)
         .select("match_id, player_id, team_id, win, matches!inner(game_creation, game_duration_seconds)")
         .not("player_id", "is", null)
         .gte("matches.game_creation", since)

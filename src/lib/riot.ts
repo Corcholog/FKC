@@ -2,11 +2,60 @@ import { SlidingWindowLimiter, sleep } from "@/lib/rate-limiter";
 
 // Match-V5 and Account-V1 use regional routing; League-V4 uses platform routing.
 // See docs/04_RIOT_API_INTEGRATION.md §1.
-const REGIONAL_BASE = "https://americas.api.riotgames.com";
+//
+// The distinction stopped being academic when the roster gained an account on
+// BR: BR and LAS are different *platforms* (br1 vs la2, so rank is a different
+// host) but the same *region* (both americas, so match history and Riot ID
+// lookup are not). Getting that backwards reports an empty rank rather than an
+// error, which is why the fallback below throws.
+const REGIONAL_BASES: Record<string, string> = {
+  americas: "https://americas.api.riotgames.com",
+};
 
 const PLATFORM_BASES: Record<string, string> = {
+  LA1: "https://la1.api.riotgames.com",
   LA2: "https://la2.api.riotgames.com",
+  BR1: "https://br1.api.riotgames.com",
+  NA1: "https://na1.api.riotgames.com",
 };
+
+// Which regional host serves a platform's match history. Every platform we
+// support is in americas today; the map exists so adding one outside it is a
+// compile-time obligation rather than a silent wrong-region query.
+const PLATFORM_REGION: Record<string, string> = {
+  LA1: "americas",
+  LA2: "americas",
+  BR1: "americas",
+  NA1: "americas",
+};
+
+/** The platform every account defaults to — LAS, where the roster lives. */
+export const DEFAULT_PLATFORM = "LA2";
+
+export const SUPPORTED_PLATFORMS = Object.keys(PLATFORM_BASES);
+
+// Thrown rather than defaulted. An unknown platform used to fall back to LA2,
+// which for a BR account returns an empty entry list — a player who simply
+// looks unranked forever, with nothing in any log to say why.
+function platformBase(platform: string): string {
+  const base = PLATFORM_BASES[platform];
+  if (!base) {
+    throw new Error(
+      `Unknown Riot platform "${platform}". Known platforms: ${SUPPORTED_PLATFORMS.join(", ")}.`,
+    );
+  }
+  return base;
+}
+
+function regionalBase(platform: string = DEFAULT_PLATFORM): string {
+  const region = PLATFORM_REGION[platform];
+  if (!region) {
+    throw new Error(
+      `Unknown Riot platform "${platform}". Known platforms: ${SUPPORTED_PLATFORMS.join(", ")}.`,
+    );
+  }
+  return REGIONAL_BASES[region];
+}
 
 // docs/04_RIOT_API_INTEGRATION.md §5: 20 req/s and 100 req/2min on a personal
 // key. Both are shaved slightly — our clock starts the window when we send,
@@ -128,18 +177,52 @@ async function riotFetch(url: string, apiKey: string) {
   }
 }
 
-export async function getPuuidByRiotId(gameName: string, tagLine: string, apiKey: string) {
-  const url = `${REGIONAL_BASE}/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
+export async function getPuuidByRiotId(
+  gameName: string,
+  tagLine: string,
+  apiKey: string,
+  platform: string = DEFAULT_PLATFORM,
+) {
+  const url = `${regionalBase(platform)}/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
   const data = (await riotFetch(url, apiKey)) as { puuid: string };
   return data.puuid;
 }
 
-export async function getRankedSoloMatchIds(
+/**
+ * One page of an account's match ids for a single queue, newest first.
+ *
+ * `queue` is a Riot queue id (420 solo/duo, 440 flex) and filters server-side,
+ * so a walk for one queue never spends a detail call on the other.
+ *
+ * `startTime` is Unix *seconds* and is what keeps the flex backfill affordable:
+ * flex history starts months before the app's soloQ tracking date, and without
+ * a floor the walk pages through everything older to discover it isn't wanted.
+ */
+export async function getMatchIds(
   puuid: string,
   apiKey: string,
-  { start = 0, count = 20 }: { start?: number; count?: number } = {},
+  {
+    queue,
+    startTime,
+    start = 0,
+    count = 20,
+    platform = DEFAULT_PLATFORM,
+  }: {
+    queue: number;
+    startTime?: number;
+    start?: number;
+    count?: number;
+    platform?: string;
+  },
 ) {
-  const url = `${REGIONAL_BASE}/lol/match/v5/matches/by-puuid/${puuid}/ids?queue=420&start=${start}&count=${count}`;
+  const params = new URLSearchParams({
+    queue: String(queue),
+    start: String(start),
+    count: String(count),
+  });
+  if (typeof startTime === "number") params.set("startTime", String(Math.floor(startTime)));
+
+  const url = `${regionalBase(platform)}/lol/match/v5/matches/by-puuid/${puuid}/ids?${params}`;
   return (await riotFetch(url, apiKey)) as string[];
 }
 
@@ -247,18 +330,48 @@ export const CHALLENGE_KEYS = [
   "visionScorePerMinute",
 ] as const;
 
+export type MatchTeamDto = {
+  teamId: number;
+  // Present on Summoner's Rift drafts and absent on modes without a ban phase,
+  // so every reader has to cope with the key not being there.
+  bans?: { championId: number; pickTurn: number }[];
+};
+
 export type MatchDto = {
   info: {
     queueId: number;
     gameCreation: number;
     gameDuration: number;
     gameVersion: string;
+    teams?: MatchTeamDto[];
     participants: MatchParticipantDto[];
   };
 };
 
-export async function getMatchById(matchId: string, apiKey: string) {
-  const url = `${REGIONAL_BASE}/lol/match/v5/matches/${matchId}`;
+/**
+ * One side's bans, in pick-turn order, for storing on the match.
+ *
+ * Riot writes `-1` for a ban that was never locked in (a timeout, or a
+ * disconnect during the ban phase). Those are dropped rather than stored,
+ * because `-1` is not a champion and every consumer would have to know that.
+ * Order is preserved for the rest — it is the only priority signal a draft
+ * carries, the same call `scrim_games.ally_bans` makes.
+ */
+export function bansForTeam(match: MatchDto, teamId: number): number[] {
+  const team = match.info.teams?.find((t) => t.teamId === teamId);
+  if (!team?.bans) return [];
+  return [...team.bans]
+    .sort((a, b) => a.pickTurn - b.pickTurn)
+    .map((b) => b.championId)
+    .filter((id) => id > 0);
+}
+
+export async function getMatchById(
+  matchId: string,
+  apiKey: string,
+  platform: string = DEFAULT_PLATFORM,
+) {
+  const url = `${regionalBase(platform)}/lol/match/v5/matches/${matchId}`;
   return (await riotFetch(url, apiKey)) as MatchDto;
 }
 
@@ -271,11 +384,32 @@ export type LeagueEntryDto = {
   losses: number;
 };
 
-export async function getRankedSoloEntry(puuid: string, platform: string, apiKey: string) {
-  const base = PLATFORM_BASES[platform] ?? PLATFORM_BASES.LA2;
-  const url = `${base}/lol/league/v4/entries/by-puuid/${puuid}`;
+export const RANKED_SOLO_QUEUE_TYPE = "RANKED_SOLO_5x5";
+export const RANKED_FLEX_QUEUE_TYPE = "RANKED_FLEX_SR";
+
+export type LeagueEntries = {
+  solo: LeagueEntryDto | null;
+  flex: LeagueEntryDto | null;
+};
+
+/**
+ * Both ranked queues for one account, from a single call.
+ *
+ * League-V4 returns every queue the account is ranked in, so flex rank costs
+ * nothing on top of solo — which is why the sync refreshes both rather than
+ * treating flex rank as a feature with a price.
+ */
+export async function getLeagueEntries(
+  puuid: string,
+  platform: string,
+  apiKey: string,
+): Promise<LeagueEntries> {
+  const url = `${platformBase(platform)}/lol/league/v4/entries/by-puuid/${puuid}`;
   const entries = (await riotFetch(url, apiKey)) as LeagueEntryDto[];
-  return entries.find((e) => e.queueType === "RANKED_SOLO_5x5") ?? null;
+  return {
+    solo: entries.find((e) => e.queueType === RANKED_SOLO_QUEUE_TYPE) ?? null,
+    flex: entries.find((e) => e.queueType === RANKED_FLEX_QUEUE_TYPE) ?? null,
+  };
 }
 
 // Shared mapping from a caught RiotApiError to a message safe to show in the admin UI.

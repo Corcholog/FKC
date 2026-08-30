@@ -102,6 +102,23 @@ function NavLink({
   );
 }
 
+/**
+ * "3 soloQ, 2 flex" — or "no new matches" when a run found nothing.
+ *
+ * Split by queue rather than one total because the two are worth different
+ * amounts of attention: a sync that turns up flex games means the team played
+ * together, and a bare "5 new match(es)" hides that.
+ */
+function formatNewMatches(byQueue: Record<string, number> | undefined): string {
+  const parts = [
+    [byQueue?.solo ?? 0, "soloQ"],
+    [byQueue?.flex ?? 0, "flex"],
+  ] as const;
+  const found = parts.filter(([count]) => count > 0);
+  if (found.length === 0) return "no new matches";
+  return found.map(([count, label]) => `${count} ${label}`).join(", ");
+}
+
 export function Navbar({
   initialSyncing = false,
   accountLabel,
@@ -131,6 +148,10 @@ export function Navbar({
     router.refresh();
   }
 
+  // No queue parameter: the navbar button is the "just bring everything up to
+  // date" affordance and covers both queues. Aiming a sync at one queue is a
+  // deliberate act that belongs next to the per-queue timestamps in Settings,
+  // not behind a dropdown on a button most people press without reading.
   async function handleSync() {
     setSyncing(true);
     try {
@@ -139,7 +160,7 @@ export function Navbar({
       if (!res.ok) {
         toast.error(data.error ?? "Sync failed.");
       } else {
-        const result = `Synced: ${data.newMatches} new match(es), ${data.playersProcessed} player(s).`;
+        const result = `Synced: ${formatNewMatches(data.newMatchesByQueue)}, ${data.playersProcessed} player(s).`;
         // A partial run isn't a failure — Riot's rate limit ran the sync out of
         // time, and the next one resumes from the same point. Say so, though,
         // or a backfill looks stuck.

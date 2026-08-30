@@ -4,8 +4,13 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireSession } from "@/lib/auth";
-import { getPuuidByRiotId, describeRiotError } from "@/lib/riot";
-import { backfillPlayerHistory, refetchMatchDetails, RiotKeyInvalidError } from "@/lib/sync";
+import {
+  getPuuidByRiotId,
+  describeRiotError,
+  DEFAULT_PLATFORM,
+  SUPPORTED_PLATFORMS,
+} from "@/lib/riot";
+import { backfillAccountHistory, refetchMatchDetails, RiotKeyInvalidError } from "@/lib/sync";
 import { MAX_CLAN_CONTEXT_CHARS, MAX_PLAYER_CONTEXT_CHARS } from "@/lib/ai-context";
 import { playerSlug } from "@/lib/slug";
 import {
@@ -62,6 +67,67 @@ async function deleteAvatar(url: string | null) {
   await admin.storage.from("avatars").remove([path]);
 }
 
+/**
+ * Resolves a Riot ID to a puuid, or returns a message fit for the form.
+ *
+ * Every account-creating path needs the same three steps — read the key,
+ * resolve, translate the failure — and they were duplicated across addPlayer
+ * and updatePlayer before accounts existed. Now there are four of them.
+ */
+async function resolveAccount(
+  gameName: string,
+  tagLine: string,
+  platform: string,
+): Promise<{ puuid: string } | { error: string }> {
+  const apiKey = await getRiotApiKey();
+  try {
+    return { puuid: await getPuuidByRiotId(gameName, tagLine, apiKey, platform) };
+  } catch (e) {
+    return { error: describeRiotError(e, gameName, tagLine) };
+  }
+}
+
+function readPlatform(formData: FormData): string {
+  const raw = (formData.get("platform") as string)?.trim().toUpperCase();
+  return raw && SUPPORTED_PLATFORMS.includes(raw) ? raw : DEFAULT_PLATFORM;
+}
+
+/**
+ * Walks a newly attached account's history straight away.
+ *
+ * Shared by every path that creates one, because they all have the same
+ * problem: a new account has no cursor, so the daily sync would discover it
+ * 200 match ids at a time over several days. Failure here is reported as
+ * partial success — the account is attached either way, and the next sync
+ * picks the history up.
+ */
+async function backfillNewAccount(puuid: string, label: string): Promise<string> {
+  const admin = createAdminClient();
+  try {
+    const summary = await backfillAccountHistory(admin, puuid);
+    const suffix = summary.partial ? " Hit the rate limit — sync again to finish." : "";
+    return `${label} — backfilled ${summary.newMatches} match(es).${suffix}`;
+  } catch (e) {
+    const isKeyInvalid = e instanceof RiotKeyInvalidError;
+    if (isKeyInvalid) {
+      await admin.from("sync_state").update({ riot_key_valid: false }).eq("id", 1);
+    }
+    const detail = isKeyInvalid
+      ? "Riot API key is invalid or expired."
+      : e instanceof Error
+        ? e.message
+        : "Unknown error.";
+    return `${label}, but the history backfill failed: ${detail} Run a regular sync once the issue is resolved.`;
+  }
+}
+
+function revalidateRoster() {
+  revalidatePath("/settings");
+  revalidatePath("/");
+  revalidatePath("/team");
+  revalidatePath("/player/[slug]", "page");
+}
+
 export async function addPlayer(
   _prevState: PlayerFormState,
   formData: FormData,
@@ -72,52 +138,88 @@ export async function addPlayer(
     const gameName = (formData.get("gameName") as string)?.trim();
     const tagLine = (formData.get("tagLine") as string)?.trim();
     const displayName = (formData.get("displayName") as string)?.trim();
+    const platform = readPlatform(formData);
     const avatarFile = formData.get("avatar") as File | null;
 
     if (!gameName || !tagLine || !displayName) {
       return { error: "Game name, tag line, and display name are required." };
     }
 
-    const apiKey = await getRiotApiKey();
+    const resolved = await resolveAccount(gameName, tagLine, platform);
+    if ("error" in resolved) return { error: resolved.error };
 
-    let puuid: string;
-    try {
-      puuid = await getPuuidByRiotId(gameName, tagLine, apiKey);
-    } catch (e) {
-      return { error: describeRiotError(e, gameName, tagLine) };
-    }
+    // The player row is created first so its generated id exists to key both the
+    // avatar object and the account row. The avatar is uploaded second because
+    // it is the only step that writes outside Postgres — a failure after it
+    // would leave an orphaned object with nothing pointing at it.
+    const { data: created, error: insertError } = await supabase
+      .from("players")
+      .insert({
+        riot_game_name: gameName,
+        riot_tag_line: tagLine,
+        display_name: displayName,
+        slug: playerSlug(gameName, tagLine),
+        platform,
+      })
+      .select("id")
+      .single();
 
-    const avatarUrl = avatarFile && avatarFile.size > 0 ? await uploadAvatar(avatarFile, puuid) : null;
-
-    const { error } = await supabase.from("players").insert({
-      id: puuid,
-      riot_game_name: gameName,
-      riot_tag_line: tagLine,
-      display_name: displayName,
-      slug: playerSlug(gameName, tagLine),
-      avatar_url: avatarUrl,
-      platform: "LA2",
-    });
-
-    if (error) {
-      if (avatarUrl) await deleteAvatar(avatarUrl);
+    if (insertError || !created) {
       return {
         error:
-          error.code === "23505"
-            ? "This player's Riot ID or display name is already tracked."
-            : error.message,
+          insertError?.code === "23505"
+            ? "This player's display name is already taken."
+            : (insertError?.message ?? "Could not add the player."),
       };
     }
 
-    revalidatePath("/settings");
-    revalidatePath("/");
-    revalidatePath("/team");
-    return { success: true };
+    const playerId = created.id as string;
+
+    const { error: accountError } = await supabase.from("player_accounts").insert({
+      puuid: resolved.puuid,
+      player_id: playerId,
+      riot_game_name: gameName,
+      riot_tag_line: tagLine,
+      platform,
+      is_primary: true,
+      track_solo: true,
+    });
+
+    if (accountError) {
+      // Compensating rollback — PostgREST has no client-side transaction, and a
+      // player with no account is a row the sync will never look at and the
+      // settings page can't repair.
+      await supabase.from("players").delete().eq("id", playerId);
+      return {
+        error:
+          accountError.code === "23505"
+            ? "That Riot account is already attached to a player."
+            : accountError.message,
+      };
+    }
+
+    if (avatarFile && avatarFile.size > 0) {
+      const avatarUrl = await uploadAvatar(avatarFile, playerId);
+      await supabase.from("players").update({ avatar_url: avatarUrl }).eq("id", playerId);
+    }
+
+    const message = await backfillNewAccount(resolved.puuid, "Player added");
+    revalidateRoster();
+    return { success: true, message };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong." };
   }
 }
 
+/**
+ * Edits the person: their display fields, and their primary account's Riot ID.
+ *
+ * The Riot ID edit here is for a *rename*. Pointing a roster slot at a
+ * genuinely different Riot account is `addAccount` now — it used to be an
+ * UPDATE of players.id, which meant swapping accounts threw the old account's
+ * history away. Keeping both is strictly better and is the entire point of
+ * player_accounts, so this refuses rather than doing the destructive thing.
+ */
 export async function updatePlayer(
   _prevState: PlayerFormState,
   formData: FormData,
@@ -143,39 +245,55 @@ export async function updatePlayer(
 
     if (fetchError || !existing) return { error: "Player not found." };
 
-    let newPuuid: string | undefined;
-    if (existing.riot_game_name !== gameName || existing.riot_tag_line !== tagLine) {
-      const apiKey = await getRiotApiKey();
-      try {
-        newPuuid = await getPuuidByRiotId(gameName, tagLine, apiKey);
-      } catch (e) {
-        return { error: describeRiotError(e, gameName, tagLine) };
+    const { data: primary, error: primaryError } = await supabase
+      .from("player_accounts")
+      .select("puuid, platform")
+      .eq("player_id", id)
+      .eq("is_primary", true)
+      .maybeSingle();
+    if (primaryError) return { error: primaryError.message };
+    if (!primary) return { error: "This player has no primary account to edit." };
+
+    const renamed =
+      existing.riot_game_name !== gameName || existing.riot_tag_line !== tagLine;
+
+    if (renamed) {
+      const resolved = await resolveAccount(gameName, tagLine, primary.platform as string);
+      if ("error" in resolved) return { error: resolved.error };
+
+      // A cosmetic rename resolves to the same puuid. A different one means
+      // this is a different account, which is an addAccount, not an edit.
+      if (resolved.puuid !== primary.puuid) {
+        return {
+          error:
+            `${gameName}#${tagLine} is a different Riot account, not a rename. ` +
+            "Add it as an account on this player instead — that keeps the history of both.",
+        };
       }
     }
-
-    // A cosmetic Riot ID rename resolves to the same puuid — only a genuine
-    // account swap on this roster slot changes it and needs history backfilled.
-    const accountChanged = newPuuid !== undefined && newPuuid !== id;
-    const finalId = accountChanged ? (newPuuid as string) : id;
 
     let avatarUrl = existing.avatar_url as string | null;
     if (avatarFile && avatarFile.size > 0) {
       await deleteAvatar(avatarUrl);
-      avatarUrl = await uploadAvatar(avatarFile, finalId);
+      avatarUrl = await uploadAvatar(avatarFile, id);
     } else if (removeAvatar) {
       await deleteAvatar(avatarUrl);
       avatarUrl = null;
     }
 
-    const update: Record<string, unknown> = {
-      riot_game_name: gameName,
-      riot_tag_line: tagLine,
-      slug: playerSlug(gameName, tagLine),
-      avatar_url: avatarUrl,
-    };
-    if (accountChanged) update.id = finalId;
-
-    const { error } = await supabase.from("players").update(update).eq("id", id);
+    // Written in both places on purpose: player_accounts owns the Riot ID, and
+    // players carries a copy of the primary account's so the dozens of read
+    // sites that render "their Riot ID" need no join. The copy is only ever
+    // written here and by the sync's roll-up.
+    const { error } = await supabase
+      .from("players")
+      .update({
+        riot_game_name: gameName,
+        riot_tag_line: tagLine,
+        slug: playerSlug(gameName, tagLine),
+        avatar_url: avatarUrl,
+      })
+      .eq("id", id);
     if (error) {
       return {
         error:
@@ -185,45 +303,194 @@ export async function updatePlayer(
       };
     }
 
-    // A genuine account swap means the new puuid's history has nothing in
-    // common with the old one, so wait-for-the-next-daily-sync won't reliably
-    // catch up (see the pagination-cap edge case noted in syncPlayerMatches).
-    // Backfill this player's full history since the tracking start date now.
-    if (accountChanged) {
-      const admin = createAdminClient();
-      try {
-        const backfillSummary = await backfillPlayerHistory(admin, finalId);
-        revalidatePath("/settings");
-        revalidatePath("/");
-        revalidatePath("/team");
-        revalidatePath("/player/[slug]", "page");
-        return {
-          success: true,
-          message: `Riot ID updated — backfilled ${backfillSummary.newMatches} match(es) since tracking started.`,
-        };
-      } catch (e) {
-        const isKeyInvalid = e instanceof RiotKeyInvalidError;
-        if (isKeyInvalid) {
-          await admin.from("sync_state").update({ riot_key_valid: false }).eq("id", 1);
-        }
-        const detail = isKeyInvalid
-          ? "Riot API key is invalid or expired."
-          : e instanceof Error
-            ? e.message
-            : "Unknown error.";
-        revalidatePath("/settings");
-        return {
-          success: true,
-          message: `Riot ID updated, but the history backfill failed: ${detail} Run a regular sync once the issue is resolved.`,
-        };
-      }
+    if (renamed) {
+      const { error: accountError } = await supabase
+        .from("player_accounts")
+        .update({ riot_game_name: gameName, riot_tag_line: tagLine })
+        .eq("puuid", primary.puuid);
+      if (accountError) return { error: accountError.message };
     }
+
+    revalidateRoster();
+    return { success: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+/**
+ * Attaches another Riot account to an existing player.
+ *
+ * This is the operation the whole migration exists for: a soloQ smurf, an
+ * account on another server, or the account the team plays flex on. It never
+ * becomes primary automatically — the primary is what the app displays as
+ * "their account", and a newly added smurf is not that.
+ */
+export async function addAccount(
+  _prevState: PlayerFormState,
+  formData: FormData,
+): Promise<PlayerFormState> {
+  try {
+    const { supabase } = await requireSession();
+
+    const playerId = formData.get("playerId") as string;
+    const gameName = (formData.get("gameName") as string)?.trim();
+    const tagLine = (formData.get("tagLine") as string)?.trim();
+    const platform = readPlatform(formData);
+    const trackSolo = formData.get("trackSolo") !== null;
+    const trackFlex = formData.get("trackFlex") !== null;
+
+    if (!playerId || !gameName || !tagLine) {
+      return { error: "Game name and tag line are required." };
+    }
+    if (!trackSolo && !trackFlex) {
+      return { error: "Pick at least one queue to track, or the account will never be synced." };
+    }
+
+    const resolved = await resolveAccount(gameName, tagLine, platform);
+    if ("error" in resolved) return { error: resolved.error };
+
+    const { error } = await supabase.from("player_accounts").insert({
+      puuid: resolved.puuid,
+      player_id: playerId,
+      riot_game_name: gameName,
+      riot_tag_line: tagLine,
+      platform,
+      is_primary: false,
+      track_solo: trackSolo,
+      track_flex: trackFlex,
+    });
+
+    if (error) {
+      return {
+        error:
+          error.code === "23505"
+            ? "That Riot account is already attached to a player."
+            : error.message,
+      };
+    }
+
+    const message = await backfillNewAccount(resolved.puuid, "Account added");
+    revalidateRoster();
+    return { success: true, message };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+/** Which queues an account is worth spending Riot calls on. */
+export async function setAccountQueues(
+  _prevState: PlayerFormState,
+  formData: FormData,
+): Promise<PlayerFormState> {
+  try {
+    const { supabase } = await requireSession();
+
+    const puuid = formData.get("puuid") as string;
+    const trackSolo = formData.get("trackSolo") !== null;
+    const trackFlex = formData.get("trackFlex") !== null;
+    if (!puuid) return { error: "Account not found." };
+
+    const { error } = await supabase
+      .from("player_accounts")
+      .update({ track_solo: trackSolo, track_flex: trackFlex })
+      .eq("puuid", puuid);
+    if (error) return { error: error.message };
 
     revalidatePath("/settings");
     return { success: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong." };
   }
+}
+
+/**
+ * Moves the primary flag, and the denormalised copy that follows it.
+ *
+ * Two writes because a partial unique index allows only one primary per player:
+ * the incumbent has to be cleared before the new one is set, or the second
+ * write fails on the index.
+ */
+export async function setPrimaryAccount(puuid: string): Promise<void> {
+  const { supabase } = await requireSession();
+
+  const { data: account, error: fetchError } = await supabase
+    .from("player_accounts")
+    .select("player_id, riot_game_name, riot_tag_line, platform")
+    .eq("puuid", puuid)
+    .single();
+  if (fetchError || !account) throw new Error("Account not found.");
+
+  const playerId = account.player_id as string;
+
+  const { error: clearError } = await supabase
+    .from("player_accounts")
+    .update({ is_primary: false })
+    .eq("player_id", playerId);
+  if (clearError) throw new Error(clearError.message);
+
+  const { error: setError } = await supabase
+    .from("player_accounts")
+    .update({ is_primary: true })
+    .eq("puuid", puuid);
+  if (setError) throw new Error(setError.message);
+
+  const gameName = account.riot_game_name as string;
+  const tagLine = account.riot_tag_line as string;
+  const { error: playerError } = await supabase
+    .from("players")
+    .update({
+      riot_game_name: gameName,
+      riot_tag_line: tagLine,
+      slug: playerSlug(gameName, tagLine),
+      platform: account.platform,
+    })
+    .eq("id", playerId);
+  if (playerError) throw new Error(playerError.message);
+
+  revalidateRoster();
+}
+
+/**
+ * Detaches an account.
+ *
+ * The match rows it contributed stay: a game is a game, and the participant
+ * rows point at the *player*, not the account. What goes is the account's own
+ * LP series, which cascades — a smurf's rank curve means nothing once the smurf
+ * is no longer part of the picture.
+ *
+ * The primary account can't be removed while another exists, because the
+ * player's Riot ID and rank are mirrored from it; promote a different one
+ * first. Removing the last account is allowed, and leaves a player the sync
+ * skips — which is how somebody who has quit stops costing Riot calls without
+ * deleting their history.
+ */
+export async function removeAccount(puuid: string): Promise<void> {
+  const { supabase } = await requireSession();
+
+  const { data: account, error: fetchError } = await supabase
+    .from("player_accounts")
+    .select("player_id, is_primary")
+    .eq("puuid", puuid)
+    .single();
+  if (fetchError || !account) throw new Error("Account not found.");
+
+  if (account.is_primary) {
+    const { count } = await supabase
+      .from("player_accounts")
+      .select("puuid", { count: "exact", head: true })
+      .eq("player_id", account.player_id);
+    if ((count ?? 0) > 1) {
+      throw new Error(
+        "That's the primary account. Make another one primary before removing it.",
+      );
+    }
+  }
+
+  const { error } = await supabase.from("player_accounts").delete().eq("puuid", puuid);
+  if (error) throw new Error(error.message);
+
+  revalidateRoster();
 }
 
 export async function updateRiotKey(

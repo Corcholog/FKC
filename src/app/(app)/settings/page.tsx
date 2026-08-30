@@ -16,6 +16,7 @@ import {
 } from "@/components/settings/demo-summaries-form";
 import { AddPlayerForm } from "@/components/settings/add-player-form";
 import { PlayerRow } from "@/components/settings/player-row";
+import type { PlayerAccount } from "@/components/settings/player-accounts";
 import { RefetchDetailsForm } from "@/components/settings/refetch-details-form";
 import { ClanContextForm } from "@/components/settings/clan-context-form";
 import { SyncStatusSection, type SyncState } from "@/components/settings/sync-status-section";
@@ -33,13 +34,41 @@ export default async function SettingsPage() {
       .order("display_name"),
     "roster",
   );
+
+  // Every account, grouped by owner below. Read unconditionally rather than per
+  // row: nine players is nine round trips otherwise, on a page that already
+  // makes several.
+  const accounts = rows(
+    await supabase
+      .from("player_accounts")
+      .select(
+        "puuid, player_id, riot_game_name, riot_tag_line, platform, is_primary, " +
+          "track_solo, track_flex, tier, division, league_points, flex_tier",
+      )
+      // Primary first, then alphabetically — so the account whose Riot ID the
+      // player is shown under leads their list.
+      .order("is_primary", { ascending: false })
+      .order("riot_game_name")
+      .returns<PlayerAccount[]>(),
+    "player accounts",
+  );
+
+  const accountsByPlayer = new Map<string, PlayerAccount[]>();
+  for (const account of accounts) {
+    const list = accountsByPlayer.get(account.player_id);
+    if (list) list.push(account);
+    else accountsByPlayer.set(account.player_id, [account]);
+  }
   // sync_state uses .single(), so a missing singleton is already an error rather
   // than a null. Kept optional: this section is status, and losing it shouldn't
   // block the roster CRUD below.
   const syncState = optional(
     await supabase
       .from("sync_state")
-      .select("riot_key_valid, last_sync_status, last_sync_finished_at, last_error")
+      .select(
+        "riot_key_valid, last_sync_status, last_sync_finished_at, last_error, " +
+          "last_solo_sync_at, last_flex_sync_at",
+      )
       .eq("id", 1)
       // Typed, unlike before: `optional(..., null)` over an untyped read inferred
       // the row as `null`, so `syncState` narrowed to `never` inside the guard
@@ -184,6 +213,16 @@ export default async function SettingsPage() {
                   ? formatRelativeTime(syncState.last_sync_finished_at)
                   : null
               }
+              soloSyncAgo={
+                syncState.last_solo_sync_at
+                  ? formatRelativeTime(syncState.last_solo_sync_at)
+                  : null
+              }
+              flexSyncAgo={
+                syncState.last_flex_sync_at
+                  ? formatRelativeTime(syncState.last_flex_sync_at)
+                  : null
+              }
             />
           </CardContent>
         </Card>
@@ -252,7 +291,11 @@ export default async function SettingsPage() {
           ) : (
             <ul className="flex flex-col gap-2">
               {players.map((player) => (
-                <PlayerRow key={player.id} player={player} />
+                <PlayerRow
+                  key={player.id}
+                  player={player}
+                  accounts={accountsByPlayer.get(player.id) ?? []}
+                />
               ))}
             </ul>
           )}

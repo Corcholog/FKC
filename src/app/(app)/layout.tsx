@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { optional } from "@/lib/supabase/read";
 import { getSession } from "@/lib/auth";
+import { SOLOQ_PARTICIPANTS } from "@/lib/data-source";
 import { getChampionList, getLatestVersion } from "@/lib/ddragon";
 import { DEFAULT_LANE, mainLane } from "@/lib/lolalytics";
 import { Navbar } from "@/components/navbar";
@@ -32,7 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // navigations. id is the primary key, so this is a stable sample.
     session?.player
       ? supabase
-          .from("match_participants")
+          .from(SOLOQ_PARTICIPANTS)
           .select("team_position")
           .eq("player_id", session.player.id)
           .order("id", { ascending: true })

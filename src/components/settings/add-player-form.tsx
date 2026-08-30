@@ -6,6 +6,7 @@ import { emptyPlayerFormState, type PlayerFormState } from "@/app/(app)/settings
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PlatformSelect } from "@/components/settings/player-accounts";
 
 export function AddPlayerForm() {
   const formRef = useRef<HTMLFormElement>(null);
@@ -29,6 +30,13 @@ export function AddPlayerForm() {
           Tag line
         </Label>
         <Input id="tagLine" name="tagLine" required placeholder="LAS" className="w-24" />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="platform" className="text-xs text-grey-light">
+          Server
+        </Label>
+        <PlatformSelect />
       </div>
 
       <div className="flex flex-col gap-1">
@@ -57,9 +65,12 @@ export function AddPlayerForm() {
 
       <p className="w-full text-xs text-grey-mid">
         Display name can&apos;t be changed later — it also doubles as this player&apos;s login name.
+        This Riot ID becomes their primary account; add smurfs and the account they flex on
+        from the row below.
       </p>
 
       {state?.error && <p className="w-full text-sm text-loss">{state.error}</p>}
+      {state?.message && <p className="w-full text-sm text-win">{state.message}</p>}
     </form>
   );
 }

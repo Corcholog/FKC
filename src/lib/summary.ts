@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { SOLOQ_PARTICIPANTS, SOLOQ_PARTICIPANTS_EMBED } from "@/lib/data-source";
 import { generateText } from "@/lib/gemini";
 import { formatRank, formatWinLoss, formatWinRate, rankSortKey } from "@/lib/rank";
 import { getLatestVersion, getChampionMap, championDisplayName } from "@/lib/ddragon";
@@ -82,7 +83,7 @@ export async function countRosterGamesSince(
   since: string,
 ): Promise<number> {
   const { count } = await supabase
-    .from("match_participants")
+    .from(SOLOQ_PARTICIPANTS)
     .select("id, matches!inner(game_creation)", { count: "exact", head: true })
     .not("player_id", "is", null)
     .gt("matches.game_creation", since);
@@ -319,7 +320,7 @@ export async function gatherPlayerPromptData(
     supabase
       .from("matches")
       .select(
-        "id, game_creation, game_duration_seconds, match_participants!inner(id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, total_cs, gold_earned, damage_dealt_to_champions, vision_score, first_blood_kill, first_blood_assist)",
+        `id, game_creation, game_duration_seconds, ${SOLOQ_PARTICIPANTS_EMBED}(id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, total_cs, gold_earned, damage_dealt_to_champions, vision_score, first_blood_kill, first_blood_assist)`,
       )
       .eq("match_participants.player_id", playerId)
       .order("game_creation", { ascending: false })
@@ -392,7 +393,7 @@ export async function gatherPlayerPromptData(
   const { data: allParticipantsRaw } =
     matchIds.length > 0
       ? await supabase
-          .from("match_participants")
+          .from(SOLOQ_PARTICIPANTS)
           .select(
             "match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, total_cs, gold_earned, damage_dealt_to_champions, vision_score",
           )
@@ -830,7 +831,7 @@ export async function gatherTeamPromptData(
       .from("players")
       .select("id, display_name, tier, division, league_points, wins, losses"),
     supabase
-      .from("match_participants")
+      .from(SOLOQ_PARTICIPANTS)
       .select("match_id, player_id, team_id, win, matches!inner(game_creation)")
       .not("player_id", "is", null)
       .returns<TeamStatRow[]>(),

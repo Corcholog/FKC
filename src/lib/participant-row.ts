@@ -105,14 +105,28 @@ export function participantStatColumns(p: MatchParticipantDto) {
 }
 
 // A complete new row, for the sync's insert path.
+//
+// `playerId` used to be a boolean `isTracked`, because players.id WAS the puuid
+// and the row could be filled in from the participant alone. Now that a person
+// can own several accounts the caller has to resolve it (sync.ts holds a
+// puuid -> player map built from player_accounts), and passing the resolved id
+// rather than a flag is what keeps that lookup in one place.
+//
+// Null means untracked — the nine other participants in every match, whose rows
+// are stored anyway because lane matchups and team compositions are built from
+// them at no extra Riot call.
+//
+// `queueId` is denormalised onto the row so the queue-scoped views are plain
+// projections; see migration 024.
 export function toParticipantRow(
   p: MatchParticipantDto,
-  { matchId, isTracked }: { matchId: string; isTracked: boolean },
+  { matchId, playerId, queueId }: { matchId: string; playerId: string | null; queueId: number },
 ) {
   return {
     match_id: matchId,
-    player_id: isTracked ? p.puuid : null,
+    player_id: playerId,
     puuid: p.puuid,
+    queue_id: queueId,
     riot_game_name: p.riotIdGameName ?? null,
     riot_tag_line: p.riotIdTagline ?? null,
     ...participantStatColumns(p),

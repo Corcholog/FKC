@@ -35,6 +35,29 @@ export type TableName =
   | "scrim_games"
   | "scrim_picks";
 
+/**
+ * Which queue a read is about.
+ *
+ * The second axis, and it works the same way as the demo one: instead of every
+ * page remembering `.eq("queue_id", 420)`, `table("match_participants")`
+ * resolves to a view that already only contains that queue. A page reads soloQ
+ * because of which source it was handed, not because a filter was written in
+ * the right dozen places.
+ *
+ * That matters more than it sounds. Migration 012 gave scrims their own tables
+ * rather than sharing these, precisely because a forgotten queue filter
+ * produces a plausible wrong number instead of an error — around twelve
+ * modules, each of which would have needed one. This is the same protection
+ * with none of the duplication.
+ */
+export type QueueScope = "solo" | "flex" | "ranked";
+
+const PARTICIPANT_VIEW: Record<QueueScope, string> = {
+  solo: "soloq_participants",
+  flex: "flex_participants",
+  ranked: "ranked_participants",
+};
+
 export type DataSource = {
   supabase: SupabaseClient;
   table: (name: TableName) => string;
@@ -44,12 +67,50 @@ export type DataSource = {
    * attribution — rather than to choose a table name.
    */
   demo: boolean;
+  /**
+   * Which queue `table("match_participants")` resolves to. Exposed so a loader
+   * can say which games it is describing ("42 flex games") without inferring it
+   * from a table name.
+   */
+  queue: QueueScope;
 };
 
-export function privateSource(supabase: SupabaseClient): DataSource {
-  return { supabase, table: (name) => name, demo: false };
+function resolve(name: TableName, queue: QueueScope, demo: boolean): string {
+  const base = name === "match_participants" ? PARTICIPANT_VIEW[queue] : name;
+  return demo ? `demo_${base}` : base;
 }
 
-export function demoSource(supabase: SupabaseClient): DataSource {
-  return { supabase, table: (name) => `demo_${name}`, demo: true };
+/**
+ * Defaults to solo, and that default is load-bearing: every page that existed
+ * before flex did keeps reading exactly the rows it read before, without being
+ * touched.
+ */
+export function privateSource(supabase: SupabaseClient, queue: QueueScope = "solo"): DataSource {
+  return { supabase, table: (name) => resolve(name, queue, false), demo: false, queue };
 }
+
+export function demoSource(supabase: SupabaseClient, queue: QueueScope = "solo"): DataSource {
+  return { supabase, table: (name) => resolve(name, queue, true), demo: true, queue };
+}
+
+/**
+ * The soloQ-only participant view, named for the reads that don't go through a
+ * DataSource.
+ *
+ * A handful of paths — the navbar's lane sample, the AI prompts, the weekly
+ * Discord recap, the tier-list editor's champion pool — query Supabase directly
+ * rather than through a loader, so nothing hands them a scoped source. They all
+ * mean solo queue, and naming the view here rather than spelling the string out
+ * eight times is what makes them findable when a third queue arrives.
+ */
+export const SOLOQ_PARTICIPANTS = "soloq_participants";
+
+/**
+ * The same view as a PostgREST embed, aliased back to the base table's name.
+ *
+ * `match_participants:soloq_participants!inner(...)` filters through the view
+ * but returns the rows under the key callers already destructure, so scoping an
+ * existing embedded query is a one-line change rather than a rename that
+ * ripples into its row types.
+ */
+export const SOLOQ_PARTICIPANTS_EMBED = `match_participants:${SOLOQ_PARTICIPANTS}!inner`;

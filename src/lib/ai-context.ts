@@ -26,7 +26,7 @@ export const MAX_PLAYER_CONTEXT_CHARS = 600;
 
 export type AiContext = {
   clan: string | null;
-  /** Keyed by player id (puuid). */
+  /** Keyed by players.id. */
   byPlayerId: Map<string, string>;
 };
 

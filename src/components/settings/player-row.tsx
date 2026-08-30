@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PlayerAccounts, type PlayerAccount } from "@/components/settings/player-accounts";
 import {
   Dialog,
   DialogClose,
@@ -29,6 +30,7 @@ import {
 
 type Player = {
   id: string;
+  /** The primary account's Riot ID, mirrored onto players — see migration 023. */
   riot_game_name: string;
   riot_tag_line: string;
   display_name: string;
@@ -194,7 +196,13 @@ function LoginControls({ player }: { player: Player }) {
   );
 }
 
-export function PlayerRow({ player }: { player: Player }) {
+export function PlayerRow({
+  player,
+  accounts,
+}: {
+  player: Player;
+  accounts: PlayerAccount[];
+}) {
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -289,6 +297,9 @@ export function PlayerRow({ player }: { player: Player }) {
             <p className="truncate text-sm font-medium text-white">{player.display_name}</p>
             <p className="truncate text-xs text-grey-light">
               {player.riot_game_name}#{player.riot_tag_line}
+              {accounts.length > 1 && (
+                <span className="text-grey-mid"> · {accounts.length} accounts</span>
+              )}
             </p>
           </div>
         </div>
@@ -335,6 +346,8 @@ export function PlayerRow({ player }: { player: Player }) {
       <div className="sm:hidden">
         <LoginControls player={player} />
       </div>
+
+      <PlayerAccounts playerId={player.id} accounts={accounts} />
 
       <AiContextEditor player={player} />
 

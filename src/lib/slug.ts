@@ -27,7 +27,7 @@ export function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/** Slug for a scrim opponent's /scrims/opponents/[slug] page. */
+/** Slug for a scrim opponent's /team/opponents/[slug] page. */
 export function opponentSlug(name: string): string {
   return slugify(name);
 }

@@ -108,7 +108,7 @@ export function championIconUrlById(ddragonId: string, version: string): string 
  *
  * DDragon versions carry a third segment that is a *build* rather than a patch —
  * it moves for asset fixes that nobody playing would call a new patch — and
- * `scrim_games.patch` wants the two-part number everyone says out loud. Keeping
+ * `team_games.patch` wants the two-part number everyone says out loud. Keeping
  * the build would also split one patch's games across several values, which is
  * the one thing a patch filter cannot survive.
  *

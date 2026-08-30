@@ -30,10 +30,11 @@ export type TableName =
   | "champion_counters"
   | "draft_comps"
   | "draft_tags"
-  | "scrim_opponents"
-  | "scrim_series"
-  | "scrim_games"
-  | "scrim_picks";
+  | "team_opponents"
+  | "team_series"
+  | "team_games"
+  | "team_picks"
+  | "competitions";
 
 /**
  * Which queue a read is about.

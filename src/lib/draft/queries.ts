@@ -22,7 +22,7 @@ import type {
 
 // Three tables carry an author column that the demo views drop, and each is
 // asked for only when the source is private — the same treatment riot_match_id
-// and scrim_series.created_by get. Nothing renders them; the write path is
+// and team_series.created_by get. Nothing renders them; the write path is
 // their only reader.
 const TAG_COLUMNS = "id, slug, label, kind, created_at";
 const PROFILE_BASE = "champion_id, roles, tags, notes, updated_at";
@@ -61,7 +61,7 @@ export async function loadChampionProfiles(
  * draft-strategy feature that accumulates the way scrim picks do — a season
  * of noted matchups is exactly the shape that reaches PostgREST's silent
  * 1000-row truncation. Ordered on the unique pair, which is a total order, so
- * `.range()` paging can't overlap or skip — see lib/scrims/queries.ts:74-84
+ * `.range()` paging can't overlap or skip — see lib/team/queries.ts:74-84
  * for the same trap in the table this pattern is copied from.
  */
 export async function loadChampionCounters(source: DataSource): Promise<ChampionCounterRow[]> {
@@ -93,7 +93,7 @@ export async function loadChampionCounters(source: DataSource): Promise<Champion
  * Ordered `created_at desc, id`: a total order, so `.range()` paging can't
  * overlap or skip. The table is small today, but the ordering discipline costs
  * nothing here and the next person shouldn't have to work it out — see the
- * same trap documented in lib/scrims/queries.ts:74-84.
+ * same trap documented in lib/team/queries.ts:74-84.
  */
 export async function loadDraftComps(
   source: DataSource,

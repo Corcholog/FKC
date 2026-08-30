@@ -1,45 +1,26 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { privateSource } from "@/lib/data-source";
-import { loadRoster } from "@/lib/loaders/roster";
-import { PlayerCard } from "@/components/player-card";
-import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
+import { rows } from "@/lib/supabase/read";
+import { loadTeamGames } from "@/lib/team/queries";
+import {
+  TeamOverviewView,
+  type TeamRosterRow,
+} from "@/components/team/views/overview-view";
+import { TeamMatchEmptyState } from "@/components/team/team-match-empty-state";
 
-export default async function TeamPage() {
+export default async function TeamOverviewPage() {
   const supabase = await createClient();
-  const { players: sorted, topChampionsByPlayerId } = await loadRoster(privateSource(supabase));
 
-  const version = await getLatestVersion();
-  const championMap = await getChampionMap(version);
+  const [games, rosterResult] = await Promise.all([
+    loadTeamGames(privateSource(supabase)),
+    supabase
+      .from("players")
+      .select("id, slug, display_name, avatar_url")
+      .order("display_name")
+      .returns<TeamRosterRow[]>(),
+  ]);
 
-  return (
-    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold text-white">Team</h1>
-        <p className="text-sm text-grey-light">Fake Clan roster, sorted by rank.</p>
-      </div>
+  if (games.length === 0) return <TeamMatchEmptyState canAdd />;
 
-      <div className="flex flex-col gap-3">
-        {sorted.length === 0 ? (
-          <p className="text-center text-sm text-grey-mid">
-            No players tracked yet — add some from{" "}
-            <Link href="/settings" className="text-gold-bright hover:underline">
-              Settings
-            </Link>
-            .
-          </p>
-        ) : (
-          sorted.map((player) => (
-            <PlayerCard
-              key={player.id}
-              player={player}
-              topChampions={topChampionsByPlayerId.get(player.id) ?? []}
-              version={version}
-              championMap={championMap}
-            />
-          ))
-        )}
-      </div>
-    </main>
-  );
+  return <TeamOverviewView games={games} roster={rows(rosterResult, "roster")} />;
 }

@@ -18,7 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-/** Confirm-then-delete, same idiom as scrims/delete-series-button.tsx. */
+/** Confirm-then-delete, same idiom as team/delete-series-button.tsx. */
 export function DeleteCompButton({
   compId,
   kind,

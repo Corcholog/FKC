@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-// Real routes rather than the Tabs component, same call as scrims/scrim-tabs.tsx:
+// Real routes rather than the Tabs component, same call as team/team-match-tabs.tsx:
 // each of these is a server component doing its own query, so they should be
 // linkable, refreshable and individually streamable. The tab strip is the only
 // part that needs the pathname, so it's the only client component in the section

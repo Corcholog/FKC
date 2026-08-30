@@ -10,7 +10,6 @@ import {
   Shield,
   Swords,
   Trophy,
-  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,12 +28,11 @@ import { cn } from "@/lib/utils";
 // navbar's, so the two versions are recognisably the same tool.
 const NAV_ITEMS = [
   { href: "/demo", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/demo/team", label: "Team", icon: Users },
+  { href: "/demo/team", label: "Team", icon: Shield },
   { href: "/demo/matches", label: "Matches", icon: Swords },
   { href: "/demo/champions", label: "Champions", icon: Trophy },
   { href: "/demo/tierlists", label: "Tier Lists", icon: ListOrdered },
   { href: "/demo/insights", label: "Insights", icon: LineChart },
-  { href: "/demo/scrims", label: "Scrims", icon: Shield },
   { href: "/demo/draft", label: "Draft", icon: Network },
 ];
 
@@ -53,7 +51,7 @@ export function DemoNavbar() {
           first version of this header capped the row and then reached for
           `overflow-x-auto` to cope — which put a scrollbar across a sticky
           header at every width above a phone. Setting overflow on one axis also
-          computes the other from `visible` to `auto`, the same trap ScrimTabs
+          computes the other from `visible` to `auto`, the same trap TeamMatchTabs
           documents; there is nothing to scroll here now.
 
           `flex-wrap` is the safety net that replaces it: if a translation or a

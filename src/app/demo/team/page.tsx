@@ -1,54 +1,35 @@
 import { createPublicClient } from "@/lib/supabase/public";
 import { demoSource } from "@/lib/data-source";
-import { buildRoster, fetchRosterRows } from "@/lib/loaders/roster";
 import { cachedDemoLoad } from "@/lib/loaders/demo-cache";
-import { getChampionMap, getLatestVersion } from "@/lib/ddragon";
-import { PlayerCard } from "@/components/player-card";
+import { rows } from "@/lib/supabase/read";
+import { loadTeamGames } from "@/lib/team/queries";
+import {
+  TeamOverviewView,
+  type TeamRosterRow,
+} from "@/components/team/views/overview-view";
+import { TeamMatchEmptyState } from "@/components/team/team-match-empty-state";
 
-// Rendered per request, with the data cached for an hour underneath — see the
-// header of demo-cache.ts for why it isn't `export const revalidate`.
 export const dynamic = "force-dynamic";
 
-// The same page as /team, against the demo views. It was /demo itself until the
-// dashboard landed; the cache key stays "roster" because the loader behind it
-// hasn't changed.
-export default async function DemoTeamPage() {
-  // Cache the rows, fold them here — cachedDemoLoad's entries are serialized, so
-  // the Map that buildRoster produces has to be built after the cache, not
-  // inside it.
-  const rows = await cachedDemoLoad("roster", () =>
-    fetchRosterRows(demoSource(createPublicClient())),
-  );
-  const { players, topChampionsByPlayerId } = buildRoster(rows);
+export default async function DemoTeamOverviewPage() {
+  const source = () => demoSource(createPublicClient());
 
-  const version = await getLatestVersion();
-  const championMap = await getChampionMap(version);
+  const [games, roster] = await Promise.all([
+    cachedDemoLoad("scrim-games", () => loadTeamGames(source())),
+    cachedDemoLoad("scrim-roster", async () => {
+      const s = source();
+      return rows(
+        await s.supabase
+          .from(s.table("players"))
+          .select("id, slug, display_name, avatar_url")
+          .order("display_name")
+          .returns<TeamRosterRow[]>(),
+        "roster",
+      );
+    }),
+  ]);
 
-  return (
-    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold text-white">Team</h1>
-        <p className="text-sm text-grey-light">The roster, sorted by rank.</p>
-      </div>
+  if (games.length === 0) return <TeamMatchEmptyState />;
 
-      <div className="flex flex-col gap-3">
-        {players.length === 0 ? (
-          <p className="text-center text-sm text-grey-mid">
-            The demo roster hasn&rsquo;t been set up yet — no aliases have been assigned.
-          </p>
-        ) : (
-          players.map((player) => (
-            <PlayerCard
-              key={player.id}
-              player={player}
-              topChampions={topChampionsByPlayerId.get(player.id) ?? []}
-              version={version}
-              championMap={championMap}
-              basePath="/demo"
-            />
-          ))
-        )}
-      </div>
-    </main>
-  );
+  return <TeamOverviewView games={games} roster={roster} basePath="/demo" />;
 }

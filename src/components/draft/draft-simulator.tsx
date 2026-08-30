@@ -74,7 +74,7 @@ function isStoredState(value: unknown): value is StoredState {
   );
 }
 
-// Coloured literally, matching scrims/scrim-ui.tsx — this is the one place in
+// Coloured literally, matching team/ui.tsx — this is the one place in
 // League where "blue" and "red" name a thing rather than describe it, and the
 // app already answers cyan/loss for that pair.
 const SIDE_COPY: Record<Side, { label: string; accent: string }> = {
@@ -487,7 +487,7 @@ export function DraftSimulator({
     return (
       // A side-coloured wash fading toward the grid. Blue and red are the one
       // place in League where a colour names a thing rather than decorates it
-      // — scrims/scrim-ui.tsx makes the same call — and it's what stops the two
+      // — team/ui.tsx makes the same call — and it's what stops the two
       // flanks reading as identical grey columns in an exported PNG.
       //
       // Kept at 15%: gold is this app's interaction colour (the active ring,

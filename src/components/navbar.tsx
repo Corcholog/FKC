@@ -5,7 +5,6 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard,
-  Users,
   Swords,
   Trophy,
   LineChart,
@@ -28,8 +27,11 @@ import { cn } from "@/lib/utils";
 
 // Browsing destinations only. Settings is deliberately not here: it's the admin
 // page, not somewhere you go to look at something, and it already sits visually
-// with /account on the right. Keeping it out is what left room for Scrims
-// without making this row tighter than it already is.
+// with /account on the right.
+//
+// Team and Scrims used to be two entries. They are one section now — the roster
+// is a tab beside the team's matches, drafts and scouting — so the row gained a
+// slot back rather than carrying two links to the same place.
 //
 // Draft is the eighth slot. Seven links plus the matchup search, Sync, the
 // settings gear, the account link and Sign out were already tight at 1024px —
@@ -38,19 +40,18 @@ import { cn } from "@/lib/utils";
 // same time. Below xl, all eight links live in the sheet, same as before.
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/team", label: "Team", icon: Users },
+  { href: "/team", label: "Team", icon: Shield },
   { href: "/matches", label: "Matches", icon: Swords },
   { href: "/champions", label: "Champions", icon: Trophy },
   { href: "/tierlists", label: "Tier Lists", icon: ListOrdered },
   { href: "/insights", label: "Insights", icon: LineChart },
-  { href: "/scrims", label: "Scrims", icon: Shield },
   { href: "/draft", label: "Draft", icon: Network },
 ];
 
 /**
  * Whether a nav item owns the current page.
  *
- * Prefix-matching, not equality: /scrims has four tabs under it, and an exact
+ * Prefix-matching, not equality: /team has four tabs under it, and an exact
  * match would leave the navbar highlighting nothing the moment you opened one.
  * The same bug applied to /player/[slug] and /tierlists/[slug] before this.
  *

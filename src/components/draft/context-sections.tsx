@@ -26,7 +26,7 @@ import type {
   DraftCompRow,
 } from "@/lib/draft/types";
 import { ChampionAvatar } from "@/components/champion-avatar";
-import { BarRow } from "@/components/scrims/scrim-ui";
+import { BarRow } from "@/components/team/ui";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";

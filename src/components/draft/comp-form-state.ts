@@ -1,6 +1,6 @@
 // State shape and payload building for the comp/synergy form.
 //
-// Kept out of the component for the same reason scrims/draft-form-state.ts is:
+// Kept out of the component for the same reason team/draft-form-state.ts is:
 // the fiddly parts — how many slots a kind gets, what counts as already
 // picked, turning half-filled slots into the action's payload — are worth
 // having as plain functions rather than closures inside the dialog.

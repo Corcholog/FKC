@@ -7,7 +7,7 @@ import { DraftTabs } from "@/components/draft/draft-tabs";
 // columns than the picker is worth. Below 96rem this is a no-op, so the only
 // screens it changes are the ones that had the room going spare.
 //
-// No header action button like scrims/new — there's no single "new" thing to
+// No header action button like team/matches/new — there's no single "new" thing to
 // create here.
 export default function DraftLayout({ children }: { children: React.ReactNode }) {
   return (

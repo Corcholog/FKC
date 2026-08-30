@@ -29,7 +29,7 @@ import {
 
 // Typed arguments, not FormData: a profile carries two arrays and a tag needs
 // its kind alongside its label, and serializing either into a hidden input
-// would buy nothing. Same call as tierlists/actions.ts and scrims/actions.ts.
+// would buy nothing. Same call as tierlists/actions.ts and team/actions.ts.
 
 export type DraftActionResult = { error?: string };
 
@@ -353,7 +353,7 @@ export async function saveDraftComp(
     };
 
     // created_by on insert only, never reassigned on edit — same reasoning as
-    // scrim_series.created_by and champion_counters: it records who wrote the
+    // team_series.created_by and champion_counters: it records who wrote the
     // thing, not who last touched it.
     const { data, error } = input.id
       ? await supabase

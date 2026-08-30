@@ -355,7 +355,7 @@ export type MatchDto = {
  * disconnect during the ban phase). Those are dropped rather than stored,
  * because `-1` is not a champion and every consumer would have to know that.
  * Order is preserved for the rest — it is the only priority signal a draft
- * carries, the same call `scrim_games.ally_bans` makes.
+ * carries, the same call `team_games.ally_bans` makes.
  */
 export function bansForTeam(match: MatchDto, teamId: number): number[] {
   const team = match.info.teams?.find((t) => t.teamId === teamId);

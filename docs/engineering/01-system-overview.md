@@ -43,10 +43,11 @@
         ▼        service role          ▼
    ┌──────────────────────────────────────────────┐
    │            Supabase Postgres                  │
-   │  players · matches · match_participants ·     │
+   │  players · player_accounts · matches ·        │
+   │  match_participants (+ queue views) ·         │
    │  player_rank_history · match_notes ·          │
    │  player_ai_summaries · team_ai_summary ·      │
-   │  clan_profile · sync_state · scrim_* ·        │
+   │  clan_profile · sync_state · team_* ·         │
    │  draft_* · champion_*                         │
    │  + Storage bucket: avatars                    │
    │  ─────────────────────────────────────────    │
@@ -137,7 +138,8 @@ src/
 │   ├── (app)/                  Route group: everything behind auth
 │   │   ├── layout.tsx          Navbar + key-expired banner
 │   │   ├── page.tsx            Dashboard (awards, activity, squad, team recap)
-│   │   ├── team/               Roster grid
+│   │   ├── team/               Team hub: overview, matches, drafts,
+│   │   │                       scouting, opponents, roster
 │   │   ├── matches/            Full match history, filterable by player
 │   │   ├── champions/          Per-player champion tierlist
 │   │   ├── insights/           Cross-player: LP race, duos, tilt, heatmap
@@ -158,6 +160,11 @@ src/
 │   ├── riot.ts                 Riot HTTP client + DTO types + field whitelists
 │   ├── rate-limiter.ts         Sliding-window limiter (shared by Riot and Gemini)
 │   ├── sync.ts                 The sync engine — the densest file in the repo
+│   ├── queues.ts               Which queues are tracked, from when, and where
+│   │                           each one's cursor lives
+│   ├── scope.ts, unified.ts    Which sources a page counts, and the one row
+│   │                           shape that lets the aggregators mix them
+│   ├── flex-team.ts            When a flex game counts as the team playing
 │   ├── participant-row.ts      Riot DTO → database row mapping
 │   ├── ddragon.ts              Champion id ↔ display name ↔ icon URL
 │   ├── auth.ts                 Session helpers (React `cache`-deduped)
@@ -171,7 +178,7 @@ src/
     ├── ui/                     shadcn primitives (Base UI under the hood)
     ├── charts/                 Recharts wrappers + the shared chart palette
     ├── settings/, player/, insights/, account/, demo/
-    ├── scrims/views/           The body of each scrims page, minus its write actions
+    ├── team/views/             The body of each team page, minus its write actions
     └── (top level)             match-row, award-tile, stat-ranking, navbar, …
 ```
 

@@ -407,7 +407,7 @@ them, and carries the group's slang. So no real text column appears in any view.
 failure mode of forgetting to write an override is a blank panel; the failure mode of a
 filter-based approach is a published in-joke.
 
-`match_notes`, `scrim_game_notes`, `player_ai_summaries`, `team_ai_summary`, `clan_profile`
+`match_notes`, `team_game_notes`, `player_ai_summaries`, `team_ai_summary`, `clan_profile`
 and `sync_state` have **no view at all**. The last two are the most dangerous in the
 database: `clan_profile.context` is described in its own schema comment as holding inside
 jokes, slang and nicknames, and `sync_state` holds the plaintext Riot key plus a

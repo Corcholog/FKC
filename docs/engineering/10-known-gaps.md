@@ -170,14 +170,14 @@ combobox and role filter are what keep it usable; past a few hundred annotated c
 neither is enough. `/draft/champions` has the same shape but a fixed ceiling — there are only
 ~170 champions.
 
-**`/scrims/team` renders every matching game.** Same shape, one level worse: an unfiltered
+**`/team/scouting` renders every matching game.** Same shape, one level worse: an unfiltered
 visit draws the entire archive as full draft cards. The filter is what keeps it usable, and
 the page is *for* filtering, so this is fine at a season's worth of games and won't be at
 five. The fix is the pagination `/matches` already has (ADR-024's `parsePage`), applied to
 the "Matching games" list only.
 
 **The eight scrim games entered before the patch field existed have no patch.** The entry
-form had no such input at all until then, which is why `/scrims/team`'s patch filter had
+form had no such input at all until then, which is why `/team/scouting`'s patch filter had
 nothing to filter — the column shipped in migration 012 and nothing ever wrote it. The form
 now carries a patch per game, **prefilled from the current DDragon version**, so this closes
 going forward; the existing eight stay null until somebody edits those series, and the
@@ -227,7 +227,7 @@ The mechanical parts are testable and would catch the realistic failure: assert 
 `demo_*` view's column list is a subset of an allowlist, and that no page under `src/app/demo/`
 imports `createClient` from `lib/supabase/server`. Both are cheap. Neither exists.
 
-**`demo_scrim_picks` collapses an opponent's roster by position.** Enemy nicknames become
+**`demo_team_picks` collapses an opponent's roster by position.** Enemy nicknames become
 `'Rival ' || team_position`, which has to be stable per person because `team-stats.ts` groups
 by `lower(player_name)` to derive a roster ([02, §13](02-data-model.md)). So a team that
 fielded two different toplaners across a season shows as one "Rival TOP" with their games
@@ -255,6 +255,45 @@ The lint rule above is the missing guard.
 **The demo layer has no fixture path.** Everything it shows comes from the live database
 through views, so there is no way to demo the demo — to develop against it without a real
 roster's data present.
+
+## 7b. What flex, multi-account and team matches left open
+
+**None of it is tested, and it is the change most able to go silently wrong.** Queue
+scoping and puuid→player resolution both fail by producing a plausible number rather than
+an error. The pure modules added here — `queues.ts`, `scope.ts`, `unified.ts`,
+`flex-team.ts` — were written to the same no-I/O rule as everything in §1's table and are
+just as testable; `splitFlexGames` (the full-stack / partial / civil-war split) and the
+damage clock in `player-stats.ts` are the two worth pinning first.
+
+**A `select *` view does not follow its table.** Postgres expands the star at CREATE VIEW
+time, so adding a column to `match_participants` means recreating `soloq_participants`,
+`flex_participants` and `ranked_participants` in the same migration. Nothing enforces
+that; the column simply won't be visible through any of them.
+
+**Eight reads bypass `DataSource` and name `SOLOQ_PARTICIPANTS` by hand.** They are listed
+in [02 §3b](02-data-model.md). A ninth added later inherits nothing and will read both
+queues.
+
+**A team match can only be attributed to a player who was linked at entry time.** Picks
+carry `player_id` when the roster was matched and a typed nickname otherwise, so a game
+entered with a substitute's nickname never reaches that person's player page at any scope.
+Fixing it means editing the series, which is the same escape hatch the derived opponent
+rosters have.
+
+**Team matches are dated to a day, not a moment.** `played_on` is a `date` because nobody
+records what time a scrim started. Streaks and recent-form lists over a mixed scope
+therefore interleave a day's team games with that day's soloQ arbitrarily.
+`computeStreak` sorts its own input, so the result is stable rather than insertion-ordered
+— but it is day-accurate and no finer.
+
+**The demo publishes soloQ only, apart from the team overview.** Its `/matches` filter is
+fixed rather than offered, and there is no scope switch on `/demo/player/[alias]`. That is
+a choice — the demo publishes one reading of the data — but it means the demo's numbers and
+the private app's can differ for the same player without either being wrong.
+
+**A partial flex stack is counted in the per-player table and not in the record.** The
+caption says so, but the two numbers on that panel genuinely count different things and
+somebody will read them as the same one.
 
 ## 8. Deliberate non-features
 

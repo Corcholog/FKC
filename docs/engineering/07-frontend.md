@@ -13,7 +13,7 @@ src/app/
 │   ├── page.tsx              /demo                    Dashboard + what the tool is
 │   ├── player/[alias]/       /demo/player/x           Mirrors /player/[slug]
 │   ├── team/, matches/, champions/, tierlists/, insights/
-│   ├── scrims/               Own layout — *not* the private one, which carries the
+│   ├── team/                 Own layout — *not* the private one, which carries the
 │   │                         "New scrim" button that is the door to the write path
 │   └── draft/                Board + reference panel, minus every save action
 └── (app)/                    Route group — parentheses = no URL segment
@@ -82,7 +82,7 @@ back at `lg` without cutting something.
 
 Both Scrims' and Draft's sub-pages are **tabs under one nav slot**, not four or five more
 of them. The tab strip lives in the section's own `layout.tsx` so each tab stays a server
-component with its own query; only the strip itself (`components/scrims/scrim-tabs.tsx`,
+component with its own query; only the strip itself (`components/team/scrim-tabs.tsx`,
 `components/draft/draft-tabs.tsx`) is a client component, because only it needs
 `usePathname`. Draft's shell is `max-w-[96rem]` against scrims' `max-w-6xl` — the simulator
 puts five pick slots either side of a champion grid, and §13's reference panel wants a
@@ -393,7 +393,7 @@ isn't me" — so let them check.
 
 ## 11. The scrim draft board
 
-`components/scrims/draft-board.tsx` is the densest component in the app — twenty
+`components/team/draft-board.tsx` is the densest component in the app — twenty
 champions, ten stat lines and a result, per game — so its layout is load-bearing rather
 than decorative.
 
@@ -438,7 +438,7 @@ three-ban format.
 
 ### The note thread under the draft
 
-Every game card carries a thread (`components/scrims/scrim-game-notes.tsx`), on both
+Every game card carries a thread (`components/team/scrim-game-notes.tsx`), on both
 `/scrims/history` and `/scrims/[id]`. Anyone can answer any note, **including a reply** — but
 the drawing stops at two levels however deep the conversation actually goes. Answers sit under
 the root behind a single left rule, in time order, and one whose target *isn't* the root prints
@@ -475,7 +475,7 @@ an empty array means "none yet", which still gets the composer.
 
 ### `BarRow`
 
-Ranked champion lists (`/scrims/drafts`, the scouting page) draw each row's value as a
+Ranked champion lists (`/team/drafts`, the scouting page) draw each row's value as a
 tinted fill *behind* the row. The shape of the distribution — "these three, then a long
 tail" — lands before any number does, and a background fill costs no horizontal space,
 which matters inside a two-column grid. Pick and ban lists scale against the top row of
@@ -572,11 +572,11 @@ drafted games to a typo is the worse failure. Bans are stripped too, not just pi
 champion picked earlier is unavailable for *every* slot later, ban slots included.
 
 A **Fearless toggle** sits next to the switcher, defaulted on. Not every series is fearless
-— `scrim_series.fearless` exists as a column for that reason — and off makes each game
+— `team_series.fearless` exists as a column for that reason — and off makes each game
 independent. It's threaded as an argument to `unavailableInSeries`, not a module flag.
 
-`MAX_GAMES = 5`, against the ten `lib/scrims/types.ts` allows. That limit exists because
-the `scrim_games_number` check constraint does and hand-entry shouldn't fight the database;
+`MAX_GAMES = 5`, against the ten `lib/team/types.ts` allows. That limit exists because
+the `team_games_number` check constraint does and hand-entry shouldn't fight the database;
 nothing is written from here, and five buttons fit in a row where ten are noise.
 
 ### State lives in the tab, not the database
@@ -955,7 +955,7 @@ The draft simulator survives intact because it is `sessionStorage` state, not a 
 read (ADR-033) — a signed-out visitor can pick and ban on the board exactly as a member
 can, which is the most convincing thing on the demo and cost nothing to expose.
 
-## 15. `/scrims/team` — the filter is the page
+## 15. `/team/scouting` — the filter is the page
 
 The other four scrim tabs each answer one question over every game ever recorded. This one
 answers any of them over a subset, because that is what preparation looks like: not "how do
@@ -963,7 +963,7 @@ we draft" but "how did we draft against this team, on this patch, when they had 
 
 So the page is a filter bar and then folds — record, draft order, game length, both
 champion pools, both ban lists, and the matching games themselves. Every section reads the
-same `applyScrimFilter(games, filter)` array.
+same `applyTeamMatchFilter(games, filter)` array.
 
 ### The filter lives in the URL
 

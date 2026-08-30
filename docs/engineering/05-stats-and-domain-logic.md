@@ -494,10 +494,46 @@ concrete row type, so a page can select one superset of columns and pass the sam
 `aggregatePlayerStats`, `streaksByPlayer`, and `aggregateByTime` without mapping between
 shapes. That's why `/insights` can fetch once and derive six different views from it.
 
-## 11. Scrim stats (`lib/scrims/`)
+## 10b. Mixing sources: the unified row, and the third clock
+
+Three records exist now — soloQ, flex, and team matches — and a page has to be able to
+count any combination of them. That needed **no new aggregation code**, and the reason is
+§10's pattern read one step further.
+
+`src/lib/unified.ts` produces a row shaped like a `match_participants` row, snake_case
+names and all. Every module above is structurally typed over those names rather than over
+a nominal row type, so `aggregatePlayerStats`, `aggregateMainRoleStats`, `aggregateByRole`,
+`streaksByPlayer`, `topChampionsByPlayer`, `championWinRate` and both champion comparators
+apply to it unchanged. `lib/team/stats.ts`'s `toChampionStatInput` already proved this on
+one aggregator; `unified.ts` generalises it.
+
+**What a source cannot answer is `null`, never `0`.** A team match records no damage and no
+vision. Zero is a real damage figure and would drag an average down; null means the game
+doesn't answer the question.
+
+That distinction is worth nothing without a clock to spend it on, so **damage got one** —
+in `player-stats.ts` and `champion-stats.ts` both. This is §1's two-clock rule applied to
+one more column, and it is the change most worth understanding, because getting it wrong
+is silent: folding team matches into a damage average would divide a real numerator by
+minutes that never contributed to it and halve everyone's DPM, with the number still
+rendering. It is a no-op on Riot rows, which always report damage.
+
+**Flex needed a rule about when it counts as *the team*.** A team match is unambiguous —
+one opponent, and `win` is ours. Flex isn't: five tracked players on one side is the team,
+fewer is some of the roster, and players on both sides is a game the team both won and
+lost. `src/lib/flex-team.ts` splits the three and the overview reports each rather than
+picking one and hoping.
+
+**Riot-only panels stay Riot-only, at every scope.** LP over time, the hour heatmap, lane
+differentials, matchups and the game-length curves read the Riot rows whatever the scope
+asks for, and `SCOPE_CAPTIONS` names them. A team match has no LP, no kickoff time finer
+than a date, no enemy laner resolved to an account and an often-missing duration — folding
+it in would not widen those numbers, it would corrupt them.
+
+## 11. Team-match stats (`lib/team/`)
 
 Same convention as everything above: pure, I/O-free functions over plain rows, called from
-server components that fetch once and fold many times. `lib/scrims/queries.ts` is the single
+server components that fetch once and fold many times. `lib/team/queries.ts` is the single
 read path and the only part that touches Supabase.
 
 | Module | Answers |
@@ -510,14 +546,14 @@ read path and the only part that touches Supabase.
 | `validate.ts` | What a submitted series must satisfy before it's written |
 
 **These reuse the soloq helpers rather than re-deriving them**, which is the whole reason
-`scrim_picks` is named the way it is. `aggregatePicks` sorts with `byGamesThenRecord`;
+`team_picks` is named the way it is. `aggregatePicks` sorts with `byGamesThenRecord`;
 `toChampionStatInput` reshapes picks into `ChampionStatInput` so `topChampionsByPlayer` and
 `championWinRate` apply directly. Anything that ranks champions therefore agrees with
 `/champions` and the player page about what "first" means.
 
 ### A pick's result is its team's result
 
-`scrim_games.win` is always *ours*. Every enemy-side aggregate negates it — `aggregatePicks`,
+`team_games.win` is always *ours*. Every enemy-side aggregate negates it — `aggregatePicks`,
 `toChampionStatInput` and `deriveOpponentRoster` each do this at the top of their loop. Getting
 it wrong is invisible in the output (the numbers still look plausible) and inverts every
 scouting conclusion, so it's stated once per function rather than assumed.
@@ -525,8 +561,8 @@ scouting conclusion, so it's stated once per function rather than assumed.
 ### CS/min averages only over games that recorded a duration
 
 `duration_seconds` is nullable, and one game entered without it would otherwise drag
-everybody's rate down by a fifth. `ScrimPlayerAgg` carries `timedGames`/`timedSeconds`
-separately, and `scrimCsPerMinute` returns **null**, not 0, when nothing timed — the same
+everybody's rate down by a fifth. `TeamPlayerAgg` carries `timedGames`/`timedSeconds`
+separately, and `teamCsPerMinute` returns **null**, not 0, when nothing timed — the same
 distinction §1's "detail metrics average over the games that reported them" makes, and for
 the same reason: unknown isn't zero, and the page renders `—`.
 
@@ -539,14 +575,14 @@ probability. Ban-only champions still appear, which is the point of the metric.
 ### Pick order isn't recorded, so nothing claims to know it
 
 No blind-vs-counter, no first-pick champion. Side is stored and blue picks first, so
-`hadFirstPick` is the whole of it. `/scrims/drafts` says this on the page rather than
+`hadFirstPick` is the whole of it. `/team/drafts` says this on the page rather than
 letting the omission read as an oversight. ADR-028.
 
 ### Validation lives in `lib/`, not in the action
 
 A `"use server"` module may only export async server functions, so validation written inside
 the action is unreachable from anything else — including a test. `validate.ts` holds it and
-`scrims/actions.ts` imports it, exactly as `normalizeTiers` relates to the tier list action.
+`team/actions.ts` imports it, exactly as `normalizeTiers` relates to the tier list action.
 The rule that catches most real mistakes is that a champion can appear at most once per game
 across all twenty slots; fearless is deliberately *not* enforced server-side, because
 organisers' rules differ and rejecting a legitimately-played game is worse than accepting an
@@ -559,7 +595,7 @@ banned. *Across* games of a fearless series only the ten played champions are un
 champion banned in game 1 and never played can be picked or banned again in game 2.
 
 `championsUsedInSeries` (saved games, here) and `usedEarlierInSeries` (the live form, in
-`components/scrims/draft-form-state.ts`) implement this, and must agree — if they drift, the
+`components/team/draft-form-state.ts`) implement this, and must agree — if they drift, the
 form greys a champion that a saved series says is legal. Both exclude bans; `usedInGame` is
 the within-game one and includes them.
 
@@ -567,7 +603,7 @@ the within-game one and includes them.
 
 Every module above answers one question over *every* recorded game. Preparation asks the
 same questions over a subset — this patch, this opponent, officials only, games where they
-had Maokai — so `filters.ts` is a `ScrimFilter` plus a predicate, and `/scrims/team`
+had Maokai — so `filters.ts` is a `TeamMatchFilter` plus a predicate, and `/team/scouting`
 (§15 of [07](07-frontend.md)) folds each aggregate over the filtered array.
 
 **Champion filters are AND, and over picks only.** "We faced K'Sante *and* Maokai" is a
@@ -600,10 +636,10 @@ rather than collapsing to `NaN` and reporting equal.
 
 ### `team-splits.ts` — what scrims have that soloq doesn't
 
-`scrimDurationSplit` and `firstPickSplit` adapt §9b's modules rather than reimplementing
+`teamDurationSplit` and `firstPickSplit` adapt §9b's modules rather than reimplementing
 them, and the adaptation is the interesting part:
 
-- **`scrim_games.duration_seconds` is nullable** (it is typed by hand and often skipped)
+- **`team_games.duration_seconds` is nullable** (it is typed by hand and often skipped)
   and scrims have **no 15-minute floor**, unlike soloq where migration 007 deleted
   everything shorter. `aggregateByDuration` silently drops both. So the wrapper counts them
   as `untimed` and `tooShort`, and the caption states what the split is actually over. A

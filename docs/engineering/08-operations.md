@@ -54,7 +54,7 @@ Migrations to date:
 | 015–017 | Draft strategy: tags + champion profiles, counters, comps |
 | 018 | The demo layer: 3 mapping tables, 13 views, `select` to `anon` |
 | 019 | `demo_player_summaries`, the view that publishes reviewed AI text |
-| 020 | `scrim_opponents.target_bans` — the ban plan; recreates `demo_scrim_opponents` |
+| 020 | `team_opponents.target_bans` — the ban plan; recreates `demo_team_opponents` |
 
 Migration 007 is the one to read as a template — it opens with a query to check what
 you're about to lose (cascade-deleted notes) *before* it deletes anything, and states the

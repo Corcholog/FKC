@@ -28,6 +28,7 @@ import {
   type TeamGameView,
   type TeamMatchKind,
   type TeamPickRow,
+  type TeamSide,
 } from "@/lib/team/types";
 
 // ------------------------------------------------------------
@@ -64,6 +65,16 @@ type HistoryEntryBase = {
   durationSeconds: number | null;
   /** "Scrim", "Flex", "LIDE 2 · Fecha 3" — what to put in the row's chip. */
   label: string;
+  /**
+   * Which half of the map we were on.
+   *
+   * Not decoration. Blue picks first in every standard draft, so side is half of
+   * why a draft looks the way it does — and on a row that puts our champions on
+   * the left whichever side we played, there is otherwise nothing to read it
+   * from. A team match records it (`team_games.side`); a flex game has it in
+   * `team_id`, which this module was already computing and throwing away.
+   */
+  side: TeamSide;
   /**
    * Null when no result belongs to the team.
    *
@@ -193,6 +204,7 @@ export function buildFlexHistory(rows: FlexHistoryInput[]): FlexHistoryEntry[] {
     const first = participants[0];
     const stackSize = trackedBySide.get(ourSide) ?? 0;
     const ourResult = ours.find((p) => p.player_id) ?? ours[0];
+    const blue = ourSide === BLUE_TEAM_ID;
 
     entries.push({
       source: "flex",
@@ -200,11 +212,12 @@ export function buildFlexHistory(rows: FlexHistoryInput[]): FlexHistoryEntry[] {
       playedAt: first.game_creation,
       durationSeconds: first.game_duration_seconds,
       label: "Flex",
+      side: blue ? "blue" : "red",
       win: civilWar ? null : (ourResult?.win ?? false),
       allies: sortByRole(ours).map((p) => toChampion(p, null)),
       enemies: sortByRole(theirs).map((p) => toChampion(p, null)),
-      allyBans: ourSide === BLUE_TEAM_ID ? first.blue_bans : first.red_bans,
-      enemyBans: ourSide === BLUE_TEAM_ID ? first.red_bans : first.blue_bans,
+      allyBans: blue ? first.blue_bans : first.red_bans,
+      enemyBans: blue ? first.red_bans : first.blue_bans,
       riotMatchId: first.riot_match_id,
       stackSize,
       fullStack: !civilWar && stackSize >= FULL_STACK,
@@ -253,6 +266,7 @@ export function buildTeamMatchHistory(games: TeamGameView[]): TeamMatchHistoryEn
       playedAt: teamMatchTimestamp(game.series.played_on),
       durationSeconds: game.duration_seconds,
       label: seriesLabel(game.series, game.competition),
+      side: game.side,
       win: game.win,
       allies: side(true),
       enemies: side(false),

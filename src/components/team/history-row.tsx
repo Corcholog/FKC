@@ -10,7 +10,7 @@ import { ChampionIcon } from "@/components/champion-icon";
 import { MatchRowShell } from "@/components/match-row-shell";
 import { CompareBoard, type PlayerLookup } from "@/components/team/compare-board";
 import { TeamGameNotes } from "@/components/team/game-notes";
-import { MetaChip } from "@/components/team/ui";
+import { MetaChip, SideBadge } from "@/components/team/ui";
 import { cn } from "@/lib/utils";
 
 // One game of the team's history, collapsed to a line.
@@ -35,7 +35,7 @@ function CompStrip({
   championMap: Map<number, ChampionInfo>;
 }) {
   return (
-    <div className={cn("flex items-center gap-1", mirrored && "flex-row-reverse")}>
+    <div className={cn("flex items-center gap-1 @md:gap-1.5", mirrored && "flex-row-reverse")}>
       {champions.map((champion, i) => (
         <ChampionIcon
           key={`${champion.championId}-${i}`}
@@ -43,8 +43,12 @@ function CompStrip({
           championName={champion.championName}
           version={version}
           championMap={championMap}
-          size="sm"
-          className="@md:h-8 @md:w-8"
+          // The compositions are what this row exists to show, so they get the
+          // space. Three steps rather than two: ten portraits plus a "vs" have
+          // to fit a phone, and at the widest they should be readable without
+          // opening the row at all.
+          size="md"
+          className="@md:h-10 @md:w-10 @2xl:h-12 @2xl:w-12"
         />
       ))}
     </div>
@@ -160,6 +164,7 @@ export function TeamHistoryRow({
         // empty boxes there would claim nobody banned.
         showBans={entry.source === "team" || entry.allyBans.length + entry.enemyBans.length > 0}
         theirName={entry.source === "team" ? entry.opponentName : "Enemy team"}
+        side={entry.side}
         durationSeconds={entry.durationSeconds}
         version={version}
         championMap={championMap}
@@ -178,13 +183,17 @@ export function TeamHistoryRow({
   );
 
   return (
-    <MatchRowShell win={entry.win} noteCount={notes?.length ?? 0} panel={panel}>
+    <MatchRowShell win={entry.win} noteCount={notes?.length ?? 0} panel={panel} roomy>
       <div className="flex min-w-0 flex-1 flex-col gap-2 @2xl:flex-row @2xl:items-center @2xl:gap-4">
-        <div className="flex min-w-0 items-center gap-2.5 @2xl:w-52 @2xl:shrink-0">
+        <div className="flex min-w-0 items-center gap-2.5 @2xl:w-60 @2xl:shrink-0">
           <ResultLabel win={entry.win} />
           <div className="min-w-0">
-            <p className="truncate text-xs">
+            <p className="flex flex-wrap items-center gap-1.5 text-xs">
               <MetaChip>{entry.label}</MetaChip>
+              {/* Blue picks first, so this is not decoration: without it the
+                  row's own layout — ours on the left, always — is the only
+                  thing a reader has, and it says nothing about the draft. */}
+              <SideBadge side={entry.side} />
             </p>
             <p className="mt-0.5 truncate text-xs text-grey-mid">
               <EntrySubtitle entry={entry} />

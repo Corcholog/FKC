@@ -2,9 +2,10 @@ import Link from "next/link";
 import { championDisplayName, type ChampionInfo } from "@/lib/ddragon";
 import { formatKDA } from "@/lib/format";
 import { formatRoleShort } from "@/lib/roles";
-import { BANS_PER_SIDE, TEAM_ROLES, nicknameOf } from "@/lib/team/types";
+import { BANS_PER_SIDE, TEAM_ROLES, enemySide, nicknameOf, type TeamSide } from "@/lib/team/types";
 import type { HistoryChampion } from "@/lib/team/history";
 import { ChampionIcon } from "@/components/champion-icon";
+import { SideBadge } from "@/components/team/ui";
 import { cn } from "@/lib/utils";
 
 // Two compositions, laid out face to face — the board under a draft on the
@@ -20,6 +21,12 @@ import { cn } from "@/lib/utils";
 // Server component throughout: nothing here is interactive, and keeping it off
 // the client means the champion map isn't serialised into the RSC payload once
 // per game on a page that renders a hundred of them.
+//
+// Every breakpoint here is a **container** query, not a viewport one. This board
+// renders both as the body of a card and inside an expanded history row, and
+// that row's shell declares `@container` — so a viewport `sm:` would grow the
+// board at a width the row around it knows nothing about, and the two would
+// disagree about how much space there is.
 
 /** Roster ids to the names and slugs used everywhere else on the site. */
 export type PlayerLookup = Map<string, { display_name: string; slug: string }>;
@@ -69,14 +76,14 @@ function ChampionSide({
         version={version}
         championMap={championMap}
         size="md"
-        className="sm:h-10 sm:w-10"
+        className="@md:h-10 @md:w-10"
       />
       <div className={cn("min-w-0 flex-1", mirrored && "text-right")}>
         <p className="truncate text-sm leading-tight font-medium text-white">{name}</p>
         {/* Player and stats on one line directly under the champion: they
             describe the same pick, so they belong in the same block.
             Truncating rather than wrapping keeps all five rows the same
-            height — see the sm: guards below for what gets dropped first when
+            height — see the @md: guards below for what gets dropped first when
             there isn't room, since truncation would otherwise eat the CS
             number, which is the least droppable thing on the line. */}
         <p className="truncate text-xs leading-tight text-grey-mid tabular-nums">
@@ -105,7 +112,7 @@ function ChampionSide({
           {/* CS/min is the first thing to go on a narrow screen: it's derived
               from the raw CS already shown, so dropping it loses nothing you
               can't recompute, and it buys ~7 characters back for the name. */}
-          {csPerMin !== null && <span className="hidden sm:inline"> ({csPerMin.toFixed(1)})</span>}
+          {csPerMin !== null && <span className="hidden @md:inline"> ({csPerMin.toFixed(1)})</span>}
         </p>
       </div>
     </div>
@@ -204,6 +211,7 @@ export function CompareBoard({
   showBans = true,
   ourName = "Us",
   theirName,
+  side,
   durationSeconds,
   version,
   championMap,
@@ -222,6 +230,12 @@ export function CompareBoard({
   showBans?: boolean;
   ourName?: string;
   theirName: string;
+  /**
+   * Which side we were on. Optional only because a caller may genuinely not
+   * know; when it is passed, both headings are badged, which is the only thing
+   * on this board that says who picked first.
+   */
+  side?: TeamSide;
   durationSeconds: number | null;
   version: string;
   championMap: Map<number, ChampionInfo>;
@@ -237,16 +251,22 @@ export function CompareBoard({
   // them — the opposite of a face-off, and the reason the champion felt
   // stranded from its own stats.
   const row =
-    "grid grid-cols-[1fr_2.25rem_1fr] items-center gap-2 sm:grid-cols-[1fr_3rem_1fr] sm:gap-3";
+    "grid grid-cols-[1fr_2.25rem_1fr] items-center gap-2 @md:grid-cols-[1fr_3rem_1fr] @md:gap-3";
 
   return (
     <div className="flex w-full flex-col gap-2">
       <div className={cn(row, "text-xs")}>
-        <span className="truncate font-medium text-gold">{ourName}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate font-medium text-gold">{ourName}</span>
+          {side && <SideBadge side={side} />}
+        </span>
         <span className="text-center text-[10px] font-semibold tracking-wider text-grey-mid uppercase">
           vs
         </span>
-        <span className="truncate text-right font-medium text-grey-light">{theirName}</span>
+        <span className="flex min-w-0 items-center justify-end gap-1.5">
+          {side && <SideBadge side={enemySide(side)} />}
+          <span className="truncate font-medium text-grey-light">{theirName}</span>
+        </span>
       </div>
 
       {showBans && (

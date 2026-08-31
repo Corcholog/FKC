@@ -19,6 +19,7 @@ export function MatchRowShell({
   win,
   noteCount,
   panel,
+  roomy = false,
   children,
 }: {
   /**
@@ -28,6 +29,12 @@ export function MatchRowShell({
    */
   win: boolean | null;
   noteCount: number;
+  /**
+   * More air around a taller row. The team match history draws ten champion
+   * portraits per row at up to 48px; the soloQ feed draws six at 32px and would
+   * only look loose with the same padding.
+   */
+  roomy?: boolean;
   /**
    * The notes UI, only mounted while open so a 50-row page isn't 50 live forms.
    *
@@ -41,6 +48,8 @@ export function MatchRowShell({
   const [open, setOpen] = useState(false);
   const panelId = useId();
 
+  const padding = roomy ? "p-3 @2xl:p-4" : "p-3";
+
   const shellClass = cn(
     "panel-hex @container border-l-4",
     panel && "is-interactive",
@@ -50,7 +59,7 @@ export function MatchRowShell({
   if (!panel) {
     return (
       <div className={shellClass}>
-        <div className="flex w-full items-center gap-3 p-3 text-left">
+        <div className={cn("flex w-full items-center gap-3 text-left", padding)}>
           {children}
           {/* Kept as an empty spacer so rows line up with the interactive
               version if the two ever appear on one page. */}
@@ -67,7 +76,10 @@ export function MatchRowShell({
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex w-full items-center gap-3 p-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className={cn(
+          "flex w-full items-center gap-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          padding,
+        )}
       >
         {children}
 
@@ -87,7 +99,7 @@ export function MatchRowShell({
       </button>
 
       {open && (
-        <div id={panelId} className="border-t border-border p-3">
+        <div id={panelId} className={cn("border-t border-border", padding)}>
           {panel}
         </div>
       )}

@@ -25,6 +25,7 @@ import type { LolalyticsLane } from "@/lib/lolalytics";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { SKIPPED_FLEX_HINT } from "@/lib/queues";
 
 // Browsing destinations only. Settings is deliberately not here: it's the admin
 // page, not somewhere you go to look at something, and it already sits visually
@@ -172,6 +173,12 @@ export function Navbar({
         // or a backfill looks stuck.
         if (data.partial) {
           toast.warning(`${result} Hit the rate limit — sync again to continue.`);
+        } else if (data.skippedFlexNoTeam) {
+          // Not an error and not something another sync fixes: flex is only
+          // stored when the main team played it, so with no team assigned there
+          // is nothing for the flex walk to find. Silence here would read as
+          // "nobody played flex".
+          toast.warning(`${result} Flex was skipped — ${SKIPPED_FLEX_HINT}`);
         } else {
           toast.success(result);
         }

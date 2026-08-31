@@ -105,13 +105,6 @@ export function TeamHistoryView({
             <>
               {record.wins}–{record.losses}
               <span className={cn("ml-1.5", winRateTone(record.winRate))}>{record.winRate}%</span>
-              {/* Named rather than folded in. A civil war is in the list and in
-                  the game count, and belongs in neither column of the record. */}
-              {record.undecided > 0 && (
-                <span className="ml-1.5 text-grey-mid">
-                  · {record.undecided} civil war{record.undecided === 1 ? "" : "s"}
-                </span>
-              )}
             </>
           )}
         </p>

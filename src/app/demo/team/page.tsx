@@ -20,7 +20,12 @@ export const dynamic = "force-dynamic";
 export default async function DemoTeamOverviewPage() {
   const source = () => demoSource(createPublicClient());
 
-  const [games, roster, team, flexRows] = await Promise.all([
+  const team = await cachedDemoLoad("team-lineup", () =>
+    loadTeamRoster(demoSource(createPublicClient())),
+  );
+  const teamPlayerIds = new Set(team.map((m) => m.id));
+
+  const [games, roster, flexRows] = await Promise.all([
     cachedDemoLoad("team-games", () => loadTeamGames(source())),
     cachedDemoLoad("team-roster", async () => {
       const s = source();
@@ -33,10 +38,6 @@ export default async function DemoTeamOverviewPage() {
         "roster",
       );
     }),
-    // The main team, from demo_players.team_role (migration 026 republishes the
-    // column). A role is a fact about a game rather than an identity, so it is
-    // one of the few player columns the demo does carry.
-    cachedDemoLoad("team-lineup", () => loadTeamRoster(demoSource(createPublicClient()))),
     // The rows, not the folded result: cachedDemoLoad serializes its entries,
     // and buildTeamOverview returns Maps — which come back as plain objects on
     // the second request, with every .get() on them throwing. The trap is that
@@ -44,9 +45,8 @@ export default async function DemoTeamOverviewPage() {
     cachedDemoLoad("team-flex", () => fetchTeamOverviewRows(demoFlexSource(createPublicClient()))),
   ]);
 
-  const flex = buildTeamOverview(flexRows);
-  const hasFlex = flex.split.fullStack.length + flex.split.partial.length + flex.split.civilWars.length > 0;
-  if (games.length === 0 && !hasFlex) return <TeamMatchEmptyState />;
+  const flex = buildTeamOverview(flexRows, teamPlayerIds);
+  if (games.length === 0 && flex.record.games === 0) return <TeamMatchEmptyState />;
 
   return (
     <TeamOverviewView

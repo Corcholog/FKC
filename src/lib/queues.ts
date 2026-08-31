@@ -87,3 +87,14 @@ export function parseQueues(raw: string | null | undefined): TrackedQueue[] {
     .filter((part): part is TrackedQueue => TRACKED_QUEUES.includes(part as TrackedQueue));
   return asked.length > 0 ? [...new Set(asked)] : [...TRACKED_QUEUES];
 }
+
+/**
+ * Why a flex sync can come back having done nothing.
+ *
+ * Flex rows exist only for games the main team played (five of them on one
+ * side), so with no main team assigned there is nothing a flex walk can keep.
+ * That is a configuration state, not a quiet day, and another Sync won't change
+ * it — which is why it gets its own message rather than a zero.
+ */
+export const SKIPPED_FLEX_HINT =
+  "assign five players a main-team position in Settings.";

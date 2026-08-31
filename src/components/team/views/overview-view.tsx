@@ -5,8 +5,7 @@ import { formatRole, mainRole } from "@/lib/roles";
 import { avatarTint } from "@/lib/avatar-tint";
 import { groupBySeries } from "@/lib/team/queries";
 import type { TeamOverviewFlex } from "@/lib/loaders/team-overview";
-import { FULL_STACK } from "@/lib/flex-team";
-import type { TeamMember } from "@/lib/team/roster";
+import { FULL_STACK, type TeamMember } from "@/lib/team/roster";
 import { playerWinRate, kdaRatio } from "@/lib/player-stats";
 import {
   aggregateAllyPlayers,
@@ -98,10 +97,10 @@ function RecordBar({
 /**
  * Ranked flex: the record, and who actually turns up for it.
  *
- * The record is over full-stack games only. Everything else flex produces gets
- * counted and named rather than folded in, because each is a different claim:
- * a three-stack is some of the roster playing flex, and a civil war has no team
- * result at all. lib/flex-team.ts is where that split lives.
+ * Every game counted here is one the team played as a five — the sync stores no
+ * other kind (lib/team/roster.ts). This section used to carry a three-way split
+ * and two chips explaining what it was leaving out; the gate moved that decision
+ * to write time, so the numbers here need no caveat.
  */
 function FlexSection({
   flex,
@@ -112,9 +111,9 @@ function FlexSection({
   roster: Map<string, TeamRosterRow>;
   basePath: string;
 }) {
-  const { record, split, byPlayer, appearances } = flex;
+  const { record, byPlayer, appearances } = flex;
 
-  if (record.games === 0 && split.partial.length === 0 && split.civilWars.length === 0) {
+  if (record.games === 0) {
     return (
       <section className="flex flex-col gap-3">
         <h2 className="font-heading text-lg font-semibold text-white">Flex queue</h2>
@@ -148,14 +147,6 @@ function FlexSection({
             <p className="mt-1 text-sm text-grey-light">
               {record.games} game{record.games === 1 ? "" : "s"} as a full {FULL_STACK}
             </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {split.partial.length > 0 && (
-                <MetaChip>{split.partial.length} part-stack</MetaChip>
-              )}
-              {split.civilWars.length > 0 && (
-                <MetaChip>{split.civilWars.length} civil war</MetaChip>
-              )}
-            </div>
           </div>
         </div>
 
@@ -314,9 +305,9 @@ export function TeamOverviewView({
   const allSeries = groupBySeries(games);
   const recentSeries = allSeries.slice(0, 5);
 
-  // The combined record: team matches plus the flex games the full roster
-  // played. Partial stacks and civil wars are deliberately out — see
-  // lib/flex-team.ts for why each would be a different claim.
+  // The combined record: team matches plus flex. Every stored flex game is one
+  // the team played as a five, so there is nothing to leave out here — the sync
+  // already did (lib/team/roster.ts).
   const combinedGames = overall.games + (flex?.record.games ?? 0);
   const combinedWins = overall.wins + (flex?.record.wins ?? 0);
   const combinedWinRate =

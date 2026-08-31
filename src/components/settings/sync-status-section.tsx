@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SKIPPED_FLEX_HINT } from "@/lib/queues";
 
 export type SyncState = {
   riot_key_valid: boolean;
@@ -49,6 +50,8 @@ function QueueSyncButtons() {
         // stops a multi-run backfill looking stuck.
         if (data.partial) {
           toast.warning(`${result} Hit the rate limit — run it again to continue.`);
+        } else if (data.skippedFlexNoTeam) {
+          toast.warning(`${label} was skipped — ${SKIPPED_FLEX_HINT}`);
         } else {
           toast.success(result);
         }

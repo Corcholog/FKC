@@ -19,9 +19,9 @@
 //
 // Pure: no I/O, no React, no Supabase.
 
-import { FULL_STACK } from "@/lib/flex-team";
 import { sortByRole } from "@/lib/roles";
 import { teamMatchTimestamp } from "@/lib/unified";
+import { recordOf, type TeamRecord } from "@/lib/team/roster";
 import {
   TEAM_MATCH_KINDS,
   seriesLabel,
@@ -76,13 +76,14 @@ type HistoryEntryBase = {
    */
   side: TeamSide;
   /**
-   * Null when no result belongs to the team.
+   * Always the team's own result.
    *
-   * That is not the same as a loss and not the same as unknown: a flex game the
-   * roster played against itself was won and lost by the same five people, and
-   * any single boolean is a lie about it.
+   * Unambiguous on both sources, and only since the sync started gating flex:
+   * a game the roster played against itself would be won and lost by the same
+   * people, and no single boolean could describe it. Such a game is no longer
+   * stored — see lib/team/roster.ts.
    */
-  win: boolean | null;
+  win: boolean;
   allies: HistoryChampion[];
   enemies: HistoryChampion[];
   /** Empty when nothing was recorded. Rendered only if non-empty — see the row. */
@@ -98,11 +99,8 @@ export type FlexHistoryEntry = HistoryEntryBase & {
    * which is the demo behaving correctly rather than a missing feature.
    */
   riotMatchId: string | null;
-  /** Tracked players on our side. Five is the team; fewer is some of the roster. */
-  stackSize: number;
-  fullStack: boolean;
-  /** Tracked players on both sides. `win` is null whenever this is true. */
-  civilWar: boolean;
+  /** How many of the main team played it. Five unless a sub was on the far side. */
+  teamPlayers: number;
 };
 
 export type TeamMatchHistoryEntry = HistoryEntryBase & {
@@ -166,14 +164,17 @@ function toChampion(row: FlexHistoryInput, riotName: string | null): HistoryCham
 }
 
 /**
- * One entry per flex match, told from the side the roster was on.
+ * One entry per flex match, told from the side the team was on.
  *
- * "Our side" is the side with more tracked players. In the ordinary case that is
- * the only side with any; in a civil war it is a coin toss dressed up as a rule,
- * which is exactly why `win` comes back null there — the side is chosen so the
- * two strips have a stable left and right, not so a result can be read off it.
+ * Takes the roster rather than inferring it: "our side" is the side with more
+ * *team members*, which is the same question the sync asked before storing the
+ * game. Counting any tracked player instead would let a friend on the far side
+ * tip a game the wrong way round.
  */
-export function buildFlexHistory(rows: FlexHistoryInput[]): FlexHistoryEntry[] {
+export function buildFlexHistory(
+  rows: FlexHistoryInput[],
+  teamPlayerIds: Set<string>,
+): FlexHistoryEntry[] {
   const byMatch = new Map<string, FlexHistoryInput[]>();
   for (const row of rows) {
     const list = byMatch.get(row.match_id);
@@ -184,26 +185,24 @@ export function buildFlexHistory(rows: FlexHistoryInput[]): FlexHistoryEntry[] {
   const entries: FlexHistoryEntry[] = [];
 
   for (const [matchId, participants] of byMatch) {
-    const trackedBySide = new Map<number, number>();
+    const teamBySide = new Map<number, number>();
     for (const row of participants) {
-      if (!row.player_id) continue;
-      trackedBySide.set(row.team_id, (trackedBySide.get(row.team_id) ?? 0) + 1);
+      if (!row.player_id || !teamPlayerIds.has(row.player_id)) continue;
+      teamBySide.set(row.team_id, (teamBySide.get(row.team_id) ?? 0) + 1);
     }
-    // No tracked player means the match is in the table for some other reason
-    // entirely; there is no "us" to tell it from.
-    if (trackedBySide.size === 0) continue;
+    // No team member at all means the row predates the gate, or the roster
+    // changed under it. Either way there is no "us" to tell it from, and a
+    // history of somebody else's flex games is not what this page is.
+    if (teamBySide.size === 0) continue;
 
-    const civilWar = trackedBySide.size > 1;
     // Ties break to blue, so the same match always renders the same way round.
-    const ourSide = [...trackedBySide.entries()].sort(
+    const [ourSide, teamPlayers] = [...teamBySide.entries()].sort(
       (a, b) => b[1] - a[1] || a[0] - b[0],
-    )[0][0];
+    )[0];
 
     const ours = participants.filter((p) => p.team_id === ourSide);
     const theirs = participants.filter((p) => p.team_id !== ourSide);
     const first = participants[0];
-    const stackSize = trackedBySide.get(ourSide) ?? 0;
-    const ourResult = ours.find((p) => p.player_id) ?? ours[0];
     const blue = ourSide === BLUE_TEAM_ID;
 
     entries.push({
@@ -213,15 +212,13 @@ export function buildFlexHistory(rows: FlexHistoryInput[]): FlexHistoryEntry[] {
       durationSeconds: first.game_duration_seconds,
       label: "Flex",
       side: blue ? "blue" : "red",
-      win: civilWar ? null : (ourResult?.win ?? false),
+      win: ours[0].win,
       allies: sortByRole(ours).map((p) => toChampion(p, null)),
       enemies: sortByRole(theirs).map((p) => toChampion(p, null)),
       allyBans: blue ? first.blue_bans : first.red_bans,
       enemyBans: blue ? first.red_bans : first.blue_bans,
       riotMatchId: first.riot_match_id,
-      stackSize,
-      fullStack: !civilWar && stackSize >= FULL_STACK,
-      civilWar,
+      teamPlayers,
     });
   }
 
@@ -356,31 +353,7 @@ export function historyViewCounts(entries: HistoryEntry[]): Record<HistoryView, 
   return counts;
 }
 
-/** The team's record over a set of entries. Civil wars are counted and never scored. */
-export function historyRecord(entries: HistoryEntry[]): {
-  games: number;
-  wins: number;
-  losses: number;
-  winRate: number;
-  /** Games with no result to attribute — reported, so the arithmetic is checkable. */
-  undecided: number;
-} {
-  let wins = 0;
-  let losses = 0;
-  let undecided = 0;
-  for (const entry of entries) {
-    if (entry.win === null) undecided += 1;
-    else if (entry.win) wins += 1;
-    else losses += 1;
-  }
-  const decided = wins + losses;
-  return {
-    games: entries.length,
-    wins,
-    losses,
-    // Rounded like every other win rate in the app, so two panels on one page
-    // never disagree by a decimal.
-    winRate: decided === 0 ? 0 : Math.round((wins / decided) * 100),
-    undecided,
-  };
+/** The team's record over a set of entries. */
+export function historyRecord(entries: HistoryEntry[]): TeamRecord {
+  return recordOf(entries);
 }

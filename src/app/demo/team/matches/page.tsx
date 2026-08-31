@@ -5,6 +5,7 @@ import { rows } from "@/lib/supabase/read";
 import { getChampionMap, getLatestVersion } from "@/lib/ddragon";
 import { loadTeamGames } from "@/lib/team/queries";
 import { fetchTeamHistoryRows } from "@/lib/loaders/team-history";
+import { loadTeamRoster } from "@/lib/team/roster";
 import {
   buildFlexHistory,
   buildTeamMatchHistory,
@@ -29,6 +30,9 @@ export default async function DemoTeamMatchesPage({
   const view = parseHistoryView(viewParam);
   const source = () => demoSource(createPublicClient());
 
+  const team = await cachedDemoLoad("team-lineup", () => loadTeamRoster(source()));
+  const teamPlayerIds = new Set(team.map((m) => m.id));
+
   const [games, flexRows, roster, version] = await Promise.all([
     cachedDemoLoad("team-games", () => loadTeamGames(source())),
     // The rows, not the folded result: cachedDemoLoad serializes its entries,
@@ -50,7 +54,10 @@ export default async function DemoTeamMatchesPage({
     getLatestVersion(),
   ]);
 
-  const entries = mergeHistory(buildFlexHistory(flexRows.flex), buildTeamMatchHistory(games));
+  const entries = mergeHistory(
+    buildFlexHistory(flexRows.flex, teamPlayerIds),
+    buildTeamMatchHistory(games),
+  );
   if (entries.length === 0) return <TeamMatchEmptyState />;
 
   return (

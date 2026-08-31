@@ -24,8 +24,10 @@ export function MatchRowShell({
 }: {
   /**
    * Null means no result belongs to this row and the accent stays neutral.
-   * The only thing that produces it today is a flex game the roster played
-   * against itself, which it both won and lost — see lib/flex-team.ts.
+   * Nothing produces one today — the flex gate in lib/team/roster.ts stopped a
+   * game the roster played against itself from ever being stored — but the
+   * neutral state is a line of CSS and the alternative is a row that has to
+   * claim a loss it can't support.
    */
   win: boolean | null;
   noteCount: number;

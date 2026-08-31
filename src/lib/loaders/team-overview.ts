@@ -13,13 +13,13 @@ import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { demoSource, privateSource, type DataSource } from "@/lib/data-source";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  flexRecord,
-  fullStackAppearances,
-  splitFlexGames,
-  type FlexParticipantInput,
-  type FlexRecord,
-  type FlexSplit,
-} from "@/lib/flex-team";
+  flexAppearances,
+  groupFlexGames,
+  recordOf,
+  type FlexGame,
+  type FlexGameInput,
+  type TeamRecord,
+} from "@/lib/team/roster";
 import {
   aggregatePlayerStats,
   type PlayerAgg,
@@ -29,9 +29,9 @@ import {
 /**
  * Every column the two folds below need, from one read.
  *
- * The untracked six-to-nine rows of each match are pulled deliberately: they are
- * what makes "were all five on the same side" answerable, which is the whole
- * basis of splitFlexGames.
+ * The untracked five rows of each match are pulled deliberately: they are the
+ * enemy composition, and they are what makes "which side were we on" answerable
+ * at all.
  */
 const PARTICIPANT_COLUMNS =
   // `id` rides along for the total order the paged read needs, nothing else.
@@ -46,7 +46,7 @@ const flexColumns = (matchesTable: string) =>
 
 type MatchEmbed = { game_creation: string; game_duration_seconds: number } | null;
 
-type FlexRow = Omit<FlexParticipantInput, "game_creation" | "game_duration_seconds"> & {
+type FlexRow = Omit<FlexGameInput, "game_creation" | "game_duration_seconds"> & {
   team_position: string | null;
   champion_id: number;
   champion_name: string;
@@ -60,7 +60,7 @@ type FlexRow = Omit<FlexParticipantInput, "game_creation" | "game_duration_secon
 };
 
 /** Flattened, so nothing downstream has to reach through the embed. */
-export type FlexParticipantRow = FlexParticipantInput & {
+export type FlexParticipantRow = FlexGameInput & {
   team_position: string | null;
   champion_id: number;
   champion_name: string;
@@ -76,12 +76,13 @@ export type FlexParticipantRow = FlexParticipantInput & {
 export type TeamOverviewRows = { flex: FlexParticipantRow[] };
 
 export type TeamOverviewFlex = {
-  split: FlexSplit;
-  /** The team's record, from full-stack games only. See flex-team.ts. */
-  record: FlexRecord;
-  /** Per-player flex aggregates, over every flex game they were in. */
+  /** One entry per stored flex game, newest first. All of them are the team's. */
+  games: FlexGame[];
+  /** The team's flex record. */
+  record: TeamRecord;
+  /** Per-player flex aggregates. */
   byPlayer: Map<string, PlayerAgg>;
-  /** How many full-stack games each player was in. */
+  /** How many of those games each player was in — who actually turns up. */
   appearances: Map<string, number>;
 };
 
@@ -117,13 +118,16 @@ export async function fetchTeamOverviewRows(source: DataSource): Promise<TeamOve
   return { flex };
 }
 
-export function buildTeamOverview({ flex }: TeamOverviewRows): TeamOverviewFlex {
-  const split = splitFlexGames(flex);
+export function buildTeamOverview(
+  { flex }: TeamOverviewRows,
+  teamPlayerIds: Set<string>,
+): TeamOverviewFlex {
+  const games = groupFlexGames(flex, teamPlayerIds);
 
-  // Per-player aggregates use every flex game the player was in, not just the
-  // full-stack ones: "how does this person play flex" is a question about them,
-  // and dropping the games where only three of the roster queued would answer a
-  // narrower one without saying so.
+  // Per-player aggregates cover every stored flex row, which is now the same
+  // set: the sync keeps a flex game only when the team played it, so there is
+  // no longer a wider pool of "some of the roster queued" games to decide
+  // whether to include.
   const statRows: PlayerStatInput[] = flex
     .filter((row) => row.player_id)
     .map((row) => ({
@@ -140,18 +144,22 @@ export function buildTeamOverview({ flex }: TeamOverviewRows): TeamOverviewFlex 
     }));
 
   return {
-    split,
-    record: flexRecord(split.fullStack),
+    games,
+    record: recordOf(games),
     byPlayer: aggregatePlayerStats(statRows),
-    appearances: fullStackAppearances(split.fullStack),
+    appearances: flexAppearances(games),
   };
 }
 
 /** The private read. Flex-scoped, so no other queue can reach these numbers. */
 export async function loadTeamOverviewFlex(
   supabase: SupabaseClient,
+  teamPlayerIds: Set<string>,
 ): Promise<TeamOverviewFlex> {
-  return buildTeamOverview(await fetchTeamOverviewRows(privateSource(supabase, "flex")));
+  return buildTeamOverview(
+    await fetchTeamOverviewRows(privateSource(supabase, "flex")),
+    teamPlayerIds,
+  );
 }
 
 export function demoFlexSource(supabase: SupabaseClient): DataSource {

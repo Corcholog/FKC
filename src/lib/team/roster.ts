@@ -144,3 +144,103 @@ export function recordOf(games: { win: boolean }[]): TeamRecord {
     winRate: games.length === 0 ? 0 : Math.round((wins / games.length) * 100),
   };
 }
+
+// ------------------------------------------------------------
+// Flex games, grouped
+// ------------------------------------------------------------
+
+/** One flex participant row, as far as grouping cares. */
+export type FlexGameInput = {
+  match_id: string;
+  player_id: string | null;
+  team_id: number;
+  win: boolean;
+  game_creation: string;
+  game_duration_seconds: number;
+};
+
+export type FlexGame = {
+  matchId: string;
+  gameCreation: string;
+  durationSeconds: number;
+  /** Which side the team was on. */
+  teamId: number;
+  /** The team members who played it. */
+  playerIds: string[];
+  /** The team's result. Unambiguous, because only their games are stored. */
+  win: boolean;
+};
+
+/**
+ * Flex participant rows folded back into games, one entry each.
+ *
+ * There used to be a three-way split here — full stack, partial stack, civil
+ * war — because any flex game with one tracked player was stored, and each of
+ * those was a different claim about the team. The sync now stores a flex game
+ * only when five of the team were on one side, so the other two cases cannot
+ * reach this: a partial stack is never written, and with five of the team on
+ * one side of a ten-player game there are at most five slots left for the rest
+ * of the roster, so "the team on both sides" would need the team to be the
+ * whole lobby.
+ *
+ * A sixth member subbing in *can* put one team member on the far side, which is
+ * why "our side" is still the side with more of them rather than the side with
+ * any.
+ */
+export function groupFlexGames(
+  rows: FlexGameInput[],
+  teamPlayerIds: Set<string>,
+): FlexGame[] {
+  const byMatch = new Map<string, FlexGameInput[]>();
+  for (const row of rows) {
+    const list = byMatch.get(row.match_id);
+    if (list) list.push(row);
+    else byMatch.set(row.match_id, [row]);
+  }
+
+  const games: FlexGame[] = [];
+  for (const [matchId, participants] of byMatch) {
+    const perSide = new Map<number, FlexGameInput[]>();
+    for (const row of participants) {
+      if (!row.player_id || !teamPlayerIds.has(row.player_id)) continue;
+      const list = perSide.get(row.team_id);
+      if (list) list.push(row);
+      else perSide.set(row.team_id, [row]);
+    }
+    // No team member at all means this row predates the gate, or the roster
+    // changed under it. Either way there is no "us" to tell it from.
+    if (perSide.size === 0) continue;
+
+    // Ties break to the lower team id, so the same match always renders the
+    // same way round.
+    const [teamId, ours] = [...perSide.entries()].sort(
+      (a, b) => b[1].length - a[1].length || a[0] - b[0],
+    )[0];
+
+    games.push({
+      matchId,
+      gameCreation: ours[0].game_creation,
+      durationSeconds: ours[0].game_duration_seconds,
+      teamId,
+      playerIds: ours.map((p) => p.player_id as string),
+      win: ours[0].win,
+    });
+  }
+
+  return games.sort((a, b) => b.gameCreation.localeCompare(a.gameCreation));
+}
+
+/**
+ * How many of these games each player was in.
+ *
+ * Answers "who actually turns up" — a five-stack needs five people and the
+ * fifth is not always the same one, so a roster with a substitute has a clear
+ * first choice and someone who fills in.
+ */
+export function flexAppearances(games: FlexGame[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const game of games) {
+    for (const id of game.playerIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}

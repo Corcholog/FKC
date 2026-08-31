@@ -12,6 +12,7 @@ import {
 } from "@/lib/riot";
 import {
   CURSOR_COLUMN,
+  QUEUE_FLEX,
   QUEUE_ID,
   TRACKED_QUEUES,
   TRACKED_QUEUE_IDS,
@@ -19,6 +20,7 @@ import {
   TRACK_COLUMN,
   type TrackedQueue,
 } from "@/lib/queues";
+import { FULL_STACK, isFullStack, isTeamMember } from "@/lib/team/roster";
 
 // How old a game can be and still be worth announcing a multikill for.
 //
@@ -76,15 +78,23 @@ type Account = {
   synced_through_flex: string | null;
   /** Joined from players — needed for multikill and promotion messages. */
   display_name: string;
+  /**
+   * The owner's position on the main team, or null. Joined from players because
+   * the flex gate below needs it per participant, and one embed is cheaper than
+   * a second query the loop would have to keep in step.
+   */
+  team_role: string | null;
 };
 
-type AccountJoinRow = Omit<Account, "display_name"> & {
-  players: { display_name: string } | { display_name: string }[];
+type PlayerEmbed = { display_name: string; team_role: string | null };
+
+type AccountJoinRow = Omit<Account, "display_name" | "team_role"> & {
+  players: PlayerEmbed | PlayerEmbed[];
 };
 
 const ACCOUNT_COLUMNS =
   "puuid, player_id, platform, is_primary, track_solo, track_flex, " +
-  "synced_through_solo, synced_through_flex, players!inner(display_name)";
+  "synced_through_solo, synced_through_flex, players!inner(display_name, team_role)";
 
 /**
  * A player crossing a tier or division boundary since the last sync.
@@ -140,6 +150,13 @@ export type SyncSummary = {
    * of budget halfway is not "synced as of now".
    */
   completedQueues: TrackedQueue[];
+  /**
+   * Flex was asked for and dropped, because fewer than five people are on the
+   * main team. Reported rather than left silent: "no flex arrived" and "flex
+   * cannot arrive" look identical from outside, and only one of them is fixed
+   * by pressing Sync again.
+   */
+  skippedFlexNoTeam: boolean;
   // True when the time budget ran out before every account's history was
   // walked. Not an error — no cursor was advanced past what was actually
   // covered, so the next run resumes cleanly.
@@ -197,12 +214,12 @@ async function loadAccounts(admin: SupabaseClient): Promise<Account[]> {
     .returns<AccountJoinRow[]>();
   if (error) throw new Error(error.message);
 
-  return (data ?? []).map(({ players, ...account }) => ({
-    ...account,
+  return (data ?? []).map(({ players, ...account }) => {
     // PostgREST types a to-one embed as either shape depending on how it infers
     // the relationship; both are one row here because player_id is not null.
-    display_name: Array.isArray(players) ? players[0].display_name : players.display_name,
-  }));
+    const owner = Array.isArray(players) ? players[0] : players;
+    return { ...account, display_name: owner.display_name, team_role: owner.team_role };
+  });
 }
 
 export async function runSync(
@@ -213,6 +230,7 @@ export async function runSync(
   const deadline = new Deadline(SYNC_BUDGET_MS);
 
   const accounts = await loadAccounts(admin);
+  let skippedFlex = false;
   // A map, not a set: participant rows carry a puuid and need the person's id,
   // and multikill alerts need their display name. This is the lookup that
   // replaced comparing player_id directly against participant.puuid.
@@ -230,6 +248,7 @@ export async function runSync(
     multikills: [],
     queues,
     completedQueues: [],
+    skippedFlexNoTeam: false,
     partial: false,
   };
 
@@ -240,10 +259,27 @@ export async function runSync(
   // roster rather than five.
   const playersWithNewMatches = new Set<string>();
 
+  // The main team, by player id — the set the flex gate tests against.
+  const teamPlayerIds = new Set(
+    accounts.filter((a) => isTeamMember(a)).map((a) => a.player_id),
+  );
+
+  // Flex is stored only when the main team played it, so with fewer than five
+  // people on the team no flex game can ever qualify. Walking it anyway would
+  // spend a detail call on every game just to reject it, and leave a marker row
+  // that stops it being reconsidered once the roster *is* set up — which is the
+  // expensive kind of wrong.
+  //
+  // Dropped from the run and reported rather than left to return nothing:
+  // "no flex arrived" and "flex cannot arrive" look identical from outside, and
+  // only one of them is fixed by pressing Sync again.
+  if (queues.includes("flex") && teamPlayerIds.size < FULL_STACK) skippedFlex = true;
+  const effectiveQueues = skippedFlex ? queues.filter((q) => q !== "flex") : queues;
+
   // Only accounts this run is actually about. Refreshing the rank of an account
   // whose only tracked queue wasn't asked for spends a Riot call on a number
   // nothing in this run will use.
-  const inScope = accounts.filter((a) => queues.some((q) => a[TRACK_COLUMN[q]]));
+  const inScope = accounts.filter((a) => effectiveQueues.some((q) => a[TRACK_COLUMN[q]]));
 
   // Ranks first, deliberately. They cost one call each and they're the only
   // part of the sync that writes an unrecoverable time series — if the budget
@@ -275,13 +311,13 @@ export async function runSync(
   outer: for (const account of inScope) {
     let walked = false;
 
-    for (const queue of queues) {
+    for (const queue of effectiveQueues) {
       if (!account[TRACK_COLUMN[queue]]) continue;
 
       if (!deadline.hasRoomForCall()) {
         summary.partial = true;
         // Everything still unwalked stays unfinished, including this queue.
-        for (const q of queues) incompleteQueues.add(q);
+        for (const q of effectiveQueues) incompleteQueues.add(q);
         break outer;
       }
 
@@ -292,6 +328,7 @@ export async function runSync(
         queue,
         apiKey,
         playersByPuuid,
+        teamPlayerIds,
         summary,
         playersWithNewMatches,
         deadline,
@@ -309,7 +346,10 @@ export async function runSync(
   }
 
   summary.playersProcessed = new Set(inScope.map((a) => a.player_id)).size;
-  summary.completedQueues = queues.filter((q) => !incompleteQueues.has(q));
+  summary.skippedFlexNoTeam = skippedFlex;
+  // A queue that was dropped for want of a roster is not a completed one: its
+  // sync_state timestamp would then claim coverage that was never attempted.
+  summary.completedQueues = effectiveQueues.filter((q) => !incompleteQueues.has(q));
 
   // Recount W/L for anyone whose history just grew.
   //
@@ -357,6 +397,9 @@ export async function backfillAccountHistory(
   const playersByPuuid = new Map(
     accounts.map((a) => [a.puuid, { playerId: a.player_id, displayName: a.display_name }]),
   );
+  const teamPlayerIds = new Set(
+    accounts.filter((a) => isTeamMember(a)).map((a) => a.player_id),
+  );
 
   const summary: SyncSummary = {
     accountsProcessed: 1,
@@ -371,6 +414,9 @@ export async function backfillAccountHistory(
     multikills: [],
     queues,
     completedQueues: [],
+    // A backfill walks whichever queues it was handed; it is not the place to
+    // decide the roster is unset, and runSync already reports that.
+    skippedFlexNoTeam: false,
     partial: false,
   };
   const playersWithNewMatches = new Set<string>();
@@ -385,6 +431,7 @@ export async function backfillAccountHistory(
       queue,
       apiKey,
       playersByPuuid,
+      teamPlayerIds,
       summary,
       playersWithNewMatches,
       deadline,
@@ -560,6 +607,8 @@ async function syncAccountQueue(
   queue: TrackedQueue,
   apiKey: string,
   playersByPuuid: Map<string, TrackedPlayer>,
+  /** The main team, by player id — the flex gate below tests against it. */
+  teamPlayerIds: Set<string>,
   summary: SyncSummary,
   playersWithNewMatches: Set<string>,
   deadline: Deadline,
@@ -647,7 +696,32 @@ async function syncAccountQueue(
       const excluded =
         !TRACKED_QUEUE_IDS.includes(match.info.queueId) ||
         match.info.gameDuration < MIN_COUNTED_DURATION_SECONDS ||
-        match.info.participants.some((p) => p.gameEndedInEarlySurrender);
+        match.info.participants.some((p) => p.gameEndedInEarlySurrender) ||
+        // Flex is a queue the main team plays *as* the team, and this app has
+        // no use for any other kind: three of the roster plus two friends is a
+        // real game for those three and says nothing about the team, which is
+        // the only subject the flex rows have. So a flex game is stored when
+        // five of the team were on one side, and otherwise gets the same
+        // treatment as a remake — a marker row, no participants, invisible
+        // everywhere.
+        //
+        // Resolved through player_id, not puuid: it is the same person in the
+        // same seat whichever of their accounts they queued on.
+        //
+        // Two things this costs, both worth knowing. The detail call is spent
+        // either way — an id page returns ids, so the lineup is only knowable
+        // from the response. And the judgement is made against the roster as it
+        // stands *now*: a game skipped before a sixth member was added stays
+        // skipped, and getting it back means deleting its marker row and
+        // nulling the flex cursor.
+        (match.info.queueId === QUEUE_FLEX &&
+          !isFullStack(
+            match.info.participants.map((p) => ({
+              teamId: p.teamId,
+              playerId: playersByPuuid.get(p.puuid)?.playerId ?? null,
+            })),
+            teamPlayerIds,
+          ));
 
       const { data: insertedMatch, error: insertMatchError } = await admin
         .from("matches")

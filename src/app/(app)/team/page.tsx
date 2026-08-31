@@ -13,7 +13,12 @@ import { TeamMatchEmptyState } from "@/components/team/team-match-empty-state";
 export default async function TeamOverviewPage() {
   const supabase = await createClient();
 
-  const [games, rosterResult, team, flex] = await Promise.all([
+  // The team has to be resolved before the flex fold, which needs the set of
+  // player ids to work out which side of each game was ours.
+  const team = await loadTeamRoster(privateSource(supabase));
+  const teamPlayerIds = new Set(team.map((m) => m.id));
+
+  const [games, rosterResult, flex] = await Promise.all([
     loadTeamGames(privateSource(supabase)),
     // Two reads of the same table, asking two different questions, and keeping
     // them apart is the point of migration 026.
@@ -27,17 +32,13 @@ export default async function TeamOverviewPage() {
       .select("id, slug, display_name, avatar_url")
       .order("display_name")
       .returns<TeamRosterRow[]>(),
-    // This one is the *claim*: who the main team is, in role order, whether or
-    // not they have played anything yet.
-    loadTeamRoster(privateSource(supabase)),
-    loadTeamOverviewFlex(supabase),
+    loadTeamOverviewFlex(supabase, teamPlayerIds),
   ]);
 
   // The empty state is about the entry form, so it only applies when there is
   // nothing to enter *and* nothing arrived from Riot either. A roster that has
   // played flex but typed no scrims still has a page worth rendering.
-  const hasFlex = flex.record.games + flex.split.partial.length + flex.split.civilWars.length > 0;
-  if (games.length === 0 && !hasFlex) return <TeamMatchEmptyState canAdd />;
+  if (games.length === 0 && flex.record.games === 0) return <TeamMatchEmptyState canAdd />;
 
   return (
     <TeamOverviewView

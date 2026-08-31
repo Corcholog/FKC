@@ -3,7 +3,6 @@ import { ExternalLink } from "lucide-react";
 import { formatDuration, formatRelativeTime } from "@/lib/format";
 import type { ChampionInfo } from "@/lib/ddragon";
 import { leagueOfGraphsMatchUrl } from "@/lib/match-links";
-import { FULL_STACK } from "@/lib/flex-team";
 import type { HistoryChampion, HistoryEntry } from "@/lib/team/history";
 import type { TeamNoteThread } from "@/lib/team/notes";
 import { ChampionIcon } from "@/components/champion-icon";
@@ -59,14 +58,10 @@ function CompStrip({
  * The result, in words rather than a coloured badge.
  *
  * The row already carries the win/loss accent on its left border, so a badge
- * beside it would say the same thing twice. What the word adds is the third
- * state: a flex game the roster played against itself has no result, and
- * "Civil war" is the only honest thing to print there.
+ * beside it would say the same thing twice; the word is what survives being
+ * read at a glance in a list of forty.
  */
-function ResultLabel({ win }: { win: boolean | null }) {
-  if (win === null) {
-    return <span className="text-sm font-semibold text-grey-mid">Civil war</span>;
-  }
+function ResultLabel({ win }: { win: boolean }) {
   return (
     <span className={cn("text-sm font-semibold", win ? "text-win" : "text-loss")}>
       {win ? "Win" : "Loss"}
@@ -74,25 +69,21 @@ function ResultLabel({ win }: { win: boolean | null }) {
   );
 }
 
-/** The second line of the identity block: who it was against, or who turned up. */
+/**
+ * The second line of the identity block: who it was against.
+ *
+ * Blank for flex, and that is not an omission. Every stored flex game is one the
+ * team played as a five, so "full stack" would be true of all of them and worth
+ * saying about none — and the enemy is a queue's worth of strangers with no name
+ * to print.
+ */
 function EntrySubtitle({ entry }: { entry: HistoryEntry }) {
-  if (entry.source === "team") {
-    return (
-      <>
-        <span className="text-grey-light">{entry.opponentName}</span>
-        <span className="mx-1 opacity-50">·</span>
-        Game {entry.gameNumber}
-      </>
-    );
-  }
-  // Below five, the roster played flex — the team didn't. /team's record counts
-  // only the full stacks for that reason, and a row that didn't say which it was
-  // would leave the two panels looking like they disagree.
-  return entry.fullStack ? (
-    <>Full stack</>
-  ) : (
+  if (entry.source !== "team") return null;
+  return (
     <>
-      {entry.stackSize} of {FULL_STACK}
+      <span className="text-grey-light">{entry.opponentName}</span>
+      <span className="mx-1 opacity-50">·</span>
+      Game {entry.gameNumber}
     </>
   );
 }

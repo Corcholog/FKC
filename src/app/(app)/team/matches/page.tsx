@@ -6,6 +6,7 @@ import { getChampionMap, getLatestVersion } from "@/lib/ddragon";
 import { loadTeamGames } from "@/lib/team/queries";
 import { authorsByUserId, labelAuthors, notesByGame, threadNotes } from "@/lib/team/notes";
 import { loadTeamHistoryRows } from "@/lib/loaders/team-history";
+import { loadTeamRoster } from "@/lib/team/roster";
 import {
   buildFlexHistory,
   buildTeamMatchHistory,
@@ -30,6 +31,12 @@ export default async function TeamMatchesPage({
   const view = parseHistoryView(viewParam);
   const supabase = await createClient();
 
+  // The team decides which side of a flex game was ours, so it is resolved
+  // first. It is deliberately *not* the name lookup below, which stays wide: a
+  // substitute who played a scrim still needs their name rendered.
+  const team = await loadTeamRoster(privateSource(supabase));
+  const teamPlayerIds = new Set(team.map((m) => m.id));
+
   const [games, flexRows, rosterResult, version, session] = await Promise.all([
     loadTeamGames(privateSource(supabase)),
     loadTeamHistoryRows(supabase),
@@ -38,7 +45,10 @@ export default async function TeamMatchesPage({
     getSession(),
   ]);
 
-  const entries = mergeHistory(buildFlexHistory(flexRows.flex), buildTeamMatchHistory(games));
+  const entries = mergeHistory(
+    buildFlexHistory(flexRows.flex, teamPlayerIds),
+    buildTeamMatchHistory(games),
+  );
   // Both sources empty, not just the hand-entered one: a roster with flex games
   // and no scrims yet has a history, and being told to add its first series
   // would be wrong about the page it is looking at.

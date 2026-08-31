@@ -6,6 +6,20 @@ import { avatarTint } from "@/lib/avatar-tint";
 import { groupBySeries } from "@/lib/team/queries";
 import type { TeamOverviewFlex } from "@/lib/loaders/team-overview";
 import { FULL_STACK, type TeamMember } from "@/lib/team/roster";
+import { cumulativeWinRate, type ResultPoint } from "@/lib/team/winrate-series";
+import { fromTeamGames, teamMatchTimestamp } from "@/lib/unified";
+import {
+  championWinRate,
+  topChampionsByPlayer,
+  type ChampionAgg,
+} from "@/lib/champion-stats";
+import { championDisplayName, type ChampionInfo } from "@/lib/ddragon";
+import { ChampionIcon } from "@/components/champion-icon";
+import { SectionCard } from "@/components/section-card";
+import {
+  WinrateCurve,
+  type WinrateSeries,
+} from "@/components/charts/winrate-curve";
 import { playerWinRate, kdaRatio } from "@/lib/player-stats";
 import {
   aggregateAllyPlayers,
@@ -22,7 +36,7 @@ import { TEAM_MATCH_KIND_LABELS,
   seriesLabel, type TeamGameView } from "@/lib/team/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { WinrateRing } from "@/components/winrate-ring";
-import { MetaChip, SeriesScore, winRateTone } from "@/components/team/ui";
+import { BarRow, MetaChip, SeriesScore, winRateTone } from "@/components/team/ui";
 import { cn } from "@/lib/utils";
 
 // The team section's front page — /team and its demo.
@@ -273,11 +287,160 @@ function Lineup({
   );
 }
 
+
+/**
+ * The team's form, and the toggle that says which games it counted.
+ *
+ * Three series, all computed here and handed over together — see WinrateCurve
+ * for why the switch between them is client state rather than a link.
+ */
+function FormSection({
+  games,
+  flex,
+}: {
+  games: TeamGameView[];
+  flex: TeamOverviewFlex | null;
+}) {
+  const competitive: ResultPoint[] = games.map((game) => ({
+    // The same midday key fromTeamPick writes, so a scrim and that evening's
+    // flex game order by one convention rather than two.
+    playedAt: teamMatchTimestamp(game.series.played_on),
+    win: game.win,
+  }));
+  const flexResults: ResultPoint[] = (flex?.games ?? []).map((game) => ({
+    playedAt: game.gameCreation,
+    win: game.win,
+  }));
+
+  const series: WinrateSeries = {
+    competitive: cumulativeWinRate(competitive),
+    flex: cumulativeWinRate(flexResults),
+    both: cumulativeWinRate([...competitive, ...flexResults]),
+  };
+
+  return (
+    <SectionCard
+      title="Form"
+      caption="Competitive is every game entered by hand or read out of a replay — scrims, friendlies and officials. Flex is ranked flex, which the sync only stores when all five of you played it."
+    >
+      <WinrateCurve series={series} />
+    </SectionCard>
+  );
+}
+
+/**
+ * What each of the five actually plays.
+ *
+ * Roster-driven, so somebody with nothing recorded gets a card saying so rather
+ * than being absent — the same reason the lineup strip exists. The pool mixes
+ * flex with team matches because they are the same five people playing the same
+ * game; soloQ is the other half of this app and stays out.
+ */
+function ChampionPools({
+  team,
+  championsByPlayer,
+  version,
+  championMap,
+  basePath,
+}: {
+  team: TeamMember[];
+  championsByPlayer: Map<string, ChampionAgg[]>;
+  version: string;
+  championMap: Map<number, ChampionInfo>;
+  basePath: string;
+}) {
+  if (team.length === 0) return null;
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-heading text-lg font-semibold text-white">Champion pools</h2>
+        <p className="text-xs text-grey-mid">Flex and team matches together — not solo queue.</p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {team.map((member) => {
+          const pool = championsByPlayer.get(member.id) ?? [];
+          return (
+            <div key={member.id} className="panel-hex flex flex-col gap-3 p-4">
+              <div className="flex items-center gap-2.5">
+                <Avatar size="sm">
+                  {member.avatar_url && <AvatarImage src={member.avatar_url} alt="" />}
+                  <AvatarFallback style={avatarTint(member.display_name)}>
+                    {member.display_name.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-white">{member.display_name}</p>
+                  <p className="truncate text-[10px] font-semibold tracking-wider text-grey-mid uppercase">
+                    {formatRole(member.team_role)}
+                  </p>
+                </div>
+                <Link
+                  href={`${basePath}/team/players?player=${member.slug}`}
+                  className="shrink-0 text-xs font-medium text-gold-bright transition-colors hover:text-gold"
+                >
+                  Full stats
+                </Link>
+              </div>
+
+              {pool.length === 0 ? (
+                <p className="text-xs text-grey-mid">Nothing recorded yet.</p>
+              ) : (
+                <ul className="flex flex-col gap-1">
+                  {pool.map((champion) => {
+                    const winRate = championWinRate(champion);
+                    return (
+                      <li key={champion.championId}>
+                        <BarRow fraction={champion.games / pool[0].games}>
+                          <div className="flex items-center gap-2">
+                            <ChampionIcon
+                              championId={champion.championId}
+                              championName={champion.championName}
+                              version={version}
+                              championMap={championMap}
+                              size="sm"
+                            />
+                            <span className="min-w-0 flex-1 truncate text-xs text-grey-light">
+                              {championDisplayName(
+                                champion.championId,
+                                championMap,
+                                champion.championName,
+                              )}
+                            </span>
+                            <span className="shrink-0 text-xs tabular-nums text-grey-mid">
+                              {champion.games}g
+                            </span>
+                            <span
+                              className={cn(
+                                "w-9 shrink-0 text-right text-xs font-medium tabular-nums",
+                                winRateTone(winRate),
+                              )}
+                            >
+                              {winRate}%
+                            </span>
+                          </div>
+                        </BarRow>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function TeamOverviewView({
   games,
   roster,
   team = [],
   flex = null,
+  version,
+  championMap,
   basePath = "",
 }: {
   games: TeamGameView[];
@@ -292,10 +455,20 @@ export function TeamOverviewView({
   team?: TeamMember[];
   /** Null when flex wasn't loaded — see the header. */
   flex?: TeamOverviewFlex | null;
+  /** Champion art. Omitted where the caller has no use for the pools panel. */
+  version?: string;
+  championMap?: Map<number, ChampionInfo>;
   basePath?: string;
 }) {
   const rosterById = new Map(roster.map((p) => [p.id, p]));
   const displayNames = new Map(roster.map((p) => [p.id, p.display_name]));
+
+  // Flex plus team matches, folded once. A UnifiedRow is structurally a
+  // ChampionStatInput, so this needs no adapter on either side (ADR-046).
+  const championsByPlayer = topChampionsByPlayer(
+    [...(flex?.unified ?? []), ...fromTeamGames(games, { allies: true })],
+    5,
+  );
 
   const overall = overallRecord(games);
   const sides = recordBySide(games);
@@ -362,6 +535,18 @@ export function TeamOverviewView({
           )}
         </div>
       </section>
+
+      <FormSection games={games} flex={flex} />
+
+      {version && championMap && (
+        <ChampionPools
+          team={team}
+          championsByPlayer={championsByPlayer}
+          version={version}
+          championMap={championMap}
+          basePath={basePath}
+        />
+      )}
 
       {flex && <FlexSection flex={flex} roster={rosterById} basePath={basePath} />}
 

@@ -162,8 +162,15 @@ export function SyncStatusSection({
 
       <QueueSyncButtons />
 
+      {/* Dated, because sync_state holds one row and the message outlives the run
+          that wrote it. An undated failure from a build that has since been
+          replaced — or from before a migration — reads exactly like one from a
+          minute ago, and the only difference that matters is whether pressing
+          the button above would change anything. */}
       {state.last_sync_status === "error" && state.last_error && (
-        <p className="text-xs text-loss">{state.last_error}</p>
+        <p className="text-xs text-loss">
+          Last run failed{lastSyncAgo ? ` ${lastSyncAgo}` : ""}: {state.last_error}
+        </p>
       )}
 
       <form ref={formRef} action={formAction} className="flex items-end gap-2 pt-1">

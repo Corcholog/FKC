@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { privateSource } from "@/lib/data-source";
 import { rows } from "@/lib/supabase/read";
+import { getChampionMap, getLatestVersion } from "@/lib/ddragon";
 import { loadTeamGames } from "@/lib/team/queries";
 import { loadTeamRoster } from "@/lib/team/roster";
 import { loadTeamOverviewFlex } from "@/lib/loaders/team-overview";
@@ -18,7 +19,7 @@ export default async function TeamOverviewPage() {
   const team = await loadTeamRoster(privateSource(supabase));
   const teamPlayerIds = new Set(team.map((m) => m.id));
 
-  const [games, rosterResult, flex] = await Promise.all([
+  const [games, rosterResult, flex, version] = await Promise.all([
     loadTeamGames(privateSource(supabase)),
     // Two reads of the same table, asking two different questions, and keeping
     // them apart is the point of migration 026.
@@ -33,6 +34,7 @@ export default async function TeamOverviewPage() {
       .order("display_name")
       .returns<TeamRosterRow[]>(),
     loadTeamOverviewFlex(supabase, teamPlayerIds),
+    getLatestVersion(),
   ]);
 
   // The empty state is about the entry form, so it only applies when there is
@@ -46,6 +48,8 @@ export default async function TeamOverviewPage() {
       roster={rows(rosterResult, "roster")}
       team={team}
       flex={flex}
+      version={version}
+      championMap={await getChampionMap(version)}
     />
   );
 }

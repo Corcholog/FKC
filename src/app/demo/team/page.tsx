@@ -2,6 +2,7 @@ import { createPublicClient } from "@/lib/supabase/public";
 import { demoSource } from "@/lib/data-source";
 import { cachedDemoLoad } from "@/lib/loaders/demo-cache";
 import { rows } from "@/lib/supabase/read";
+import { getChampionMap, getLatestVersion } from "@/lib/ddragon";
 import { loadTeamGames } from "@/lib/team/queries";
 import { loadTeamRoster } from "@/lib/team/roster";
 import {
@@ -25,7 +26,7 @@ export default async function DemoTeamOverviewPage() {
   );
   const teamPlayerIds = new Set(team.map((m) => m.id));
 
-  const [games, roster, flexRows] = await Promise.all([
+  const [games, roster, flexRows, version] = await Promise.all([
     cachedDemoLoad("team-games", () => loadTeamGames(source())),
     cachedDemoLoad("team-roster", async () => {
       const s = source();
@@ -43,6 +44,7 @@ export default async function DemoTeamOverviewPage() {
     // the second request, with every .get() on them throwing. The trap is that
     // the first request is a cache miss and works perfectly. See demo-cache.ts.
     cachedDemoLoad("team-flex", () => fetchTeamOverviewRows(demoFlexSource(createPublicClient()))),
+    getLatestVersion(),
   ]);
 
   const flex = buildTeamOverview(flexRows, teamPlayerIds);
@@ -54,6 +56,8 @@ export default async function DemoTeamOverviewPage() {
       roster={roster}
       team={team}
       flex={flex}
+      version={version}
+      championMap={await getChampionMap(version)}
       basePath="/demo"
     />
   );

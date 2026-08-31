@@ -25,6 +25,7 @@ import {
   type PlayerAgg,
   type PlayerStatInput,
 } from "@/lib/player-stats";
+import { fromParticipant, type UnifiedRow } from "@/lib/unified";
 
 /**
  * Every column the two folds below need, from one read.
@@ -84,6 +85,16 @@ export type TeamOverviewFlex = {
   byPlayer: Map<string, PlayerAgg>;
   /** How many of those games each player was in — who actually turns up. */
   appearances: Map<string, number>;
+  /**
+   * The same rows as unified rows, for the folds that mix flex with team
+   * matches — champion pools, most of all.
+   *
+   * Handed over rather than aggregated here because the other half of the mix
+   * lives in lib/team/queries.ts and this loader has never seen it. A UnifiedRow
+   * is structurally a ChampionStatInput, so the caller concatenates and folds
+   * once (ADR-046).
+   */
+  unified: UnifiedRow[];
 };
 
 export async function fetchTeamOverviewRows(source: DataSource): Promise<TeamOverviewRows> {
@@ -148,6 +159,7 @@ export function buildTeamOverview(
     record: recordOf(games),
     byPlayer: aggregatePlayerStats(statRows),
     appearances: flexAppearances(games),
+    unified: flex.filter((row) => row.player_id).map((row) => fromParticipant(row, "flexq")),
   };
 }
 

@@ -1284,6 +1284,9 @@ detail metrics already followed, and it is a no-op on Riot rows.
 
 ## ADR-047 — A flex game counts as "the team" only at five
 
+> **Superseded by ADR-048.** The threshold survives unchanged; where it is applied does
+> not. Kept as written because the argument below is why the gate exists at all.
+
 **Context.** Team-wide statistics mix team matches with flex. A team match is
 unambiguous: one opponent, and `win` is ours. Flex is not — the roster queues as a five,
 as a three with friends, and occasionally against itself.
@@ -1298,4 +1301,69 @@ The alternative — treating any flex game with a tracked player as a team game 
 the record with games the team did not play and inverts on the civil wars, which is the
 kind of wrong that looks plausible. The threshold is a constant (`FULL_STACK`) rather than
 a setting, because "the team" is five people and that is not a preference.
+
+---
+
+## ADR-048 — The main team is a column, and the flex rule moves to write time
+
+**Context.** This app had become two trackers sharing a database — a soloQ tracker for a
+group of friends, and a competitive tracker for five of them across scrims, tournaments and
+ranked flex — and nothing in the schema said which was which. Every `/team` page selected
+the whole `players` table with no predicate. The only rule that existed was ADR-047's, and
+it is a rule about *a match*: it can decide whether one flex game was the team's and it
+cannot name a player who did not play, which is most of what a team page needs to say.
+
+`track_flex` on `player_accounts` looked like the missing flag and was not. It is a
+Riot-call budget, read only by the sync.
+
+**Decision.** `players.team_role` — nullable, one of the five positions, non-null meaning
+"on the main team". `lib/team/roster.ts` is the single reader. And ADR-047's threshold
+moves from render time into `runSync`: a flex match is stored only when five of the team
+were on one side, resolved through `player_id`.
+
+**Consequence.** Two of ADR-047's three cases become unwritable — a partial stack never
+lands, and five of the team on one side of a ten-player game leaves no room for the team on
+the other — so `flex-team.ts`, the civil-war branch, the nullable `win` and the two chips
+explaining what the record excluded all went. The rule is enforced once, where the data
+enters, rather than in every fold that reads it.
+
+Three things follow that are worth stating rather than discovering:
+
+**A skipped game stays skipped.** The gate judges against the roster as it stands now, so
+adding a sixth member later does not recover games passed over before. Recovery is deleting
+those `excluded` marker rows and nulling the flex cursors.
+
+**It saves rows, not Riot calls.** An id page returns ids, so the lineup is only knowable
+from the detail response — which is spent either way. What it does change is that walking
+more than `N - 4` accounts for flex is now provably redundant, since every qualifying game
+contains five of the team (see [03 §8c](03-sync-engine.md)).
+
+**Membership decides what is counted; it does not decide what is named.** The name lookups
+under `/team` still read every player, because a substitute who played a scrim needs their
+name rendered. Narrowing those would print "Unknown" rather than leaving them out — a
+different bug, and a quieter one.
+
+---
+
+## ADR-049 — Two halves, and where a control lives
+
+**Context.** Once the team stopped meaning "everyone", the app had two subjects and one
+flat navbar of seven links, no two of which announced which subject they belonged to.
+
+**Decision.** The navigation groups into **Clan** (dashboard, roster, matches, champions,
+tier lists, insights — everyone, on solo queue) and **Main team** (the `/team` section and
+the draft tools). `/team/roster` moved out to `/roster`, where it always belonged: it is
+nine players sorted by soloQ rank. `/settings` became a section with five tabs, following
+the pattern `/team` and `/draft` already set.
+
+**Consequence.** The split is now visible without being explained. It also settles a
+recurring question — *should this control be a link or client state* — by making the answer
+structural: **a different query is a route, the same data viewed differently is `useState`**.
+The scope switch, the roster rail and the source tabs on `/team/players` are links; the
+win-rate toggle is state, because all three of its series are computed in one pass and
+handed over together.
+
+The cost is the desktop row, which is eight links wide and separated by a rule rather than
+by headings — two words of section label cost more there than they explain. The sheet gets
+real labels, because vertical space is free.
 

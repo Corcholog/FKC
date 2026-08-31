@@ -164,7 +164,7 @@ src/
 │   │                           each one's cursor lives
 │   ├── scope.ts, unified.ts    Which sources a page counts, and the one row
 │   │                           shape that lets the aggregators mix them
-│   ├── flex-team.ts            When a flex game counts as the team playing
+│   ├── team/roster.ts          Who the main team is, and whether a game was theirs
 │   ├── participant-row.ts      Riot DTO → database row mapping
 │   ├── ddragon.ts              Champion id ↔ display name ↔ icon URL
 │   ├── auth.ts                 Session helpers (React `cache`-deduped)

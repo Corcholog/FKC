@@ -27,15 +27,27 @@ import { cn } from "@/lib/utils";
 // /demo/player/[alias] is deliberately absent: it's reached by clicking a card,
 // and a nav entry would need a player to point at. Icons match the private
 // navbar's, so the two versions are recognisably the same tool.
-const NAV_ITEMS = [
-  { href: "/demo", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/demo/roster", label: "Roster", icon: Users },
-  { href: "/demo/matches", label: "Matches", icon: Swords },
-  { href: "/demo/champions", label: "Champions", icon: Trophy },
-  { href: "/demo/tierlists", label: "Tier Lists", icon: ListOrdered },
-  { href: "/demo/insights", label: "Insights", icon: LineChart },
-  { href: "/demo/team", label: "Team", icon: Shield },
-  { href: "/demo/draft", label: "Draft", icon: Network },
+// The same two halves as the private navbar, and the same reasoning: the clan
+// group is everybody on solo queue, the team group is the five.
+const NAV_GROUPS = [
+  {
+    label: "Clan",
+    items: [
+      { href: "/demo", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/demo/roster", label: "Roster", icon: Users },
+      { href: "/demo/matches", label: "Matches", icon: Swords },
+      { href: "/demo/champions", label: "Champions", icon: Trophy },
+      { href: "/demo/tierlists", label: "Tier Lists", icon: ListOrdered },
+      { href: "/demo/insights", label: "Insights", icon: LineChart },
+    ],
+  },
+  {
+    label: "Main team",
+    items: [
+      { href: "/demo/team", label: "Team", icon: Shield },
+      { href: "/demo/draft", label: "Draft", icon: Network },
+    ],
+  },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -75,26 +87,34 @@ export function DemoNavbar() {
             No sheet: that is state, a portal and a focus trap, and this header
             has eight read-only links and no menu to hide. */}
         <nav className="order-last flex w-full flex-wrap items-center gap-1 sm:order-none sm:w-auto sm:flex-1">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const active = isActive(pathname, href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                title={label}
-                className={cn(
-                  "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  active ? "text-gold-bright" : "text-grey-light hover:text-white",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {/* Hidden visually, never removed: an icon-only link with no
-                    accessible name is a link a screen reader announces as its
-                    URL. */}
-                <span className="sr-only xl:not-sr-only">{label}</span>
-              </Link>
-            );
-          })}
+          {NAV_GROUPS.map((group, i) => (
+            <div key={group.label} className="flex flex-wrap items-center gap-1">
+              {/* A rule rather than a heading: this row wraps onto its own line
+                  below sm, where two extra words of label would push the links
+                  onto a third. */}
+              {i > 0 && <span aria-hidden className="mx-1.5 h-4 w-px bg-border" />}
+              {group.items.map(({ href, label, icon: Icon }) => {
+                const active = isActive(pathname, href);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    title={label}
+                    className={cn(
+                      "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      active ? "text-gold-bright" : "text-grey-light hover:text-white",
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {/* Hidden visually, never removed: an icon-only link with no
+                        accessible name is a link a screen reader announces as
+                        its URL. */}
+                    <span className="sr-only xl:not-sr-only">{label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <Link

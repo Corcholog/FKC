@@ -27,17 +27,28 @@ src/app/
     ├── player/[slug]/page.tsx  /player/x    Detail: LP chart, top champions, roles,
     │                                        matchups, heatmap, recent form
     ├── tierlists/            /tierlists     Hand-made rankings; [slug] is the editor
-    ├── team/                 Section with its own layout + tab strip (see below)
+    ├── roster/page.tsx       /roster        Everyone, by soloQ rank, with their pools
+    ├── team/                 Section with its own layout + tab strip (see below).
+    │   │                     Everything here is about the five players with a
+    │   │                     players.team_role — see 02 §2.
     │   ├── layout.tsx        Heading, tabs, "New series" — wraps everything under it
-    │   ├── page.tsx          /team                    Overview: records, flex, players
+    │   ├── page.tsx          /team                    Overview: lineup, form, records,
+    │   │                                              champion pools
     │   ├── matches/          /team/matches            The match history — flex and team
     │   │                                              matches, one row per game; [id] is
     │   │                                              one series, plus new/ and [id]/edit
+    │   ├── players/          /team/players            Per-player depth, ?player= &source=
     │   ├── scouting/         /team/scouting           The filtered game view — §15
     │   ├── drafts/           /team/drafts             Pick/ban aggregates
     │   ├── opponents/        /team/opponents          Teams; [slug] is the scouting page
-    │   ├── roster/           /team/roster             The nine players, as a grid
     │   └── actions.ts        Save / delete series, opponent notes, game-note CRUD
+    ├── settings/             Section with its own layout + tab strip
+    │   ├── page.tsx          /settings                Roster: add, edit, accounts
+    │   ├── team/             /settings/team           The five roles, flex discovery
+    │   ├── sync/             /settings/sync           Riot key, per-queue sync, backfill
+    │   ├── ai/               /settings/ai             Clan context
+    │   ├── demo/             /settings/demo           Demo summary drafts
+    │   └── actions.ts        Every settings server action
     ├── notes/                No page.tsx, so no route — just the note CRUD server
     │   ├── actions.ts        actions and their form-state type, shared by every
     │   └── form-state.ts     surface that renders a match row.

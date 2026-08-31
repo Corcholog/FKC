@@ -259,11 +259,13 @@ roster's data present.
 ## 7b. What flex, multi-account and team matches left open
 
 **None of it is tested, and it is the change most able to go silently wrong.** Queue
-scoping and puuid→player resolution both fail by producing a plausible number rather than
-an error. The pure modules added here — `queues.ts`, `scope.ts`, `unified.ts`,
-`flex-team.ts` — were written to the same no-I/O rule as everything in §1's table and are
-just as testable; `splitFlexGames` (the full-stack / partial / civil-war split) and the
-damage clock in `player-stats.ts` are the two worth pinning first.
+scoping, puuid→player resolution and the flex gate all fail by producing a plausible number
+rather than an error — and the gate now fails by *not writing a row*, which is worse: a
+game rejected because the roster was misconfigured is not recoverable by re-running the
+sync, only by clearing marker rows. The pure modules — `queues.ts`, `scope.ts`,
+`unified.ts`, `team/roster.ts`, `team/history.ts`, `team/winrate-series.ts` — were written
+to the same no-I/O rule as everything in §1's table and are just as testable. `isFullStack`
+is the one that most deserves the repo's first test.
 
 **A `select *` view does not follow its table.** Postgres expands the star at CREATE VIEW
 time, so adding a column to `match_participants` means recreating `soloq_participants`,
@@ -306,9 +308,30 @@ but nine of those are strangers, and a full scoreboard is a step toward republis
 this app deliberately doesn't. The board shows the compositions; League of Graphs has the
 rest.
 
-**A partial flex stack is counted in the per-player table and not in the record.** The
-caption says so, but the two numbers on that panel genuinely count different things and
-somebody will read them as the same one.
+**A partial flex stack is no longer stored at all** (ADR-048), which closed the gap this
+section used to describe — but it opened two smaller ones. A team player's flex games are
+now invisible on `/player/[slug]?scope=ranked` unless the whole team was in them, which is
+the intended reading of "flex is a team queue" and still a narrowing nobody is told about
+on that page. And a non-team player with `track_flex` on an account stores nothing, so the
+toggle does nothing for them; `/settings/team` says so, the roster tab does not.
+
+**The main team is judged as of now, not as of the game.** `players.team_role` has no
+history, so a roster change re-labels the past: somebody who left is dropped from the
+lineup and from every fold that reads it, and their games stay in the record under a team
+they are no longer on. A `team_members` table with join and leave dates is the fix, and it
+was declined for a five-person roster that has never changed.
+
+**`/team/players` loads every team member's full soloQ history** to build the roster rail,
+because the rail re-ranks with the source switch. That is the heaviest read in the section
+and the first one that would want narrowing — either by folding per player on demand or by
+capping the pool the rail is built from.
+
+**`settings/actions.ts` did not split when the page did.** The routes are five now; the
+actions are still one 32 KB `"use server"` file, because its private helpers
+(`requireSession`, `revalidateRoster`, `resolveAccount`, `backfillNewAccount`) are shared
+across every section and a `"use server"` module can only export async functions — so the
+split needs those extracted first. Nothing is broken by it; it is the tidy-up the page
+split was supposed to come with.
 
 ## 8. Deliberate non-features
 

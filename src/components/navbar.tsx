@@ -31,28 +31,34 @@ import { SKIPPED_FLEX_HINT } from "@/lib/queues";
 // page, not somewhere you go to look at something, and it already sits visually
 // with /account on the right.
 //
-// Team and Scrims used to be two entries. They are one section now — the team's
-// matches, drafts and scouting are tabs under it — so the row gained a slot back
-// rather than carrying two links to the same place.
+// Two halves, and the split is the app's whole shape: the clan group is every
+// tracked player on solo queue, the team group is the five who scrim, play
+// tournaments and queue flex together (players.team_role, migration 026).
 //
-// Roster came the other way, out of that section, when migration 026 made "the
-// team" mean five named people: the page is the whole friend group on solo
-// queue, which is this app's other half. It sits next to Dashboard because that
-// is the half it belongs to.
-//
-// Eight links plus the matchup search, Sync, the settings gear, the account link
-// and Sign out is the row at its limit; it collapses into the sheet below xl.
-// Grouping the two halves visually is the next thing this row needs.
-const NAV_ITEMS = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/roster", label: "Roster", icon: Users },
-  { href: "/matches", label: "Matches", icon: Swords },
-  { href: "/champions", label: "Champions", icon: Trophy },
-  { href: "/tierlists", label: "Tier Lists", icon: ListOrdered },
-  { href: "/insights", label: "Insights", icon: LineChart },
-  { href: "/team", label: "Team", icon: Shield },
-  { href: "/draft", label: "Draft", icon: Network },
+// Rendered as a separator on the desktop row and as labelled sections in the
+// sheet. The row is eight links wide already and two words of heading would cost
+// more than they explain there; in the sheet the space is vertical and free.
+const NAV_GROUPS = [
+  {
+    label: "Clan",
+    items: [
+      { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/roster", label: "Roster", icon: Users },
+      { href: "/matches", label: "Matches", icon: Swords },
+      { href: "/champions", label: "Champions", icon: Trophy },
+      { href: "/tierlists", label: "Tier Lists", icon: ListOrdered },
+      { href: "/insights", label: "Insights", icon: LineChart },
+    ],
+  },
+  {
+    label: "Main team",
+    items: [
+      { href: "/team", label: "Team", icon: Shield },
+      { href: "/draft", label: "Draft", icon: Network },
+    ],
+  },
 ];
+
 
 /**
  * Whether a nav item owns the current page.
@@ -205,14 +211,19 @@ export function Navbar({
           {/* The matchup fields need room, so the links collapse into the sheet
               one breakpoint later than they used to. */}
           <nav className="hidden items-center gap-1 xl:flex">
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.href}
-                href={item.href}
-                label={item.label}
-                Icon={item.icon}
-                active={isActive(pathname, item.href)}
-              />
+            {NAV_GROUPS.map((group, i) => (
+              <div key={group.label} className="flex items-center gap-1">
+                {i > 0 && <span aria-hidden className="mx-1.5 h-4 w-px bg-border" />}
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    href={item.href}
+                    label={item.label}
+                    Icon={item.icon}
+                    active={isActive(pathname, item.href)}
+                  />
+                ))}
+              </div>
             ))}
           </nav>
         </div>
@@ -247,7 +258,7 @@ export function Navbar({
             {!syncing && <Swords className="h-4 w-4" />}
           </Button>
 
-          {/* Settings lives here rather than in NAV_ITEMS — see the comment on
+          {/* Settings lives here rather than in NAV_GROUPS — see the comment on
               that array. Icon-only: it's the one destination nobody needs a
               label to find, and the row has no width to spare. */}
           <Link
@@ -313,16 +324,23 @@ export function Navbar({
                 className="px-4"
                 onOpened={() => setSheetOpen(false)}
               />
-              <nav className="flex flex-col gap-1 px-2">
-                {NAV_ITEMS.map((item) => (
-                  <NavLink
-                    key={item.href}
-                    href={item.href}
-                    label={item.label}
-                    Icon={item.icon}
-                    active={isActive(pathname, item.href)}
-                    onNavigate={() => setSheetOpen(false)}
-                  />
+              <nav className="flex flex-col gap-3 px-2">
+                {NAV_GROUPS.map((group) => (
+                  <div key={group.label} className="flex flex-col gap-1">
+                    <p className="px-3 text-[10px] font-semibold tracking-wider text-grey-mid uppercase">
+                      {group.label}
+                    </p>
+                    {group.items.map((item) => (
+                      <NavLink
+                        key={item.href}
+                        href={item.href}
+                        label={item.label}
+                        Icon={item.icon}
+                        active={isActive(pathname, item.href)}
+                        onNavigate={() => setSheetOpen(false)}
+                      />
+                    ))}
+                  </div>
                 ))}
               </nav>
               {/* sm:hidden, same as it already was: from sm up these three are

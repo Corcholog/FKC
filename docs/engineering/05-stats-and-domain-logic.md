@@ -518,11 +518,14 @@ is silent: folding team matches into a damage average would divide a real numera
 minutes that never contributed to it and halve everyone's DPM, with the number still
 rendering. It is a no-op on Riot rows, which always report damage.
 
-**Flex needed a rule about when it counts as *the team*.** A team match is unambiguous —
-one opponent, and `win` is ours. Flex isn't: five tracked players on one side is the team,
-fewer is some of the roster, and players on both sides is a game the team both won and
-lost. `src/lib/flex-team.ts` splits the three and the overview reports each rather than
-picking one and hoping.
+**Flex needed a rule about when it counts as *the team*, and that rule moved to write
+time.** It used to be a three-way split at render — full stack, partial stack, civil war —
+because any flex game with one tracked player was stored and each of those was a different
+claim. The sync now keeps a flex game only when five of the main team were on one side
+([03 §8c](03-sync-engine.md)), so two of the three can no longer be written: a partial
+stack never lands, and five of the team on one side of a ten-player game leaves no room for
+the team on the other. `src/lib/flex-team.ts` is gone; what survives is `groupFlexGames`
+and `recordOf` in `src/lib/team/roster.ts`, and the numbers need no caveat.
 
 **Riot-only panels stay Riot-only, at every scope.** LP over time, the hour heatmap, lane
 differentials, matchups and the game-length curves read the Riot rows whatever the scope

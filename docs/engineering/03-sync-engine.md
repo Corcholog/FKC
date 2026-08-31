@@ -347,6 +347,52 @@ One lock still covers every queue: the rate limit and the 60-second budget are s
 two concurrent runs would spend the same allowance twice and both come back partial. Only a
 queue that *finished* stamps its `sync_state.last_*_sync_at`.
 
+## 8c. A flex game is the team's, or it is nobody's
+
+Flex is a queue the main team plays *as* the team, and this app has no use for any other
+kind: three of the roster plus two friends is a real game for those three and says nothing
+about the team, which is the only subject the flex rows have. So the exclusion rule gained
+a clause — a flex match is kept when **five of the main team were on one side**
+(`isFullStack`, `lib/team/roster.ts`), and otherwise gets the same treatment as a remake.
+
+**Resolved through `player_id`, not puuid.** It is the same person in the same seat
+whichever of their accounts they queued on, which is exactly the distinction migration 023
+made possible.
+
+**"Not stored" means no participant rows.** The `matches` row is still written, marked
+`excluded` — the reason is in §5 and it is the same one remakes have: *an unrecorded match
+id is one the walk would re-fetch on every future sync forever*. Every read path joins
+through the participant views, so a match with none is invisible to every stat.
+
+**What it does not save is the detail call.** An id page returns ids; the lineup is only
+knowable from the response. So the saving is rows and render-time noise, not Riot budget —
+and that changes which account is worth walking, see below.
+
+**The judgement is made against the roster as it stands now.** A game skipped before a
+sixth member was added stays skipped. Recovering it means deleting those `excluded` marker
+rows for queue 440 and nulling the flex cursors, then re-syncing.
+
+**With fewer than five people assigned, the flex queue is dropped from the run entirely**
+and `SyncSummary.skippedFlexNoTeam` says so. Walking it would spend a detail call on every
+game to reject it *and* leave marker rows that block reconsidering them once the roster is
+set up. "No flex arrived" and "flex cannot arrive" look identical from outside, and only
+one of them is fixed by pressing Sync again.
+
+### One tracked account finds them all
+
+A qualifying flex game contains five of the team, so with a five-person roster **every one
+of them is in every game** — and all five accounts return the same match ids. Formally,
+with `N` members and a five-player threshold a game can omit at most `N - 5` of them, so
+`N - 4` accounts cover every possible lineup. At `N = 5` that is one.
+
+The detail call is already paid once (`riot_match_id` is unique; the second inserter takes
+the `23505` branch), so what the extra accounts cost is id pages — four wasted calls per
+run, and four times that during a backfill.
+
+**And the right one to walk is the account that plays flex *only* with the team**, because
+every game that isn't theirs still costs a detail call to find that out. `/settings/team`
+names the tracked accounts and says when there are more than `N - 4` of them.
+
 ## 9. Cost model
 
 For N tracked players, one full sync costs:

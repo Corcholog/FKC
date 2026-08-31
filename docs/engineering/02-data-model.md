@@ -85,6 +85,7 @@ Columns worth understanding:
 | `tier`/`division`/`league_points` | A **snapshot**, overwritten on every sync. The history lives in `player_rank_history`. |
 | `wins`/`losses` | **This app's own tracked record**, not Riot's season totals. Recomputed each sync as a straight count of that player's `match_participants` rows. See §5. |
 | `ai_context` | Free text about the person, injected into their AI prompts. |
+| `team_role` | Which position this person plays on the **main team**, or null (migration 026). Nullable *is* the membership flag: this app is a soloQ tracker for the whole friend group plus a competitive tracker for five of them, and everything under `/team` reads this column. Riot's own `team_position` vocabulary, so `lib/roles.ts` and `TEAM_ROLES` need no translation. Not unique per role — a substitute is on the team, and "five of them were in this game" is enforced per match by the sync. |
 | ~~`synced_through`~~ | Moved to `player_accounts`, and split per queue — coverage is a property of an account and a queue, not of a person. See §2b and [03 §5](03-sync-engine.md). |
 
 `idx_players_display_name_lower` is a **case-insensitive unique index**, because

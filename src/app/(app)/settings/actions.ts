@@ -13,6 +13,7 @@ import {
 import { backfillAccountHistory, refetchMatchDetails, RiotKeyInvalidError } from "@/lib/sync";
 import { MAX_CLAN_CONTEXT_CHARS, MAX_PLAYER_CONTEXT_CHARS } from "@/lib/ai-context";
 import { playerSlug } from "@/lib/slug";
+import { TEAM_ROLES, type TeamRole } from "@/lib/team/types";
 import {
   DEMO_SUMMARY_DRAFT_SOURCE,
   DEMO_SUMMARY_SOURCE,
@@ -449,6 +450,46 @@ export async function setPrimaryAccount(puuid: string): Promise<void> {
   if (playerError) throw new Error(playerError.message);
 
   revalidateRoster();
+}
+
+/**
+ * Puts a player on the main team at a position, or takes them off it.
+ *
+ * This app is two trackers over one roster: a soloQ tracker for the whole
+ * friend group, and a competitive tracker for the five who scrim, play
+ * tournaments and queue flex together. `players.team_role` is the only thing
+ * that separates them, so this is the write that decides what /team is about.
+ *
+ * It is deliberately not `track_flex`, which lives on an account and answers a
+ * different question — "is this account worth spending Riot calls walking for
+ * queue 440". The two coincide today and are not the same fact: unticking a
+ * sync checkbox should never silently redefine who the team is.
+ *
+ * Two roles can be the same. A sixth person who subs in at mid is on the team,
+ * and the rule that matters — five of them were in this game — is enforced per
+ * match by the sync, not by the roster.
+ */
+export async function setTeamRole(playerId: string, role: string | null): Promise<void> {
+  const { supabase } = await requireSession();
+
+  // Validated here rather than trusted from the client, even though the check
+  // constraint would also catch it: a constraint violation surfaces as a
+  // Postgres error string in a toast, which is a worse answer than a sentence.
+  if (role !== null && !TEAM_ROLES.includes(role as TeamRole)) {
+    throw new Error(`"${role}" is not one of the five positions.`);
+  }
+
+  const { error } = await supabase
+    .from("players")
+    .update({ team_role: role })
+    .eq("id", playerId);
+  if (error) throw new Error(error.message);
+
+  revalidateRoster();
+  // The team section is the whole point of this column, and none of its pages
+  // is covered by revalidateRoster's list.
+  revalidatePath("/team", "layout");
+  revalidatePath("/roster");
 }
 
 /**

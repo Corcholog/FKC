@@ -15,6 +15,7 @@ import {
   Menu,
   Loader2,
   UserRound,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -29,22 +30,26 @@ import { cn } from "@/lib/utils";
 // page, not somewhere you go to look at something, and it already sits visually
 // with /account on the right.
 //
-// Team and Scrims used to be two entries. They are one section now — the roster
-// is a tab beside the team's matches, drafts and scouting — so the row gained a
-// slot back rather than carrying two links to the same place.
+// Team and Scrims used to be two entries. They are one section now — the team's
+// matches, drafts and scouting are tabs under it — so the row gained a slot back
+// rather than carrying two links to the same place.
 //
-// Draft is the eighth slot. Seven links plus the matchup search, Sync, the
-// settings gear, the account link and Sign out were already tight at 1024px —
-// adding an eighth without more room would have been the row's actual breaking
-// point, not just a squeeze — so the collapse below moved from lg to xl at the
-// same time. Below xl, all eight links live in the sheet, same as before.
+// Roster came the other way, out of that section, when migration 026 made "the
+// team" mean five named people: the page is the whole friend group on solo
+// queue, which is this app's other half. It sits next to Dashboard because that
+// is the half it belongs to.
+//
+// Eight links plus the matchup search, Sync, the settings gear, the account link
+// and Sign out is the row at its limit; it collapses into the sheet below xl.
+// Grouping the two halves visually is the next thing this row needs.
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/team", label: "Team", icon: Shield },
+  { href: "/roster", label: "Roster", icon: Users },
   { href: "/matches", label: "Matches", icon: Swords },
   { href: "/champions", label: "Champions", icon: Trophy },
   { href: "/tierlists", label: "Tier Lists", icon: ListOrdered },
   { href: "/insights", label: "Insights", icon: LineChart },
+  { href: "/team", label: "Team", icon: Shield },
   { href: "/draft", label: "Draft", icon: Network },
 ];
 

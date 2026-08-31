@@ -47,6 +47,12 @@ const nextConfig: NextConfig = {
       move("/scrims/:id/edit", "/team/matches/:id/edit"),
       move("/scrims/:id", "/team/matches/:id"),
 
+      // The roster left the team section when migration 026 made "the team"
+      // mean five specific people. The page itself never changed — it is the
+      // whole friend group on solo queue, which is the other half of this app.
+      move("/team/roster", "/roster"),
+      move("/demo/team/roster", "/demo/roster"),
+
       // The demo mirrors the private tree, so it mirrors the redirects.
       move("/demo/scrims", "/demo/team"),
       move("/demo/scrims/history", "/demo/team/matches"),

@@ -15,7 +15,6 @@ const TABS = [
   { href: "/scouting", label: "Scouting" },
   { href: "/drafts", label: "Drafts" },
   { href: "/opponents", label: "Opponents" },
-  { href: "/roster", label: "Roster" },
 ];
 
 export function TeamMatchTabs({ basePath = "" }: { basePath?: string }) {

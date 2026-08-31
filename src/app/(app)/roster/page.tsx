@@ -5,18 +5,27 @@ import { loadRoster } from "@/lib/loaders/roster";
 import { PlayerCard } from "@/components/player-card";
 import { getLatestVersion, getChampionMap } from "@/lib/ddragon";
 
-export default async function TeamRosterPage() {
+// Everyone, sorted by rank, with their soloQ champion pools.
+//
+// This lived at /team/roster until migration 026 gave the main team a column,
+// and it never belonged there: it is the whole friend group on solo queue,
+// which is the *other* half of this app. The team section now answers "who are
+// the five", and this page answers "how is everybody doing".
+export default async function RosterPage() {
   const supabase = await createClient();
   const { players: sorted, topChampionsByPlayerId } = await loadRoster(privateSource(supabase));
 
   const version = await getLatestVersion();
   const championMap = await getChampionMap(version);
 
-  // No <main> and no heading: /team/layout.tsx owns both. This was a top-level
-  // route until the team section absorbed it.
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-grey-light">Fake Clan roster, sorted by rank.</p>
+    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+      <div>
+        <h1 className="font-heading text-2xl font-semibold text-white">Roster</h1>
+        <p className="text-sm text-grey-light">
+          Everyone tracked here, sorted by solo queue rank.
+        </p>
+      </div>
 
       <div className="flex flex-col gap-3">
         {sorted.length === 0 ? (
@@ -39,6 +48,6 @@ export default async function TeamRosterPage() {
           ))
         )}
       </div>
-    </div>
+    </main>
   );
 }

@@ -15,7 +15,7 @@ import {
   type DemoSummaryDraft,
 } from "@/components/settings/demo-summaries-form";
 import { AddPlayerForm } from "@/components/settings/add-player-form";
-import { PlayerRow } from "@/components/settings/player-row";
+import { PlayerRow, type SettingsPlayer } from "@/components/settings/player-row";
 import type { PlayerAccount } from "@/components/settings/player-accounts";
 import { RefetchDetailsForm } from "@/components/settings/refetch-details-form";
 import { ClanContextForm } from "@/components/settings/clan-context-form";
@@ -30,8 +30,15 @@ export default async function SettingsPage() {
   const players = rows(
     await supabase
       .from("players")
-      .select("id, riot_game_name, riot_tag_line, display_name, avatar_url, user_id, ai_context")
-      .order("display_name"),
+      .select(
+        "id, riot_game_name, riot_tag_line, display_name, avatar_url, user_id, " +
+          "ai_context, team_role",
+      )
+      .order("display_name")
+      // Spelled out because the column list is a concatenation, which PostgREST's
+      // type inference can't read — without this the rows come back as
+      // GenericStringError and every field access below is an error.
+      .returns<SettingsPlayer[]>(),
     "roster",
   );
 

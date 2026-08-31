@@ -6,6 +6,7 @@ import { avatarTint } from "@/lib/avatar-tint";
 import { groupBySeries } from "@/lib/team/queries";
 import type { TeamOverviewFlex } from "@/lib/loaders/team-overview";
 import { FULL_STACK } from "@/lib/flex-team";
+import type { TeamMember } from "@/lib/team/roster";
 import { playerWinRate, kdaRatio } from "@/lib/player-stats";
 import {
   aggregateAllyPlayers,
@@ -223,14 +224,81 @@ function FlexSection({
   );
 }
 
+/**
+ * The five, in role order — the answer to "who is this page about".
+ *
+ * Roster-driven rather than games-driven, and that is the whole reason
+ * migration 026 exists: everything else on this page is folded out of games, so
+ * a player who hasn't played one is invisible to it. "Our support has played
+ * nothing this split" is information, and this is the only panel that can say
+ * it.
+ */
+function Lineup({
+  team,
+  basePath,
+}: {
+  team: TeamMember[];
+  basePath: string;
+}) {
+  if (team.length === 0) {
+    return (
+      <section className="panel-hex p-4">
+        <p className="text-sm text-grey-mid">
+          No main team assigned yet — set each player&apos;s role in{" "}
+          <Link href="/settings" className="text-gold-bright hover:text-gold">
+            Settings
+          </Link>{" "}
+          and this section becomes the five of them.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="flex flex-wrap gap-2">
+      {team.map((member) => (
+        <Link
+          key={member.id}
+          href={`${basePath}/player/${member.slug}`}
+          className="panel-hex group flex min-w-0 flex-1 basis-36 items-center gap-2.5 p-3 transition-colors hover:border-gold-muted"
+        >
+          <Avatar size="sm">
+            {member.avatar_url && <AvatarImage src={member.avatar_url} alt="" />}
+            <AvatarFallback style={avatarTint(member.display_name)}>
+              {member.display_name.slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-white transition-colors group-hover:text-gold-bright">
+              {member.display_name}
+            </p>
+            <p className="truncate text-[10px] font-semibold tracking-wider text-grey-mid uppercase">
+              {formatRole(member.team_role)}
+            </p>
+          </div>
+        </Link>
+      ))}
+    </section>
+  );
+}
+
 export function TeamOverviewView({
   games,
   roster,
+  team = [],
   flex = null,
   basePath = "",
 }: {
   games: TeamGameView[];
+  /**
+   * Every player, for putting a face and a link on a name the aggregates
+   * already resolved. Deliberately the wide list: a substitute who played a
+   * scrim is on it, and narrowing it to the main team would render them as
+   * "Unknown" rather than leaving them out.
+   */
   roster: TeamRosterRow[];
+  /** The main team itself (players.team_role), in role order. */
+  team?: TeamMember[];
   /** Null when flex wasn't loaded — see the header. */
   flex?: TeamOverviewFlex | null;
   basePath?: string;
@@ -256,6 +324,8 @@ export function TeamOverviewView({
 
   return (
     <div className="flex flex-col gap-8">
+      <Lineup team={team} basePath={basePath} />
+
       {/* Headline: the record, then the split that explains it. */}
       <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
         <div className="panel-hex panel-hex-clip flex items-center gap-4 p-5">

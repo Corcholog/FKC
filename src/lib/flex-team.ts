@@ -19,7 +19,12 @@
 //
 // Pure: no I/O, no React, no Supabase.
 
-export const FULL_STACK = 5;
+import { FULL_STACK } from "@/lib/team/roster";
+
+// One definition, re-exported: the threshold is a fact about the roster, so it
+// lives with the roster (lib/team/roster.ts). Kept exported here so the callers
+// that already import it from this module keep working.
+export { FULL_STACK };
 
 export type FlexParticipantInput = {
   match_id: string;

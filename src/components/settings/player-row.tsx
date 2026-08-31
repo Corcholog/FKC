@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PlayerAccounts, type PlayerAccount } from "@/components/settings/player-accounts";
+import { TeamRoleSelect } from "@/components/settings/team-role-select";
 import {
   Dialog,
   DialogClose,
@@ -28,7 +29,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-type Player = {
+export type SettingsPlayer = {
   id: string;
   /** The primary account's Riot ID, mirrored onto players — see migration 023. */
   riot_game_name: string;
@@ -37,6 +38,8 @@ type Player = {
   avatar_url: string | null;
   user_id: string | null;
   ai_context: string | null;
+  /** Their position on the main team, or null if they're only in the friend group. */
+  team_role: string | null;
 };
 
 /**
@@ -47,7 +50,7 @@ type Player = {
  * Distinct from match notes: notes are "what happened in this game", this is
  * context that holds across every game. See src/lib/ai-context.ts.
  */
-function AiContextEditor({ player }: { player: Player }) {
+function AiContextEditor({ player }: { player: SettingsPlayer }) {
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState(
     updatePlayerAiContext,
@@ -102,7 +105,7 @@ function AiContextEditor({ player }: { player: Player }) {
  * it over; the player can change it later from /account. They always sign in
  * with their display name, never an email (see resolve_login_email).
  */
-function LoginControls({ player }: { player: Player }) {
+function LoginControls({ player }: { player: SettingsPlayer }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -200,7 +203,7 @@ export function PlayerRow({
   player,
   accounts,
 }: {
-  player: Player;
+  player: SettingsPlayer;
   accounts: PlayerAccount[];
 }) {
   const [editing, setEditing] = useState(false);
@@ -305,6 +308,11 @@ export function PlayerRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {/* Five of these set to a position are the main team — every record,
+              chart and roster under /team is derived from them. */}
+          <div className="mr-1 hidden sm:block">
+            <TeamRoleSelect playerId={player.id} role={player.team_role} />
+          </div>
           <div className="mr-1 hidden sm:block">
             <LoginControls player={player} />
           </div>
@@ -343,7 +351,8 @@ export function PlayerRow({
         </div>
       </div>
 
-      <div className="sm:hidden">
+      <div className="flex flex-wrap items-center gap-2 sm:hidden">
+        <TeamRoleSelect playerId={player.id} role={player.team_role} />
         <LoginControls player={player} />
       </div>
 

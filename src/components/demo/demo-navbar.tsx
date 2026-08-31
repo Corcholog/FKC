@@ -10,6 +10,7 @@ import {
   Shield,
   Swords,
   Trophy,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,11 +29,12 @@ import { cn } from "@/lib/utils";
 // navbar's, so the two versions are recognisably the same tool.
 const NAV_ITEMS = [
   { href: "/demo", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/demo/team", label: "Team", icon: Shield },
+  { href: "/demo/roster", label: "Roster", icon: Users },
   { href: "/demo/matches", label: "Matches", icon: Swords },
   { href: "/demo/champions", label: "Champions", icon: Trophy },
   { href: "/demo/tierlists", label: "Tier Lists", icon: ListOrdered },
   { href: "/demo/insights", label: "Insights", icon: LineChart },
+  { href: "/demo/team", label: "Team", icon: Shield },
   { href: "/demo/draft", label: "Draft", icon: Network },
 ];
 

@@ -15,7 +15,7 @@ type ChampionListResponse = {
 // Both DDragon fetches are awaited in the (app) layout, so an unguarded failure
 // here doesn't break a card — it takes down every authenticated page at once.
 // That made this the widest-blast-radius call in the app and the only external
-// one without error handling (Riot, Gemini and Supabase all have it).
+// one without error handling (Riot and Supabase both have it).
 //
 // Neither of these is load-bearing: champion *names* fall back to the stored
 // codename via championDisplayName, and championIconUrl already returns null on

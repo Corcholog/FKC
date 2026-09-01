@@ -11,6 +11,7 @@
 // take rows the caller already has.
 
 import { findLaneOpponent, sortByRole } from "@/lib/roles";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllByIds } from "@/lib/supabase/fetch-all";
 import type { DataSource } from "@/lib/data-source";
 // Type-only, so this stays a compile-time shape with no runtime import of the
@@ -23,12 +24,21 @@ import type { TeamComposChampion } from "@/components/match-row";
  * shows up as `undefined` at render, never as an error.
  */
 export const MATCH_ROW_COLUMNS =
-  "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs, vision_score";
+  "id, match_id, player_id, puuid, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs, vision_score";
 
 export type MatchRowParticipant = {
   id: string;
   match_id: string;
   player_id: string | null;
+  /**
+   * The account that played it.
+   *
+   * Present on every participant row, tracked or not — it is the natural key of
+   * a Riot account and what `player_accounts` is keyed by. What it buys a match
+   * row is being able to say *which* of somebody's accounts a game was on,
+   * which `player_id` cannot: that names the person.
+   */
+  puuid: string;
   team_id: number;
   team_position: string | null;
   champion_id: number;
@@ -110,4 +120,40 @@ export function matchComposition(
     enemies: sortByRole(participants.filter((p) => p.team_id !== viewer.team_id)).map(toChampion),
     opponent: opponentParticipant ? toChampion(opponentParticipant) : null,
   };
+}
+
+/**
+ * puuid → Riot ID, for accounts belonging to somebody who has more than one.
+ *
+ * Partial on purpose. A match row shows the account only when knowing it tells
+ * the reader something, and for a player with a single account it never does —
+ * so the map simply has no entry, and no surface needs a "does this person have
+ * smurfs" branch of its own.
+ *
+ * One read of a five-row table, so it is not worth the ceremony of paging.
+ */
+export async function multiAccountNames(
+  supabase: SupabaseClient,
+): Promise<Map<string, string>> {
+  const { data, error } = await supabase
+    .from("player_accounts")
+    .select("puuid, player_id, riot_game_name, riot_tag_line")
+    .returns<
+      { puuid: string; player_id: string; riot_game_name: string; riot_tag_line: string }[]
+    >();
+  if (error) throw new Error(error.message);
+
+  const countByPlayer = new Map<string, number>();
+  for (const account of data ?? []) {
+    countByPlayer.set(account.player_id, (countByPlayer.get(account.player_id) ?? 0) + 1);
+  }
+
+  return new Map(
+    (data ?? [])
+      .filter((account) => (countByPlayer.get(account.player_id) ?? 0) > 1)
+      .map((account) => [
+        account.puuid,
+        `${account.riot_game_name}#${account.riot_tag_line}`,
+      ]),
+  );
 }

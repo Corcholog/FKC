@@ -20,7 +20,7 @@ import {
   TRACK_COLUMN,
   type TrackedQueue,
 } from "@/lib/queues";
-import { FULL_STACK, isFullStack, isTeamMember } from "@/lib/team/roster";
+import { isFullStack } from "@/lib/team/roster";
 
 // How old a game can be and still be worth announcing a multikill for.
 //
@@ -156,7 +156,6 @@ export type SyncSummary = {
    * cannot arrive" look identical from outside, and only one of them is fixed
    * by pressing Sync again.
    */
-  skippedFlexNoTeam: boolean;
   // True when the time budget ran out before every account's history was
   // walked. Not an error — no cursor was advanced past what was actually
   // covered, so the next run resumes cleanly.
@@ -230,7 +229,6 @@ export async function runSync(
   const deadline = new Deadline(SYNC_BUDGET_MS);
 
   const accounts = await loadAccounts(admin);
-  let skippedFlex = false;
   // A map, not a set: participant rows carry a puuid and need the person's id,
   // and multikill alerts need their display name. This is the lookup that
   // replaced comparing player_id directly against participant.puuid.
@@ -248,7 +246,6 @@ export async function runSync(
     multikills: [],
     queues,
     completedQueues: [],
-    skippedFlexNoTeam: false,
     partial: false,
   };
 
@@ -259,27 +256,15 @@ export async function runSync(
   // roster rather than five.
   const playersWithNewMatches = new Set<string>();
 
-  // The main team, by player id — the set the flex gate tests against.
-  const teamPlayerIds = new Set(
-    accounts.filter((a) => isTeamMember(a)).map((a) => a.player_id),
-  );
-
-  // Flex is stored only when the main team played it, so with fewer than five
-  // people on the team no flex game can ever qualify. Walking it anyway would
-  // spend a detail call on every game just to reject it, and leave a marker row
-  // that stops it being reconsidered once the roster *is* set up — which is the
-  // expensive kind of wrong.
-  //
-  // Dropped from the run and reported rather than left to return nothing:
-  // "no flex arrived" and "flex cannot arrive" look identical from outside, and
-  // only one of them is fixed by pressing Sync again.
-  if (queues.includes("flex") && teamPlayerIds.size < FULL_STACK) skippedFlex = true;
-  const effectiveQueues = skippedFlex ? queues.filter((q) => q !== "flex") : queues;
+  // The team, by player id — the set the flex gate tests against. Every player
+  // is on it since 028, so this cannot be short of five and the flex walk can
+  // no longer be silently starved of a roster.
+  const teamPlayerIds = new Set(accounts.map((a) => a.player_id));
 
   // Only accounts this run is actually about. Refreshing the rank of an account
   // whose only tracked queue wasn't asked for spends a Riot call on a number
   // nothing in this run will use.
-  const inScope = accounts.filter((a) => effectiveQueues.some((q) => a[TRACK_COLUMN[q]]));
+  const inScope = accounts.filter((a) => queues.some((q) => a[TRACK_COLUMN[q]]));
 
   // Ranks first, deliberately. They cost one call each and they're the only
   // part of the sync that writes an unrecoverable time series — if the budget
@@ -311,13 +296,13 @@ export async function runSync(
   outer: for (const account of inScope) {
     let walked = false;
 
-    for (const queue of effectiveQueues) {
+    for (const queue of queues) {
       if (!account[TRACK_COLUMN[queue]]) continue;
 
       if (!deadline.hasRoomForCall()) {
         summary.partial = true;
         // Everything still unwalked stays unfinished, including this queue.
-        for (const q of effectiveQueues) incompleteQueues.add(q);
+        for (const q of queues) incompleteQueues.add(q);
         break outer;
       }
 
@@ -346,10 +331,7 @@ export async function runSync(
   }
 
   summary.playersProcessed = new Set(inScope.map((a) => a.player_id)).size;
-  summary.skippedFlexNoTeam = skippedFlex;
-  // A queue that was dropped for want of a roster is not a completed one: its
-  // sync_state timestamp would then claim coverage that was never attempted.
-  summary.completedQueues = effectiveQueues.filter((q) => !incompleteQueues.has(q));
+  summary.completedQueues = queues.filter((q) => !incompleteQueues.has(q));
 
   // Recount W/L for anyone whose history just grew.
   //
@@ -370,7 +352,6 @@ export async function runSync(
     if (error) throw new Error(error.message);
   }
 
-  await markSummariesStale(admin, playersWithNewMatches);
 
   return summary;
 }
@@ -397,9 +378,7 @@ export async function backfillAccountHistory(
   const playersByPuuid = new Map(
     accounts.map((a) => [a.puuid, { playerId: a.player_id, displayName: a.display_name }]),
   );
-  const teamPlayerIds = new Set(
-    accounts.filter((a) => isTeamMember(a)).map((a) => a.player_id),
-  );
+  const teamPlayerIds = new Set(accounts.map((a) => a.player_id));
 
   const summary: SyncSummary = {
     accountsProcessed: 1,
@@ -414,9 +393,6 @@ export async function backfillAccountHistory(
     multikills: [],
     queues,
     completedQueues: [],
-    // A backfill walks whichever queues it was handed; it is not the place to
-    // decide the roster is unset, and runSync already reports that.
-    skippedFlexNoTeam: false,
     partial: false,
   };
   const playersWithNewMatches = new Set<string>();
@@ -449,7 +425,6 @@ export async function backfillAccountHistory(
     if (error) throw new Error(error.message);
   }
 
-  await markSummariesStale(admin, playersWithNewMatches);
 
   return summary;
 }
@@ -460,40 +435,6 @@ async function touchAccount(admin: SupabaseClient, puuid: string) {
     .update({ last_walked_at: new Date().toISOString() })
     .eq("puuid", puuid);
   if (error) throw new Error(error.message);
-}
-
-// Flags whose summaries have something new to say. Nothing is generated here —
-// Gemini's free tier is metered per day, so all generation happens in one
-// scheduled batch (/api/summaries) that reads these flags.
-//
-// Summaries are opt-in (migration 009), and the filter belongs here rather than
-// only in the batch: upserting a row for an opted-out player would recreate the
-// row migration 009 just deleted, and their page would go from showing no card
-// to showing an empty one after the first sync.
-async function markSummariesStale(admin: SupabaseClient, playerIds: Set<string>) {
-  if (playerIds.size === 0) return;
-
-  const { data: enabled } = await admin
-    .from("players")
-    .select("id")
-    .eq("ai_summary_enabled", true)
-    .in("id", [...playerIds]);
-
-  // One upsert for the whole batch, not one per player: this runs at the tail of
-  // a sync that's already up against a 50s budget, and a round trip per player
-  // spends that budget on latency rather than on Riot calls.
-  const staleRows = (enabled ?? []).map((row) => ({
-    player_id: row.id as string,
-    stale: true,
-  }));
-  if (staleRows.length > 0) {
-    await admin
-      .from("player_ai_summaries")
-      .upsert(staleRows, { onConflict: "player_id" });
-  }
-
-  // Any new game changes the group picture too — duos, streaks, head-to-heads.
-  await admin.from("team_ai_summary").update({ stale: true }).eq("id", 1);
 }
 
 export type RefetchSummary = {

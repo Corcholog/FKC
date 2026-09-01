@@ -27,7 +27,6 @@ export function DraftBoard({
   championMap,
   playerNames,
   ourName = "Us",
-  basePath = "",
 }: {
   game: TeamGameView;
   version: string;
@@ -35,8 +34,6 @@ export function DraftBoard({
   /** Roster ids to the names and slugs used everywhere else on the site. */
   playerNames: PlayerLookup;
   ourName?: string;
-  /** "/demo" on the public copy — prefixes the link from a pick to its player. */
-  basePath?: string;
 }) {
   return (
     <CompareBoard
@@ -50,7 +47,6 @@ export function DraftBoard({
       version={version}
       championMap={championMap}
       playerNames={playerNames}
-      basePath={basePath}
     />
   );
 }
@@ -96,22 +92,18 @@ export function TeamGameCard({
   notes,
   currentUserId,
   ourName,
-  basePath = "",
 }: {
   game: TeamGameView;
   version: string;
   championMap: Map<number, ChampionInfo>;
   playerNames: PlayerLookup;
   /**
-   * Newest first, replies attached. Omitted on surfaces that don't load notes —
-   * which includes the whole public demo: there is no demo view of
-   * team_game_notes, deliberately.
+   * Newest first, replies attached. Omitted on surfaces that don't load notes.
    */
   notes?: TeamNoteThread[];
   /** Whose notes carry Edit/Delete. Null for the shared viewer account. */
   currentUserId?: string | null;
   ourName?: string;
-  basePath?: string;
 }) {
   return (
     <div className="panel-hex p-3 sm:p-4">
@@ -126,7 +118,6 @@ export function TeamGameCard({
           championMap={championMap}
           playerNames={playerNames}
           ourName={ourName}
-          basePath={basePath}
         />
         {/* Undefined means "this page doesn't do notes"; an empty array means
             "no notes yet", which still gets the composer. */}

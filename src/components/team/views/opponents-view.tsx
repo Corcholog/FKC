@@ -3,18 +3,15 @@ import { recordByOpponent } from "@/lib/team/stats";
 import type { TeamGameView, TeamOpponentRow } from "@/lib/team/types";
 import { cn } from "@/lib/utils";
 
-// The opponent index — /team/opponents and its demo.
+// The opponent index — /prep/opponents.
 //
-// Every team name here comes from demo_team_opponents on the public side, so
-// the view has nothing to hide; basePath is the only thing it takes beyond data.
+// Takes nothing beyond its data.
 export function TeamOpponentsView({
   games,
   opponents,
-  basePath = "",
 }: {
   games: TeamGameView[];
   opponents: TeamOpponentRow[];
-  basePath?: string;
 }) {
   const records = new Map(recordByOpponent(games).map((r) => [r.opponentId, r]));
 
@@ -30,7 +27,7 @@ export function TeamOpponentsView({
         return (
           <Link
             key={opponent.id}
-            href={`${basePath}/team/opponents/${opponent.slug}`}
+            href={`/prep/opponents/${opponent.slug}`}
             className="panel-hex is-interactive flex flex-wrap items-center gap-3 px-4 py-3"
           >
             <span className="font-medium text-white">{opponent.name}</span>

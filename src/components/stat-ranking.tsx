@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 // The answer to "why didn't I win that award?".
 //
-// Every headline number in the app — an award tile, a heatmap cell, a point on
+// Every headline number in the app — an award tile, an hour's bar, a point on
 // a curve — is the top of an ordered list that was thrown away on the way to
 // rendering it. This dialog is that list: every contender, in order, with the
 // value that put them there and the sample size behind it. A tooltip can only

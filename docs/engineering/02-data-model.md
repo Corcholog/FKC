@@ -46,10 +46,11 @@ locally, outside this published folder.
                                              └────────────────────┘
 
 Singletons (id = 1, enforced by CHECK):
-  sync_state · clan_profile · team_ai_summary
+  sync_state · team_profile · team_ai_summary
 
-Plus two islands with their own sections: team matches (§9) and the demo (§13). The demo
-adds no facts — three mapping tables and fourteen views over everything above.
+Plus one island with a section of its own: team matches (§9). There used to be a second —
+the demo's three mapping tables and fourteen views — and it is gone (ADR-050, migration
+027).
 ```
 
 ## 2. `players` — the roster
@@ -80,12 +81,12 @@ Columns worth understanding:
 | Column | Notes |
 |---|---|
 | `display_name` | **Permanent once set.** It doubles as the login identifier, so renaming would either collide with the unique index or hijack another player's login lookup. Protected by a dropped/re-granted UPDATE privilege, not by RLS — see [04](04-auth-and-security.md). |
-| `slug` | URL-safe id derived from the Riot ID (`src/lib/slug.ts`). Regenerated on rename, so `/player/[slug]` URLs are not permanent. |
+| `slug` | URL-safe id derived from the Riot ID (`src/lib/slug.ts`). Regenerated on rename, so `/players/[slug]` URLs are not permanent. |
 | `user_id` | FK to `auth.users`. NULL = no login yet. Only the service-role client can write it. |
 | `tier`/`division`/`league_points` | A **snapshot**, overwritten on every sync. The history lives in `player_rank_history`. |
 | `wins`/`losses` | **This app's own tracked record**, not Riot's season totals. Recomputed each sync as a straight count of that player's `match_participants` rows. See §5. |
 | `ai_context` | Free text about the person, injected into their AI prompts. |
-| `team_role` | Which position this person plays on the **main team**, or null (migration 026). Nullable *is* the membership flag: this app is a soloQ tracker for the whole friend group plus a competitive tracker for five of them, and everything under `/team` reads this column. Riot's own `team_position` vocabulary, so `lib/roles.ts` and `TEAM_ROLES` need no translation. Not unique per role — a substitute is on the team, and "five of them were in this game" is enforced per match by the sync. |
+| `team_role` | Which position this person plays. **`not null` and unique** since migration 028: five rows, one per position, so this table *is* the team and no read has to ask who is on it. It was nullable in 026, when the nullability was the membership flag and this app was two trackers over one roster (ADR-048); ADR-050 retired the other half. Riot's own `team_position` vocabulary, so `lib/roles.ts` and `TEAM_ROLES` need no translation. The unique constraint is `deferrable`, because the only edit this column gets is a swap and a non-deferred unique rejects the intermediate state — see `swap_team_roles` in 028. |
 | ~~`synced_through`~~ | Moved to `player_accounts`, and split per queue — coverage is a property of an account and a queue, not of a person. See §2b and [03 §5](03-sync-engine.md). |
 
 `idx_players_display_name_lower` is a **case-insensitive unique index**, because
@@ -309,9 +310,9 @@ const losses = participantRows.length - wins;
 
 Since excluded games have no participant rows, **an excluded game does not count as a
 win or a loss in the app's record**. But rank and LP come straight from Riot's league
-endpoint, so a sub-15-minute win still moves the LP chart.
+endpoint, so a sub-15-minute win still moves the rank.
 
-The result: the LP graph can tick up on a day the W/L record doesn't move. That is
+The result: the rank badge can tick up on a day the W/L record doesn't move. That is
 intended and documented in migration 007, not a bug — but it is exactly the sort of
 inconsistency that looks like one, which is why it's stated here explicitly.
 
@@ -335,7 +336,7 @@ cascade-deleted before it removes short games — a good instinct to copy.
 
 ## 7. Identity change: what happens on a Riot ID edit
 
-Handled in `updatePlayer` (`src/app/(app)/settings/actions.ts:112`):
+Handled in `updatePlayer` (`src/app/(app)/settings/actions/:112`):
 
 1. If the game name or tag line changed, re-resolve the Riot ID to a puuid.
 2. **A cosmetic rename returns the same puuid** → nothing structural happens, just new
@@ -382,9 +383,9 @@ an enemy university player is a nickname somebody typed, not a resolvable accoun
 reason that actually decided it is §3's invariant read the other way round: *every* soloq
 read path joins `match_participants!inner` with no queue filter. That invariant is what
 makes `excluded` work — and it's also what would silently pull scrim rows into the hall of
-fame, `/champions`, duo stats, streaks, sessions, the hour heatmap, the AI prompts and the
-Discord standings. Around twelve modules, each needing a filter added, where missing one
-produces a wrong number rather than an error. ADR-029.
+fame, the roster board, duo stats, streaks, sessions, the hour bars and the Discord
+standings. A dozen modules, each needing a filter added, where missing one produces a wrong
+number rather than an error. ADR-029.
 
 **What is shared is the vocabulary, and it's shared completely.** `team_picks.team_position`
 holds the same `TOP/JUNGLE/MIDDLE/BOTTOM/UTILITY` strings as `match_participants`, and the
@@ -511,8 +512,8 @@ is the point. Both directions can exist as independent rows; the `unique` constr
 the ordered pair, not the unordered one.
 
 Three surfaces read the same table with no duplication: the answers list at
-`/draft/counters`, the "counters / countered by" lists on a champion's row in
-`/draft/champions`, and the reference panel on `/draft`, which asks it twice — "who beats
+`/prep/counters`, the "counters / countered by" lists on a champion's row in
+`/prep/champions`, and the reference panel on `/prep/draft`, which asks it twice — "who beats
 these enemy picks" and "what beats ours". Both of those are lookups on
 `target_champion_id`; only whose picks go in differs, which is a trap worth knowing about
 and is documented at the counter functions in `src/lib/draft/context.ts`. The panel filters
@@ -528,12 +529,12 @@ several good answers, not one — "who's a good response to Jarvan" is a list, n
 pick. `CounterGroupEditor` (`src/components/draft/counter-group-editor.tsx`) is keyed on
 one champion held constant (`fixed`) and one `direction` (whether `fixed` is the target or
 the counter), and edits the *entire* set of rows on that side in one save. Every entry
-point — a card on `/draft/counters`, a champion's "Add" button, clicking an existing list
+point — a card on `/prep/counters`, a champion's "Add" button, clicking an existing list
 entry — opens this same view rather than a single-pair form, because adding five responses
 and editing one are really the same action once "the list for this champion" is the unit
 of edit.
 
-**Why `/draft/counters` is a list of answers and not a matrix.** It was a matrix first.
+**Why `/prep/counters` is a list of answers and not a matrix.** It was a matrix first.
 The data gets touched at three moments: writing it down during prep, looking one champion
 up during prep, and having it surfaced by the board mid-draft (that last one is the
 contextual panel). None of them is "scan the whole relation space", which is the only
@@ -545,7 +546,7 @@ notes included, with a `ChampionCombobox` to focus one champion. The combobox is
 filter over the cards on purpose: it can select a champion with *no* rows yet, which is
 precisely when "how do we answer this" is most worth asking.
 
-`saveCounterGroup` (`src/app/(app)/draft/actions.ts`) diffs the submitted list against
+`saveCounterGroup` (`src/app/(app)/prep/actions.ts`) diffs the submitted list against
 what already exists for `fixed`+`direction`: champions still present are updated in place,
 new ones are inserted, and any existing row for a champion no longer in the list is
 deleted. **`created_by` is only set on insert, never touched on update** — the diff is
@@ -562,7 +563,7 @@ They have identical columns — label, champions, win-condition tags, notes — 
 in how many champions they hold and what that count means. Two tables would have been two
 identical row types, two identical query modules, two identical forms, two save actions,
 and a reference panel that queries both and merges the results — which is precisely what it
-does *not* have to do: `loadDraftComps(supabase)` with no options hands `/draft` every row
+does *not* have to do: `loadDraftComps(supabase)` with no options hands `/prep/draft` every row
 of both kinds in one call, and the panel's sections split on `kind` themselves. The
 discriminator costs one `text` column and one check constraint. If a comp ever grows a column a synergy can't
 have (per-slot roles, an `opponent_id`, a side), split it then; nothing here makes that
@@ -630,6 +631,10 @@ than by constraint, so the cleanup is unconditional — a slug left dangling in 
 renders as a raw slug with no label, which reads as corruption.
 
 ## 13. The demo layer — three tables and fourteen views
+
+> **Gone — deleted by ADR-050 and migration 027.** Kept as written rather than cut: it
+> records how the anonymization actually worked, which is the part worth having if
+> anything like it is ever wanted again. Nothing below describes code that still runs.
 
 Migrations 018 and 019. This layer stores **no facts about the game**. It is a mapping
 from real identities to invented ones, plus a set of views that apply it. Delete every
@@ -740,6 +745,10 @@ season collapses into one "Rival TOP". That is a real inaccuracy in the demo's s
 page and it is listed in [10](10-known-gaps.md).
 
 ## 14. `demo_text` as a two-state row
+
+> **Gone — deleted by ADR-050 and migration 027.** Kept as written rather than cut: it
+> records how the anonymization actually worked, which is the part worth having if
+> anything like it is ever wanted again. Nothing below describes code that still runs.
 
 Migration 019 adds one view:
 

@@ -23,7 +23,7 @@ There is also **no admin role**. `/settings` — roster CRUD, the Riot key, logi
 friend group, and it's called out again in [10](10-known-gaps.md) as the thing that
 would have to change first if the app ever grew.
 
-## 2. Five Supabase clients
+## 2. Four Supabase clients
 
 The most common Supabase mistake is using the wrong one. `src/lib/supabase/`:
 
@@ -32,7 +32,6 @@ The most common Supabase mistake is using the wrong one. `src/lib/supabase/`:
 | `client.ts` | `createBrowserClient` | Browser | publishable | caller's | **enforced** |
 | `server.ts` | `createServerClient` + `cookies()` | RSC, Server Actions, Route Handlers | publishable | caller's | **enforced** |
 | `middleware.ts` | `createServerClient` + request/response jars | `src/proxy.ts` | publishable | caller's | **enforced** |
-| `public.ts` | `createClient`, **no cookie jar** | `/demo` pages only | publishable | always `anon` | **enforced** |
 | `admin.ts` | `createClient` | Server only | **secret** | service role | **bypassed** |
 
 `admin.ts` is the dangerous one. Its rules:
@@ -306,7 +305,6 @@ NOT_YOUR_GAME }`.
 | `NEXT_PUBLIC_SUPABASE_URL` | env | Public by design |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | env | Public by design — RLS is the boundary |
 | `SUPABASE_SECRET_KEY` | env | **Server only.** Bypasses RLS entirely |
-| `GEMINI_API_KEY` | env | Server only |
 | `CRON_SECRET` | env | Server only; compared against a bearer header |
 | Riot API key | **`sync_state` table** | Readable by any authenticated user |
 
@@ -327,6 +325,10 @@ unlink, for the same reason. The player's notes survive with `author_user_id` se
 because notes are the only irreplaceable data in the database.
 
 ## 10. The public demo
+
+> **Gone — deleted by ADR-050 and migration 027.** Kept as written rather than cut: it
+> records how the anonymization actually worked, which is the part worth having if
+> anything like it is ever wanted again. Nothing below describes code that still runs.
 
 Everything above assumes "no session ⇒ no data". `/demo` is the exception: a read-only,
 identity-stripped copy of the whole app that a stranger can open. It exists because a
@@ -407,9 +409,9 @@ them, and carries the group's slang. So no real text column appears in any view.
 failure mode of forgetting to write an override is a blank panel; the failure mode of a
 filter-based approach is a published in-joke.
 
-`match_notes`, `team_game_notes`, `player_ai_summaries`, `team_ai_summary`, `clan_profile`
+`match_notes`, `team_game_notes`, `player_ai_summaries`, `team_ai_summary`, `team_profile`
 and `sync_state` have **no view at all**. The last two are the most dangerous in the
-database: `clan_profile.context` is described in its own schema comment as holding inside
+database: `team_profile.context` is described in its own schema comment as holding inside
 jokes, slang and nicknames, and `sync_state` holds the plaintext Riot key plus a
 `last_error` in which Riot embeds puuids.
 

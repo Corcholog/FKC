@@ -1,9 +1,6 @@
-// The tier list overview — /tierlists and /demo/tierlists.
+// The tier list overview — /prep/tierlists.
 //
-// Same fetch/build split as the rest of this folder. Two of the private page's
-// columns have no demo counterpart and both are handled the way riot_match_id is
-// in loaders/matches.ts — asked for only when the source is private, so the demo
-// gets a 42703 rather than a null if anyone ever selects one by mistake.
+// Same fetch/build split as the rest of this folder.
 
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { rows } from "@/lib/supabase/read";
@@ -12,7 +9,6 @@ import { allChampionsByPlayer, type ChampionStatInput } from "@/lib/champion-sta
 import { LOLALYTICS_LANES, mainLane } from "@/lib/lolalytics";
 import {
   normalizeTiers,
-  relabelForDemo,
   statMap,
   type Tier,
   type TierChampionStat,
@@ -23,7 +19,6 @@ export type TierListsPlayer = {
   slug: string;
   display_name: string;
   avatar_url: string | null;
-  /** Private only — `demo_players` drops user_id. */
   user_id?: string | null;
 };
 
@@ -31,7 +26,6 @@ export type TierListRecord = {
   player_id: string;
   tiers: unknown;
   updated_at: string;
-  /** Private only — `demo_champion_tier_lists` drops updated_by. */
   updated_by?: string | null;
 };
 
@@ -51,7 +45,6 @@ export type TierListsRows = {
    * Carried with the rows rather than passed to `buildTierLists` separately, so
    * a page cannot forget it. Forgetting would publish the real tier labels.
    */
-  demo: boolean;
 };
 
 const PLAYER_COLUMNS = "id, slug, display_name, avatar_url";
@@ -59,21 +52,19 @@ const PLAYER_COLUMNS = "id, slug, display_name, avatar_url";
 export async function fetchTierListsRows(source: DataSource): Promise<TierListsRows> {
   const matchesTable = source.table("matches");
 
-  // Privately the page lists everyone with a login, not the whole tracked
-  // roster: a tier list is somebody's opinion, so it needs somebody to hold it.
-  // The demo has no accounts and no user_id column to filter on, so it lists
-  // whoever actually has a list — a subset, and the one a visitor came to see.
-  let playerQuery = source.supabase
+  // Everyone with a login, not the whole roster: a tier list is somebody's
+  // opinion, so it needs somebody to hold it.
+  const playerQuery = source.supabase
     .from(source.table("players"))
-    .select(source.demo ? PLAYER_COLUMNS : `${PLAYER_COLUMNS}, user_id`)
-    .order("display_name");
-  if (!source.demo) playerQuery = playerQuery.not("user_id", "is", null);
+    .select(`${PLAYER_COLUMNS}, user_id`)
+    .order("display_name")
+    .not("user_id", "is", null);
 
   const [playersResult, listsResult, statRowRecords] = await Promise.all([
     playerQuery.returns<TierListsPlayer[]>(),
     source.supabase
       .from(source.table("champion_tier_lists"))
-      .select(`player_id, tiers, updated_at${source.demo ? "" : ", updated_by"}`)
+      .select("player_id, tiers, updated_at, updated_by")
       .returns<TierListRecord[]>(),
     // Hover stats for every listed player in one pass, the same shape
     // /champions builds for one. Paged: this select used to run bare, and a
@@ -92,19 +83,14 @@ export async function fetchTierListsRows(source: DataSource): Promise<TierListsR
   ]);
 
   const lists = rows(listsResult, "tier lists");
-  let players = rows(playersResult, source.demo ? "roster" : "players with logins");
-
-  if (source.demo) {
-    const hasList = new Set(lists.map((l) => l.player_id));
-    players = players.filter((p) => hasList.has(p.id));
-  }
+  const players = rows(playersResult, "players with logins");
 
   const statRows: TierListStatRow[] = statRowRecords.map((r) => {
     const embedded = (r as unknown as Record<string, StatRow["matches"]>)[matchesTable];
     return { ...r, game_duration_seconds: embedded?.game_duration_seconds ?? 0 };
   });
 
-  return { players, lists, statRows, demo: source.demo };
+  return { players, lists, statRows };
 }
 
 export type TierListEntry = {
@@ -113,7 +99,7 @@ export type TierListEntry = {
   list: {
     tiers: Tier[];
     updatedAt: string;
-    /** Null on the demo, and privately when nobody has edited it since. */
+    /** Null when nobody has edited it since the column was added. */
     editedBy: string | null;
   } | null;
   /** "Top", "Jungle", … — the lane they queue for most. */
@@ -135,7 +121,7 @@ export function buildTierLists(
   const listsByPlayer = new Map(data.lists.map((row) => [row.player_id, row]));
 
   // updated_by is an auth user id; the roster is the only place a name for it
-  // exists. Empty on the demo, where neither column is in the views.
+  // exists.
   const nameByUserId = new Map(
     data.players.filter((p) => p.user_id).map((p) => [p.user_id as string, p.display_name]),
   );
@@ -169,9 +155,7 @@ export function buildTierLists(
         player,
         list: record
           ? {
-              // The rankings are real; only the row names are replaced. See
-              // relabelForDemo for why they have to be.
-              tiers: data.demo ? relabelForDemo(tiers) : tiers,
+              tiers,
               updatedAt: record.updated_at,
               editedBy: record.updated_by ? (nameByUserId.get(record.updated_by) ?? null) : null,
             }

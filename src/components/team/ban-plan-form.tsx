@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Save, X } from "lucide-react";
 import { toast } from "sonner";
-import { updateOpponentBanPlan } from "@/app/(app)/team/actions";
+import { updateOpponentBanPlan } from "@/app/(app)/matches/actions";
 import type { ChampionInfo } from "@/lib/ddragon";
 import { BANS_PER_SIDE } from "@/lib/team/types";
 import {

@@ -124,7 +124,6 @@ export function TeamFilterBar({
   options,
   champions,
   version,
-  basePath = "",
   resultCount,
   totalCount,
 }: {
@@ -132,7 +131,6 @@ export function TeamFilterBar({
   options: TeamMatchFilterOptions;
   champions: Champion[];
   version: string;
-  basePath?: string;
   resultCount: number;
   totalCount: number;
 }) {
@@ -152,7 +150,7 @@ export function TeamFilterBar({
   const active = activeTeamMatchFilterCount(filter);
 
   function go(next: TeamMatchFilter) {
-    router.push(`${basePath}/team/scouting${teamMatchFilterToQuery(next)}`);
+    router.push(`/prep/scouting${teamMatchFilterToQuery(next)}`);
   }
 
   function addChampion(side: ChampionSide, champion: Champion | null) {
@@ -329,7 +327,7 @@ export function TeamFilterBar({
             type="button"
             size="sm"
             variant="ghost"
-            onClick={() => router.push(`${basePath}/team/scouting`)}
+            onClick={() => router.push(`/prep/scouting`)}
           >
             <X />
             Clear

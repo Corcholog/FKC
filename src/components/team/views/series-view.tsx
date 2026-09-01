@@ -8,18 +8,16 @@ import { seriesLabel, type TeamGameView } from "@/lib/team/types";
 import { TeamGameCard, type PlayerLookup } from "@/components/team/draft-board";
 import { MetaChip, SeriesScore } from "@/components/team/ui";
 
-// One series, game by game — /team/matches/[id] and its demo.
+// One series, game by game — /matches/[id].
 //
-// Two slots rather than two flags. `actions` is Edit and Delete, which only
-// exist privately; `notesFor` is the review thread under each draft. The demo
-// passes neither, so the page is the drafts and nothing else — no control that
-// writes, and no thread to read.
+// Two slots rather than two flags. `actions` is Edit and Delete; `notesFor` is
+// the review thread under each draft. Pass neither and the page is the drafts
+// and nothing else — no control that writes, and no thread to read.
 export function TeamSeriesView({
   games,
   version,
   championMap,
   playerNames,
-  basePath = "",
   actions,
   notesFor,
   currentUserId,
@@ -28,7 +26,6 @@ export function TeamSeriesView({
   version: string;
   championMap: Map<number, ChampionInfo>;
   playerNames: PlayerLookup;
-  basePath?: string;
   actions?: ReactNode;
   notesFor?: (game: TeamGameView) => TeamNoteThread[];
   currentUserId?: string | null;
@@ -41,7 +38,7 @@ export function TeamSeriesView({
   return (
     <div className="flex flex-col gap-6">
       <Link
-        href={`${basePath}/team/matches`}
+        href={`/matches`}
         className="flex w-fit items-center gap-1.5 text-sm text-grey-mid transition-colors hover:text-gold-bright"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -51,7 +48,7 @@ export function TeamSeriesView({
       <div className="panel-hex panel-hex-clip flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
         <div className="min-w-0">
           <Link
-            href={`${basePath}/team/opponents/${opponent.slug}`}
+            href={`/prep/opponents/${opponent.slug}`}
             className="font-heading text-xl font-semibold text-white transition-colors hover:text-gold-bright"
           >
             {opponent.name}
@@ -94,7 +91,6 @@ export function TeamSeriesView({
           playerNames={playerNames}
           notes={notesFor?.(game)}
           currentUserId={currentUserId}
-          basePath={basePath}
         />
       ))}
     </div>

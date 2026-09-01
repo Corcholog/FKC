@@ -12,7 +12,7 @@ import {
   type DraftCompKind,
   type DraftTagRow,
 } from "@/lib/draft/types";
-import { saveDraftComp } from "@/app/(app)/draft/actions";
+import { saveDraftComp } from "@/app/(app)/prep/actions";
 import { CompOrderEditor } from "@/components/draft/comp-order-editor";
 import { TagMultiSelect } from "@/components/draft/tag-multi-select";
 import { Button } from "@/components/ui/button";
@@ -115,7 +115,7 @@ export function SaveCompDialog({
         toast.error(result.error);
         return;
       }
-      const where = kind === "comp" ? "/draft/comps" : "/draft/synergies";
+      const where = kind === "comp" ? "/prep/comps" : "/prep/synergies";
       toast.success(kind === "comp" ? "Composition saved." : "Synergy saved.", {
         action: { label: "View", onClick: () => router.push(where) },
       });
@@ -153,7 +153,7 @@ export function SaveCompDialog({
 
           {/* Preview and control at once. Not optional as a preview — the
               dialog covers the board, so without it "did I save blue or red"
-              is unanswerable until you visit /draft/comps — and the order it
+              is unanswerable until you visit /prep/comps — and the order it
               shows is the order that gets stored. */}
           <div
             className={cn(

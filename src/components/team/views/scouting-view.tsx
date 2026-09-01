@@ -20,7 +20,7 @@ import { WinrateRing } from "@/components/winrate-ring";
 import { BarRow, MetaChip, winRateTone } from "@/components/team/ui";
 import { cn } from "@/lib/utils";
 
-// The team page — /team/scouting and its demo.
+// The scouting page — /prep/scouting.
 //
 // The other four scrim pages each answer one question over every game ever
 // recorded. This one answers *any* of those questions over a subset, which is
@@ -116,7 +116,6 @@ export function TeamScoutingView({
   championMap,
   champions,
   playerNames,
-  basePath = "",
 }: {
   /** Every recorded game. The filter is applied here, not by the page. */
   games: TeamGameView[];
@@ -125,7 +124,6 @@ export function TeamScoutingView({
   championMap: Map<number, ChampionInfo>;
   champions: Champion[];
   playerNames: PlayerLookup;
-  basePath?: string;
 }) {
   const filtered = applyTeamMatchFilter(games, filter);
   const options = teamMatchFilterOptions(games);
@@ -146,7 +144,6 @@ export function TeamScoutingView({
         options={options}
         champions={champions}
         version={version}
-        basePath={basePath}
         resultCount={filtered.length}
         totalCount={games.length}
       />
@@ -269,7 +266,6 @@ export function TeamScoutingView({
                   version={version}
                   championMap={championMap}
                   playerNames={playerNames}
-                  basePath={basePath}
                 />
               ))}
             </div>

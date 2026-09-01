@@ -13,13 +13,12 @@ import { ChampionIcon } from "@/components/champion-icon";
 import { BarRow, winRateTone } from "@/components/team/ui";
 import { cn } from "@/lib/utils";
 
-// Draft aggregates across every recorded game — /team/drafts and its demo.
+// Draft aggregates across every recorded game — /prep/picks.
 //
-// The only view in this section that needed nothing done to it: it renders
-// champions, bans and rates, and not a single person's name. That is why the
-// demo's scrim views were validated starting here — if these numbers come out
-// right, the demo_team_* views are wired up correctly, with no aliasing in the
-// way to confuse a wrong result for a right one.
+// The only view in this section that names nobody: it renders champions, bans
+// and rates and not a single person, which is why it is the one worth checking
+// first when the team_* reads are in doubt — a wrong number here is a wrong
+// query, with no name resolution in the way to blame it on.
 
 const TOP_N = 12;
 

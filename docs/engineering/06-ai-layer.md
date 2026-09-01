@@ -1,5 +1,10 @@
 # 06 — The AI Layer
 
+> **Gone — deleted by ADR-051 and migration 029.** The whole Gemini layer is out:
+> the routes, the prompts, the tables and the cron. Kept as written because the
+> quota economics below are the part worth having if anything like it comes back —
+> the shape of the decision outlived the feature. Nothing here describes running code.
+
 Files: `src/lib/gemini.ts` (transport), `src/lib/summary.ts` (prompt construction),
 `src/lib/player-signals.ts` (the computed splits the player prompt is built on),
 `src/lib/ai-context.ts` (human-written context), `src/app/api/summaries/route.ts` (the
@@ -315,7 +320,11 @@ everyone's record one by one — say something about the group."*
 
 ## 6b. The demo's analyst read — a third profile, not a translated second
 
-`src/lib/summary-analyst.ts`. Same data as the player summary; a different reader.
+> **Gone — deleted by ADR-050 and migration 027.** Kept as written rather than cut: it
+> records how the anonymization actually worked, which is the part worth having if
+> anything like it is ever wanted again. Nothing below describes code that still runs.
+
+`src/lib/summary.ts`. Same data as the player summary; a different reader.
 
 The private summary is written **for the person it is about**. It opens with what their
 friends wrote about them, quotes their own match notes back at them, and answers *how am I
@@ -330,7 +339,7 @@ is worth using, and answers *what would I need to know to play with or against t
 - resolves clanmates named in game lines through the same map, so a line reads
   `duo with Onyx (Caitlyn)`,
 - **skips the `match_notes` query entirely** rather than filtering its results,
-- passes an empty `AiContext`, so neither `clan_profile.context` nor `players.ai_context`
+- passes an empty `AiContext`, so neither `team_profile.context` nor `players.ai_context`
   is assembled into the text.
 
 A model cannot leak a note it was never shown. That is a stronger property than any
@@ -373,7 +382,7 @@ involving an unaliased player disappears rather than falling back to a real name
 builders downstream see names and never ids, which means `buildAnalystTeamPrompt` has
 nothing to substitute and no way to reach a `display_name`.
 
-It also has no way to reach `clan_profile.context`. The private recap opens with
+It also has no way to reach `team_profile.context`. The recap opens with
 `clanContextBlock(aiContext)` — the group's own blurb about itself, capped at 4000 chars of
 nicknames and running jokes, and the single most identifying string in the database. The
 gatherer never loads it, so there is no variable in the analyst path holding it; this is the
@@ -436,7 +445,7 @@ that produce *plausible* output are the expensive kind.
 
 `ai-context.ts` holds two levels of free text, answering different questions:
 
-- **`clan_profile.context`** — who the *group* is. Inside jokes, slang, nicknames, running
+- **`team_profile.context`** — who the *team* is. Inside jokes, slang, nicknames, running
   bits. Capped at 4000 chars into the prompt. **The private team recap only** — the demo's
   recap is built by a gatherer that never reads it (§6b).
 - **`players.ai_context`** — who *one person* is. Their reputation, habits, the thing

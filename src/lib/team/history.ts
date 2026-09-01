@@ -94,9 +94,9 @@ type HistoryEntryBase = {
 export type FlexHistoryEntry = HistoryEntryBase & {
   source: "flex";
   /**
-   * Null on the demo, which publishes no riot_match_id on purpose — it is the
+   * Null when the source carries no riot_match_id — it is the
    * one field that de-anonymizes a whole lobby. With no id there is no link out,
-   * which is the demo behaving correctly rather than a missing feature.
+   * which is the source being honest rather than a missing feature.
    */
   riotMatchId: string | null;
   /** How many of the main team played it. Five unless a sub was on the far side. */

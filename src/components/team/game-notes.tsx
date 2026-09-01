@@ -8,7 +8,7 @@ import {
   addTeamGameNote,
   updateTeamGameNote,
   deleteTeamGameNote,
-} from "@/app/(app)/team/actions";
+} from "@/app/(app)/matches/actions";
 import { formatRelativeTime } from "@/lib/format";
 import type { TeamNoteThread, ThreadedNote } from "@/lib/team/notes";
 import { Button } from "@/components/ui/button";

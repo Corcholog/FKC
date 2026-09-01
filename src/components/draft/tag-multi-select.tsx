@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import type { DraftTagKind, DraftTagRow } from "@/lib/draft/types";
-import { createDraftTag } from "@/app/(app)/draft/actions";
+import { createDraftTag } from "@/app/(app)/prep/actions";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";

@@ -2,17 +2,13 @@
 
 import { useActionState, useRef, useState } from "react";
 import { Star, StarOff } from "lucide-react";
-import {
-  addAccount,
-  removeAccount,
-  setAccountQueues,
-  setPrimaryAccount,
-} from "@/app/(app)/settings/actions";
+import { addAccount, removeAccount, setAccountQueues, setPrimaryAccount } from "@/app/(app)/settings/actions/accounts";
 import { emptyPlayerFormState, type PlayerFormState } from "@/app/(app)/settings/form-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PLATFORMS, platformLabel } from "@/lib/platforms";
 
 export type PlayerAccount = {
   puuid: string;
@@ -28,25 +24,6 @@ export type PlayerAccount = {
   league_points: number | null;
   flex_tier: string | null;
 };
-
-/**
- * Platforms offered in the UI.
- *
- * Deliberately shorter than riot.ts's SUPPORTED_PLATFORMS: that list is what
- * the client will route, this one is what anybody here actually plays on, and
- * a select with thirty regions in it makes picking the right one harder rather
- * than easier. Adding a region is one line in both places.
- */
-const PLATFORMS: { value: string; label: string }[] = [
-  { value: "LA2", label: "LAS" },
-  { value: "LA1", label: "LAN" },
-  { value: "BR1", label: "BR" },
-  { value: "NA1", label: "NA" },
-];
-
-export function platformLabel(platform: string): string {
-  return PLATFORMS.find((p) => p.value === platform)?.label ?? platform;
-}
 
 export function PlatformSelect({
   name = "platform",

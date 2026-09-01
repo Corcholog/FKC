@@ -10,10 +10,13 @@ import { MatchRow } from "@/components/match-row";
 
 // The last few games, on a player's own page.
 //
-// Shared between the private page and the demo, and `notes` is the whole
-// difference. Privately it carries the note threads plus who is allowed to write
-// one; publicly it is absent, which makes each row non-expandable rather than
-// expandable onto nothing (see MatchRowShell).
+// `notes` carries the note threads plus who is allowed to write one. Absent, it
+// makes each row non-expandable rather than expandable onto nothing (see
+// MatchRowShell).
+//
+// `accountNames` labels each row with the account that played it, and only for
+// somebody who has more than one — which is exactly the page where the label is
+// worth the pixels, since the whole history folds several accounts together.
 export function RecentForm({
   matchList,
   participantsByMatch,
@@ -22,8 +25,8 @@ export function RecentForm({
   playerSlug,
   version,
   championMap,
-  basePath = "",
   notes,
+  accountNames,
 }: {
   matchList: MatchListRow[];
   participantsByMatch: Map<string, MatchRowParticipant[]>;
@@ -32,19 +35,20 @@ export function RecentForm({
   playerSlug: string;
   version: string;
   championMap: Map<number, ChampionInfo>;
-  basePath?: string;
   notes?: {
     byParticipant: Map<string, MatchNote[]>;
     canAdd: boolean;
     currentUserId: string | null;
   };
+  /** puuid → Riot ID, for anybody with more than one account. */
+  accountNames?: Map<string, string>;
 }) {
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Recent form</h2>
         <Link
-          href={`${basePath}/matches?player=${playerSlug}`}
+          href={`/matches?player=${playerSlug}`}
           className="text-xs text-gold-bright hover:underline"
         >
           View full history →
@@ -96,6 +100,7 @@ export function RecentForm({
                     }
                   : undefined
               }
+              accountName={accountNames?.get(viewer.puuid)}
             />
           );
         })

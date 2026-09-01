@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Save } from "lucide-react";
 import { toast } from "sonner";
-import { saveTeamSeries, updateTeamSeries } from "@/app/(app)/team/actions";
+import { saveTeamSeries, updateTeamSeries } from "@/app/(app)/matches/actions";
 import {
   TEAM_MATCH_KINDS,
   TEAM_MATCH_KIND_LABELS,
@@ -347,7 +347,7 @@ export function TeamSeriesForm({
       // navigation below — without it, clicking anything while the destination
       // renders would ask about saving work that's already saved.
       setBaseline(snapshot);
-      router.push(result.seriesId ? `/team/matches/${result.seriesId}` : "/team/matches");
+      router.push(result.seriesId ? `/matches/${result.seriesId}` : "/matches");
       router.refresh();
     });
   }
@@ -547,7 +547,7 @@ export function TeamSeriesForm({
         )}
         {editing && (
           <Link
-            href={`/team/matches/${editing.id}`}
+            href={`/matches/${editing.id}`}
             className={cn(buttonVariants({ variant: "ghost", size: "sm" }), !unsaved && "ml-auto")}
           >
             Cancel

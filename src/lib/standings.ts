@@ -11,7 +11,7 @@ import { fetchAllRows } from "@/lib/supabase/fetch-all";
 // the LP change is the point and the ordering is the frame around it.
 //
 // Reads only `players` and `player_rank_history`, both of which the sync has
-// already written by the time this runs. No Riot calls, no Gemini.
+// already written by the time this runs. No Riot calls at all.
 
 type PlayerRow = {
   display_name: string;

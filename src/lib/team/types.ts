@@ -81,7 +81,7 @@ export type TeamSeriesRow = {
   competition_id: string | null;
   /** Free text: "Fecha 3", "Playoffs QF". Null when it wasn't recorded. */
   stage: string | null;
-  /** Private only — who entered the series. Not selected on the demo, and not in its view. */
+  /** Who entered the series. Nothing renders it; the write path is its only reader. */
   created_by?: string | null;
   created_at: string;
 };

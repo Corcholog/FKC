@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DRAFT_COMP_KIND_LABELS, type DraftCompKind } from "@/lib/draft/types";
-import { deleteDraftComp } from "@/app/(app)/draft/actions";
+import { deleteDraftComp } from "@/app/(app)/prep/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

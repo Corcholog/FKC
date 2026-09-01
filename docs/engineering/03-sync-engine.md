@@ -369,11 +369,18 @@ knowable from the response. So the saving is rows and render-time noise, not Rio
 and that changes which account is worth walking, see below.
 
 **The judgement is made against the roster as it stands now.** A game skipped before a
-sixth member was added stays skipped. Recovering it means deleting those `excluded` marker
+roster change stays skipped. Recovering it means deleting those `excluded` marker
 rows for queue 440 and nulling the flex cursors, then re-syncing.
 
-**With fewer than five people assigned, the flex queue is dropped from the run entirely**
-and `SyncSummary.skippedFlexNoTeam` says so. Walking it would spend a detail call on every
+**This used to be defensible against a misconfigured roster.** With fewer than five people
+assigned, no flex game could qualify, so the queue was dropped from the run and
+`SyncSummary.skippedFlexNoTeam` reported the skip — "no flex arrived" and "flex cannot
+arrive" look identical from outside, and only one of them is fixed by pressing Sync again.
+Migration 028 made `team_role` `not null` on a five-row table, so that state is unreachable
+and both the branch and the hint are gone.
+
+The reasoning is kept because it is why the walk still costs what it does: walking it would
+spend a detail call on every
 game to reject it *and* leave marker rows that block reconsidering them once the roster is
 set up. "No flex arrived" and "flex cannot arrive" look identical from outside, and only
 one of them is fixed by pressing Sync again.

@@ -93,7 +93,6 @@ export function TeamHistoryRow({
   version,
   championMap,
   playerNames,
-  basePath = "",
   notes,
   currentUserId,
 }: {
@@ -101,11 +100,10 @@ export function TeamHistoryRow({
   version: string;
   championMap: Map<number, ChampionInfo>;
   playerNames: PlayerLookup;
-  basePath?: string;
   /**
    * The game's review thread. Undefined means "this surface doesn't do notes",
-   * which is every flex row and the whole public demo; an empty array means
-   * "none yet", which still gets the composer.
+   * which is every flex row; an empty array means "none yet", which still gets
+   * the composer.
    */
   notes?: TeamNoteThread[];
   currentUserId?: string | null;
@@ -120,7 +118,7 @@ export function TeamHistoryRow({
       <div className="flex flex-wrap items-center gap-2">
         {entry.source === "team" ? (
           <Link
-            href={`${basePath}/team/matches/${entry.seriesId}`}
+            href={`/matches/${entry.seriesId}`}
             className="text-xs font-medium text-gold-bright transition-colors hover:text-gold"
           >
             Open the series
@@ -160,7 +158,6 @@ export function TeamHistoryRow({
         version={version}
         championMap={championMap}
         playerNames={playerNames}
-        basePath={basePath}
       />
 
       {entry.source === "team" && notes !== undefined && (

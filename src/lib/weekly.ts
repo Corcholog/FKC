@@ -8,10 +8,16 @@ import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 // The Sunday wrap.
 //
-// Everything here is derived from data /insights already computes — the value
-// is the framing, not new analysis: a week is a unit people remember playing,
-// where "since tracking started" is not. Nothing in this file calls Riot or
-// Gemini; it's one participant query plus one rank-history query.
+// The value is the framing, not new analysis: a week is a unit people remember
+// playing, where "since tracking started" is not. Nothing in this file calls
+// Riot or anything metered; it's one participant query plus one rank-history
+// query.
+//
+// It is also the last reader of `player_rank_history` (ADR-052). The site has
+// no rank-over-time surface any more — no LP chart on a player page, no LP race
+// — but a week's LP swing is the one form of it that survived, because a recap
+// is about a period by construction and "you gained 40 LP" is the sentence
+// people actually wanted from that chart.
 //
 // The rule that keeps this readable: a section that has nothing to say prints
 // nothing. A wrap padded with "no notable duos this week" every week trains
@@ -143,8 +149,7 @@ export function buildWeeklyWrap(
   }
 
   // --- Duo of the week ---------------------------------------------------
-  const duoStats = aggregateDuoStats(rows as DuoInput[]);
-  const duos = duoStats.duos.filter((d) => d.games >= MIN_DUO_GAMES);
+  const duos = aggregateDuoStats(rows as DuoInput[]).filter((d) => d.games >= MIN_DUO_GAMES);
   if (duos.length > 0) {
     const bestDuo = [...duos].sort((a, b) => duoWinRate(b) - duoWinRate(a))[0];
     // duoWinRate already returns a rounded 0-100 percentage, not a fraction —

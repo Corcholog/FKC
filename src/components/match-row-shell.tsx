@@ -40,7 +40,7 @@ export function MatchRowShell({
   /**
    * The notes UI, only mounted while open so a 50-row page isn't 50 live forms.
    *
-   * Omitted on the public demo, which carries no notes and no match link to put
+   * Omitted where there are no notes and no match link to put
    * in a panel. Without one the row renders as a plain div: an expand chevron
    * that opens onto nothing is worse than no chevron.
    */

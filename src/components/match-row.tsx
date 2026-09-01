@@ -14,6 +14,7 @@ import type { MatchNote } from "@/lib/match-notes";
 import { isSupport } from "@/lib/roles";
 import { MatchRowShell } from "@/components/match-row-shell";
 import { NotesSection } from "@/components/notes-section";
+import { cn } from "@/lib/utils";
 
 export type TeamComposChampion = {
   championId: number;
@@ -23,12 +24,7 @@ export type TeamComposChampion = {
 };
 
 type MatchRowData = {
-  /**
-   * Null on the public demo. `demo_matches` has no riot_match_id on purpose: it
-   * is the single field that de-anonymizes a whole lobby, since pasting it into
-   * any third-party site returns all ten real Riot IDs. Only the notes panel
-   * uses it, and the demo has no notes panel either.
-   */
+  /** Null on a source that carries no Riot id. Only the notes panel uses it. */
   riotMatchId: string | null;
   championId: number;
   championName: string;
@@ -99,15 +95,25 @@ export function MatchRow({
   championMap,
   notes,
   playerName,
+  accountName,
 }: {
   match: MatchRowData;
   version: string;
   championMap: Map<number, ChampionInfo>;
-  /** Omitted on the public demo — no notes, and no riot_match_id to link out with. */
+  /** Omitted where there are no notes and no riot_match_id to link out with. */
   notes?: MatchRowNotes;
   /** Shown above the champion name when this row appears outside a single
-   * player's own page (e.g. a squad-wide feed) so it's clear whose game it is. */
+   * player's own page (e.g. a roster-wide feed) so it's clear whose game it is. */
   playerName?: string;
+  /**
+   * Which of their accounts played it — only when they have more than one.
+   *
+   * Silent for anybody with a single account, which is what keeps it useful: a
+   * Riot ID under every row on a page where it is always the same one is noise,
+   * and the same line under a smurf's game is the answer to "why is this Bronze
+   * game on a Diamond player's page".
+   */
+  accountName?: string;
 }) {
   const iconUrl = championIconUrl(match.championId, version, championMap);
   const displayName = championDisplayName(match.championId, championMap, match.championName);
@@ -145,8 +151,20 @@ export function MatchRow({
           <div className="h-10 w-10 shrink-0 rounded-md bg-gold-muted" />
         )}
         <div className="min-w-0">
-          {playerName && (
-            <p className="truncate text-[10px] font-medium tracking-wide text-gold-bright uppercase">{playerName}</p>
+          {(playerName || accountName) && (
+            <p className="truncate text-[10px] font-medium tracking-wide text-gold-bright uppercase">
+              {playerName}
+              {accountName && (
+                <span
+                  className={cn(
+                    "font-normal tracking-normal text-grey-mid normal-case",
+                    playerName && "ml-1.5",
+                  )}
+                >
+                  {accountName}
+                </span>
+              )}
+            </p>
           )}
           <p className="truncate text-sm font-medium text-white">{displayName}</p>
           <p className="tabular-nums text-xs text-grey-light">

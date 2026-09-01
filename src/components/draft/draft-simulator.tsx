@@ -124,7 +124,7 @@ function readStoredState(): StoredState | null {
 }
 
 /**
- * The draft scratchpad at /draft.
+ * The draft scratchpad at /prep/draft.
  *
  * **There is no turn machine, deliberately.** A real draft is fifteen
  * alternating actions across two ban phases, and encoding that would mean the

@@ -5,11 +5,11 @@ import { PlayerRow, type SettingsPlayer } from "@/components/settings/player-row
 import type { PlayerAccount } from "@/components/settings/player-accounts";
 import { SectionCard } from "@/components/section-card";
 
-// Everyone this app tracks, and the Riot accounts behind them.
+// The team, and the Riot accounts behind them.
 //
-// The friend group, not the main team — five of these people are also that, and
-// which five is the next tab. Everything under /team reads players.team_role;
-// everything else reads all of them.
+// Five rows, one per position, enforced by the database since migration 028 —
+// so this page adds and removes people rather than deciding who counts. Which
+// seat each of them holds is the next tab.
 export default async function SettingsRosterPage() {
   const supabase = await createClient();
 
@@ -21,7 +21,7 @@ export default async function SettingsRosterPage() {
       .from("players")
       .select(
         "id, riot_game_name, riot_tag_line, display_name, avatar_url, user_id, " +
-          "ai_context, team_role",
+          "team_role",
       )
       .order("display_name")
       // Spelled out because the column list is a concatenation, which PostgREST's

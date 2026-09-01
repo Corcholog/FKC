@@ -1,4 +1,4 @@
-// The read behind the team match history — /team/matches and its demo.
+// The read behind the team match history — /matches.
 //
 // Two sources, and only one of them is a query this file makes. Team matches
 // come back whole from lib/team/queries.ts, which every page in the section
@@ -7,7 +7,7 @@
 // (migration 024) rather than through a queue filter anybody has to remember.
 //
 // Same fetch/build split as every other loader here, for the reason
-// demo-cache.ts spells out: a cached entry is serialized, so the half that gets
+// every loader here follows: the half that gets
 // cached returns plain arrays and nothing with a Map in it.
 
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
@@ -31,23 +31,18 @@ const PARTICIPANT_COLUMNS =
  * The match columns each row needs, flattened afterwards.
  *
  * Two of them are private-only and for opposite reasons. `riot_match_id` is the
- * single field that de-anonymizes a whole lobby, so demo_matches drops it on
- * purpose (018) — without it a demo row simply has no link out. The ban arrays
+ * single field that identifies a whole lobby. The ban arrays
  * are harmless but were added to `matches` after that view was written, and a
  * view's column list is fixed at creation, so they are not in it either.
- *
- * Selecting them conditionally rather than tolerating a missing column matters:
- * PostgREST fails the whole request on an unknown column, so a demo page would
- * render nothing at all rather than render without bans.
  */
-const matchColumns = (demo: boolean) =>
-  demo ? "game_creation, game_duration_seconds" : "riot_match_id, blue_bans, red_bans, game_creation, game_duration_seconds";
+const MATCH_COLUMNS =
+  "riot_match_id, blue_bans, red_bans, game_creation, game_duration_seconds";
 
-// The embed is named for whichever matches table was queried — demo_matches on
-// the demo — and PostgREST returns it under that same name. loaders/roster.ts
-// and loaders/team-overview.ts hit the same thing and document it.
+// The embed is named for whichever matches table was queried, and PostgREST
+// returns it under that same name. loaders/players.ts and
+// loaders/team-overview.ts hit the same thing and document it.
 const flexColumns = (source: DataSource) =>
-  `${PARTICIPANT_COLUMNS}, ${source.table("matches")}!inner(${matchColumns(source.demo)})`;
+  `${PARTICIPANT_COLUMNS}, ${source.table("matches")}!inner(${MATCH_COLUMNS})`;
 
 type MatchEmbed = {
   riot_match_id?: string | null;

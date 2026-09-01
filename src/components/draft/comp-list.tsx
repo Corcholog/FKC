@@ -48,7 +48,7 @@ const COPY: Record<DraftCompKind, { title: string; noun: string; empty: string }
 };
 
 /**
- * The list page for one kind. Both /draft/comps and /draft/synergies are this
+ * The list page for one kind. Both /prep/comps and /prep/synergies are this
  * component with a different `kind` — the rows are the same shape and the only
  * thing that differs is how many champions each holds.
  *

@@ -12,10 +12,10 @@ isn't. See [10](10-known-gaps.md).
 player-stats.ts    lifetime & per-role aggregates, awards, trends
 champion-stats.ts  per (player, champion) aggregates for the tierlist
 matchups.ts        lane opponents, nemesis
-duo-stats.ts       who plays with whom, civil wars, synergy
+duo-stats.ts       who plays with whom, and synergy (the Sunday recap only)
 streaks.ts         current / longest win & loss runs
-sessions.ts        queue sessions, the tilt curve
-time-stats.ts      hour × weekday heatmap, in Buenos Aires time
+sessions.ts        queue sessions (the Sunday recap only)
+time-stats.ts      hour-of-day buckets, in Buenos Aires time
 rank.ts            tier/division/LP ↔ sortable & plottable numbers
 roles.ts           Riot's position strings → labels, order, main role, lane opponent
 ```
@@ -222,14 +222,17 @@ Two different numeric projections of the same rank, deliberately kept separate:
 tierIndex * 10000 + divisionWorseness * 1000 - lp
 ```
 
-**`ladderPoints`** — higher is better, continuous, for the LP chart's y-axis:
+**`ladderPoints`** — higher is better, continuous, so two ranks can be *subtracted*:
 
 ```
 1 division = 100 LP, 1 tier = 4 divisions = 400 LP
 ```
 
-Choosing 100 LP per division makes tier boundaries land on clean multiples of 400, which
-gives the chart free, meaningful gridlines instead of arbitrary ones.
+It drew the LP chart's y-axis until that chart was deleted (ADR-052), and 100 LP per
+division was chosen so tier boundaries landed on clean multiples of 400 and gave the axis
+free gridlines. What still uses it is the arithmetic, not the axis: the sync's
+promotion/demotion detection, the Discord standings, and the Sunday recap's "gained 40 LP
+this week".
 
 Two edge cases handled explicitly:
 
@@ -282,7 +285,7 @@ championDisplayName(championId, championMap, fallback)
 ```
 
 Including inside AI prompts — `summary.ts` resolves names before building the prompt,
-otherwise Gemini writes about "MonkeyKing".
+otherwise every surface renders "MonkeyKing".
 
 Two more DDragon details:
 
@@ -293,11 +296,12 @@ Two more DDragon details:
   champion's display name. They'd show as duplicates in the matchup picker and have no
   Lolalytics page.
 
-## 5. Sessions and the tilt curve (`sessions.ts`)
+## 5. Sessions (`sessions.ts`)
 
-The question isn't "how many games did you play" but **"how did the 7th game of the night
-go compared to the 1st"** — the closest thing to a measurable tilt signal available
-without the timeline API.
+A session is a run of games with no meaningful break in it. It was built to ask **"how did
+the 7th game of the night go compared to the 1st"** — the closest thing to a measurable
+tilt signal available without the timeline API — and the chart that asked it is gone. What
+is left is the grouping itself, which the Sunday recap uses to name a bad evening.
 
 ```ts
 export const SESSION_GAP_MINUTES = 120;
@@ -309,16 +313,13 @@ A gap longer than two hours starts a new session. Two details:
 50-minute slugfest eats most of the gap and splits a continuous session in half.
 
 **Sessions are grouped per player, never roster-wide.** Splicing five people's evenings
-into one timeline would manufacture a fictional 30-game marathon. `/insights` builds
-`sessionsByPlayer` first, then flattens.
+into one timeline would manufacture a fictional 30-game marathon. The Sunday recap builds
+sessions per player, never over the pooled rows.
 
-`winRateByGameIndex` buckets by 1-based position within a session, folding everything past
-index 10 into the last bucket. Every point carries its own sample size, because the tail
-is always built on fewer sessions than the head — and the chart says so.
-
-`gameIndexByOwner` returns the same buckets split by whose sessions they came from, so a
-dip at game 7 can be traced to the two people who actually play seven-game nights rather
-than read as a clan-wide law of tilt. That feeds the click-through dialog.
+The per-index folds that drew the tilt curve — `winRateByGameIndex` and
+`gameIndexByOwner` — went with `/insights` (ADR-052). What a session is still good for is
+naming the evening somebody lost four in a row, which is the one thing the Sunday recap
+asks of it.
 
 ## 6. Duos (`duo-stats.ts`)
 
@@ -332,25 +333,20 @@ function pairKey(a: string, b: string): string {
 }
 ```
 
-Canonical ordering is what stops a duo being counted twice under both orderings, and it's
-also what makes `aWins` in a civil war unambiguous — it always refers to the same player
-regardless of which row was read first.
+Canonical ordering is what stops a duo being counted twice under both orderings — the
+record always refers to the same player regardless of which row was read first.
 
 A five-stack produces 10 pairs, and that's intended: each duo's record should count that
 game.
 
-**Synergy** compares a pair's winrate against the average of the two players' *solo*
-winrates:
-
-```ts
-if (!soloA?.games || !soloB?.games) return null;
-```
-
-Null when either has no solo baseline. An unqualified "+40%" measured against a
-nonexistent baseline is worse than saying nothing.
+**Synergy is gone.** `duoSynergy` compared a pair's winrate against the average of the two
+players' solo winrates, and returned null when either had no solo baseline. It needed the
+matrix around it to be readable, and the matrix went with `/insights` (ADR-052) — so the
+per-player solo baseline `aggregateDuoStats` used to build alongside the pairs went too.
 
 `MIN_DUO_GAMES = 3` — below that it's noise; two games at 100% is not a synergy. The
-`/insights` matrix shows sub-threshold pairs but doesn't *rank* them.
+Sunday recap filters to the threshold rather than showing what falls under it, because a
+Discord message has no room for a caveat column.
 
 ## 7. Time (`time-stats.ts`)
 
@@ -368,9 +364,14 @@ zone. One subtlety handled: `hour12: false` still renders midnight as `"24"` in 
 versions, hence `Number(hourRaw) % 24`.
 
 The late-night window (00:00–06:00) is explicitly labelled as *not* a scientific cutoff —
-it's "the window where one more game stops being a good idea". `/insights` always shows
+it's "the window where one more game stops being a good idea". The front page always shows
 it next to the rest-of-day winrate, because the number only means something against a
 comparison.
+
+`aggregateByTime` returns 24 buckets and nothing else. It used to also build a
+[weekday][hour] grid and per-weekday totals for a 24×7 heatmap; that chart is gone
+(ADR-052), and 168 buckets folded over every row the roster has played, on a page that
+folds them on every request, is not free.
 
 ## 8. Matchups and nemesis (`matchups.ts`)
 
@@ -492,7 +493,8 @@ export function someMetric(agg: XAgg): number;
 Structural typing does the heavy lifting: `XInput` describes the *columns needed*, not a
 concrete row type, so a page can select one superset of columns and pass the same array to
 `aggregatePlayerStats`, `streaksByPlayer`, and `aggregateByTime` without mapping between
-shapes. That's why `/insights` can fetch once and derive six different views from it.
+shapes. That's why the front page can fetch once and derive the roster board's four
+readings, the team record and the hour chart from the same arrays.
 
 ## 10b. Mixing sources: the unified row, and the third clock
 
@@ -527,11 +529,13 @@ stack never lands, and five of the team on one side of a ten-player game leaves 
 the team on the other. `src/lib/flex-team.ts` is gone; what survives is `groupFlexGames`
 and `recordOf` in `src/lib/team/roster.ts`, and the numbers need no caveat.
 
-**Riot-only panels stay Riot-only, at every scope.** LP over time, the hour heatmap, lane
-differentials, matchups and the game-length curves read the Riot rows whatever the scope
-asks for, and `SCOPE_CAPTIONS` names them. A team match has no LP, no kickoff time finer
-than a date, no enemy laner resolved to an account and an often-missing duration — folding
-it in would not widen those numbers, it would corrupt them.
+**Riot-only panels stay Riot-only, at every source.** The hour bars, lane differentials,
+matchups and the game-length curves read the Riot rows whatever the scope asks for, and
+`SOURCE_CAPTIONS` names them. A team match has no kickoff time finer than a date, no enemy
+laner resolved to an account and an often-missing duration — folding it in would not widen
+those numbers, it would corrupt them. The hour chart is the sharpest case: `fromTeamPick`
+stamps a scrim at midday so it sorts into the right day, so counting team rows there would
+invent a spike at 09:00 out of nothing.
 
 ## 10c. One row per game: `lib/team/history.ts`
 
@@ -541,7 +545,7 @@ a *list*, and the hard part is different.
 `flex_participants` stores one row per player per game, so the roster's five-stack
 arrives as five rows describing one game. The squad-wide feed at `/matches` renders those
 as five rows and is right to: that list is told from a player's point of view, and each of
-the five is somebody's game. `/team/matches` is told from the team's, so it folds them
+the five is somebody's game. `/matches` is told from the team's, so it folds them
 into one entry — **the team played it once**.
 
 Both records are flattened into a `HistoryEntry`, which carries only what the row shows:
@@ -609,7 +613,7 @@ probability. Ban-only champions still appear, which is the point of the metric.
 ### Pick order isn't recorded, so nothing claims to know it
 
 No blind-vs-counter, no first-pick champion. Side is stored and blue picks first, so
-`hadFirstPick` is the whole of it. `/team/drafts` says this on the page rather than
+`hadFirstPick` is the whole of it. `/prep/picks` says this on the page rather than
 letting the omission read as an oversight. ADR-028.
 
 ### Validation lives in `lib/`, not in the action
@@ -637,7 +641,7 @@ the within-game one and includes them.
 
 Every module above answers one question over *every* recorded game. Preparation asks the
 same questions over a subset — this patch, this opponent, officials only, games where they
-had Maokai — so `filters.ts` is a `TeamMatchFilter` plus a predicate, and `/team/scouting`
+had Maokai — so `filters.ts` is a `TeamMatchFilter` plus a predicate, and `/prep/scouting`
 (§15 of [07](07-frontend.md)) folds each aggregate over the filtered array.
 
 **Champion filters are AND, and over picks only.** "We faced K'Sante *and* Maokai" is a

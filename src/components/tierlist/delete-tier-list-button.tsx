@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { deleteTierList } from "@/app/(app)/tierlists/actions";
+import { deleteTierList } from "@/app/(app)/prep/tierlists/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

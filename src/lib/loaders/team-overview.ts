@@ -1,4 +1,4 @@
-// The flex half of the team overview — /team and /demo/team.
+// The flex half of the team overview — /team.
 //
 // Team matches come from lib/team/queries.ts, which already loads everything a
 // page in that section needs. This is the other source the overview counts:
@@ -6,11 +6,11 @@
 // the flex-scoped participant view (migration 024).
 //
 // Same fetch/build split as every other loader here, and for the reason
-// demo-cache.ts spells out: a cached entry is serialized, so the half that gets
+// every loader here follows: the half that gets
 // cached returns plain arrays and the half that returns Maps runs after it.
 
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
-import { demoSource, privateSource, type DataSource } from "@/lib/data-source";
+import { privateSource, type DataSource } from "@/lib/data-source";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   flexAppearances,
@@ -39,8 +39,8 @@ const PARTICIPANT_COLUMNS =
   "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, " +
   "kills, deaths, assists, total_cs, damage_dealt_to_champions, gold_earned, vision_score";
 
-// The embed is named for whichever matches table was queried — demo_matches on
-// the demo — and PostgREST returns it under that same name. loaders/roster.ts
+// The embed is named for whichever matches table was queried, and PostgREST
+// returns it under that same name. loaders/players.ts
 // hits the same thing and documents it.
 const flexColumns = (matchesTable: string) =>
   `${PARTICIPANT_COLUMNS}, ${matchesTable}!inner(game_creation, game_duration_seconds)`;
@@ -172,8 +172,4 @@ export async function loadTeamOverviewFlex(
     await fetchTeamOverviewRows(privateSource(supabase, "flex")),
     teamPlayerIds,
   );
-}
-
-export function demoFlexSource(supabase: SupabaseClient): DataSource {
-  return demoSource(supabase, "flex");
 }

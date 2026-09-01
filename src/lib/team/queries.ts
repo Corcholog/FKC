@@ -23,14 +23,11 @@ import type {
 } from "@/lib/team/types";
 
 const OPPONENT_COLUMNS = "id, name, slug, notes, target_bans, created_at";
-// created_by is asked for only privately: it is who entered the series, an auth
-// user id, and demo_team_series drops it. Nothing renders it — the write path
-// is its only reader — so the demo simply never selects it.
-const SERIES_BASE_COLUMNS =
-  "id, opponent_id, played_on, kind, fearless, notes, competition_id, stage, created_at";
+// created_by is who entered the series, an auth user id. Nothing renders it —
+// the write path is its only reader.
+const SERIES_COLUMNS =
+  "id, opponent_id, played_on, kind, fearless, notes, competition_id, stage, created_at, created_by";
 const COMPETITION_COLUMNS = "id, name, slug, starts_on, ends_on";
-const seriesColumns = (source: DataSource) =>
-  source.demo ? SERIES_BASE_COLUMNS : `${SERIES_BASE_COLUMNS}, created_by`;
 // No notes column — a game's notes are a thread, loaded by lib/team/notes.ts
 // only on the two pages that render them.
 const GAME_COLUMNS =
@@ -105,7 +102,7 @@ export async function loadTeamGames(
   // one page it never shows; past a page it silently duplicates and drops
   // drafts. Same class of bug fetch-all.ts exists to prevent, one level down.
   const series = await fetchAllRows<TeamSeriesRow>((from, to) => {
-    let q = source.supabase.from(source.table("team_series")).select(seriesColumns(source));
+    let q = source.supabase.from(source.table("team_series")).select(SERIES_COLUMNS);
     if (options.opponentId) q = q.eq("opponent_id", options.opponentId);
     if (options.seriesId) q = q.eq("id", options.seriesId);
     return q

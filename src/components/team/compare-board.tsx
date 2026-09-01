@@ -38,7 +38,6 @@ function ChampionSide({
   championMap,
   playerNames,
   durationSeconds,
-  basePath,
 }: {
   champion: HistoryChampion | undefined;
   /** Enemy side: icon on the right, text right-aligned, so the two teams face off. */
@@ -47,7 +46,6 @@ function ChampionSide({
   championMap: Map<number, ChampionInfo>;
   playerNames: PlayerLookup;
   durationSeconds: number | null;
-  basePath: string;
 }) {
   if (!champion) {
     // Reachable two ways: a half-written team match (the form requires ten picks
@@ -91,7 +89,7 @@ function ChampionSide({
             <>
               {roster ? (
                 <Link
-                  href={`${basePath}/player/${roster.slug}`}
+                  href={`/players/${roster.slug}`}
                   className="text-grey-light transition-colors hover:text-gold-bright"
                 >
                   {who}
@@ -216,7 +214,6 @@ export function CompareBoard({
   version,
   championMap,
   playerNames,
-  basePath = "",
 }: {
   allies: HistoryChampion[];
   enemies: HistoryChampion[];
@@ -240,8 +237,6 @@ export function CompareBoard({
   version: string;
   championMap: Map<number, ChampionInfo>;
   playerNames: PlayerLookup;
-  /** "/demo" on the public copy — prefixes the link from a pick to its player. */
-  basePath?: string;
 }) {
   // Row template is shared by the ban strip and every pick row so the centre
   // column stays a true axis all the way down the card.
@@ -291,7 +286,6 @@ export function CompareBoard({
               championMap={championMap}
               playerNames={playerNames}
               durationSeconds={durationSeconds}
-              basePath={basePath}
             />
             <span className="text-center text-[10px] font-semibold tracking-wider text-grey-mid">
               {entry.label}
@@ -303,7 +297,6 @@ export function CompareBoard({
               championMap={championMap}
               playerNames={playerNames}
               durationSeconds={durationSeconds}
-              basePath={basePath}
             />
           </div>
         ))}

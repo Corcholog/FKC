@@ -31,7 +31,7 @@ import {
   type TierChampion,
   type TierChampionStat,
 } from "@/lib/tierlist";
-import { saveTierList } from "@/app/(app)/tierlists/actions";
+import { saveTierList } from "@/app/(app)/prep/tierlists/actions";
 import { Button } from "@/components/ui/button";
 import { ChampionTile } from "@/components/tierlist/champion-tile";
 import { ChampionPool } from "@/components/tierlist/champion-pool";
@@ -343,7 +343,7 @@ export function TierListEditor({
             <DeleteTierListButton
               playerId={playerId}
               playerName={playerName}
-              redirectTo="/tierlists"
+              redirectTo="/prep/tierlists"
             />
           )}
           {/* A tier list is twenty-odd deliberate placements and nothing about

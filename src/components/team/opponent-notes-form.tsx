@@ -4,13 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
-import { updateOpponentNotes } from "@/app/(app)/team/actions";
+import { updateOpponentNotes } from "@/app/(app)/matches/actions";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 /**
- * Free-text scouting notes on one opponent — the same call as clan_profile's
+ * Free-text scouting notes on one opponent — the same call as team_profile's
  * context field: the useful version of "what do we know about this team" is
  * prose, not columns.
  */

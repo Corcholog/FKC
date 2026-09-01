@@ -376,12 +376,12 @@ export function SynergySection({ data, ourPicks, unavailable, className }: Conte
     <Section
       title="Synergies"
       count={complete.length + near.length}
-      href="/draft/synergies"
+      href="/prep/synergies"
       linkLabel="Open saved synergies"
       className={className}
     >
       {complete.length === 0 && near.length === 0 ? (
-        <EmptyNote href="/draft/synergies" cta="Save one">
+        <EmptyNote href="/prep/synergies" cta="Save one">
           {ourPicks.length === 0
             ? "No picks on our side yet."
             : "No saved synergy matches these picks."}
@@ -447,13 +447,13 @@ export function CounterSection({
       // many rows exist — a section reading "9" over nine struck-through names
       // is worse than no number.
       count={live}
-      href="/draft/counters"
+      href="/prep/counters"
       linkLabel="Open noted matchups"
       className={className}
     >
       <SubHead>Answers</SubHead>
       {answers.length === 0 ? (
-        <EmptyNote href="/draft/counters" cta="Note some">
+        <EmptyNote href="/prep/counters" cta="Note some">
           {theirPicks.length === 0
             ? "Nothing on their side yet."
             : `No answers noted against ${nameList(theirPicks, data.championById)}.`}
@@ -471,7 +471,7 @@ export function CounterSection({
 
       <SubHead>Watch out</SubHead>
       {threats.length === 0 ? (
-        <EmptyNote href="/draft/counters" cta="Note some">
+        <EmptyNote href="/prep/counters" cta="Note some">
           {ourPicks.length === 0
             ? "Nothing on our side yet."
             : `Nothing noted as beating ${nameList(ourPicks, data.championById)}.`}
@@ -497,12 +497,12 @@ export function CompSection({ data, ourPicks, className }: ContextualProps) {
     <Section
       title="Compositions"
       count={matches.length}
-      href="/draft/comps"
+      href="/prep/comps"
       linkLabel="Open saved compositions"
       className={className}
     >
       {matches.length === 0 ? (
-        <EmptyNote href="/draft/comps" cta="Save one">
+        <EmptyNote href="/prep/comps" cta="Save one">
           {ourPicks.length === 0
             ? "Nothing on our side yet."
             : "No saved comp contains any of our picks."}
@@ -583,7 +583,7 @@ export function TagSection({ data, ourPicks, theirPicks, ourSide, className }: C
   return (
     <Section
       title="Champion tags"
-      href="/draft/champions"
+      href="/prep/champions"
       linkLabel="Open champion annotations"
       className={className}
     >
@@ -607,7 +607,7 @@ export function TagSection({ data, ourPicks, theirPicks, ourSide, className }: C
         </div>
       </div>
       {data.profiles.size === 0 && (
-        <EmptyNote href="/draft/champions" cta="Tag some champions">
+        <EmptyNote href="/prep/champions" cta="Tag some champions">
           Nothing is annotated yet.
         </EmptyNote>
       )}
@@ -638,12 +638,12 @@ export function ExploreSynergies({ data }: { data: PanelData }) {
     <Section
       title="Synergies"
       count={shown.length}
-      href="/draft/synergies"
+      href="/prep/synergies"
       linkLabel="Open saved synergies"
     >
       <SearchBox value={query} onChange={setQuery} placeholder="Champion, name or win condition" />
       {shown.length === 0 ? (
-        <EmptyNote href="/draft/synergies" cta="Save one">
+        <EmptyNote href="/prep/synergies" cta="Save one">
           {query ? "Nothing matches that." : "No synergies saved yet."}
         </EmptyNote>
       ) : (
@@ -664,12 +664,12 @@ export function ExploreComps({ data }: { data: PanelData }) {
     <Section
       title="Compositions"
       count={shown.length}
-      href="/draft/comps"
+      href="/prep/comps"
       linkLabel="Open saved compositions"
     >
       <SearchBox value={query} onChange={setQuery} placeholder="Champion, name or win condition" />
       {shown.length === 0 ? (
-        <EmptyNote href="/draft/comps" cta="Save one">
+        <EmptyNote href="/prep/comps" cta="Save one">
           {query ? "Nothing matches that." : "No compositions saved yet."}
         </EmptyNote>
       ) : (
@@ -699,12 +699,12 @@ export function ExploreCounters({ data }: { data: PanelData }) {
     <Section
       title="Counters"
       count={shown.length}
-      href="/draft/counters"
+      href="/prep/counters"
       linkLabel="Open noted matchups"
     >
       <SearchBox value={query} onChange={setQuery} placeholder="Either champion, or a note" />
       {shown.length === 0 ? (
-        <EmptyNote href="/draft/counters" cta="Note some">
+        <EmptyNote href="/prep/counters" cta="Note some">
           {query ? "Nothing matches that." : "No matchups noted yet."}
         </EmptyNote>
       ) : (
@@ -734,12 +734,12 @@ export function ExploreChampions({ data }: { data: PanelData }) {
     <Section
       title="Champions"
       count={shown.length}
-      href="/draft/champions"
+      href="/prep/champions"
       linkLabel="Open champion annotations"
     >
       <SearchBox value={query} onChange={setQuery} placeholder="Champion" />
       {shown.length === 0 ? (
-        <EmptyNote href="/draft/champions" cta="Annotate some">
+        <EmptyNote href="/prep/champions" cta="Annotate some">
           {query ? "No champion matches that." : "Nothing is annotated yet."}
         </EmptyNote>
       ) : (

@@ -2,29 +2,22 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { QueueScope } from "@/lib/data-source";
+import { SOLOQ_VIEW } from "@/components/matches/match-view-tabs";
 
 // Page links rather than a client-side "load more": /matches is a Server
 // Component with no client data fetching anywhere, and a plain <Link> keeps it
 // that way — the page number lives in the URL, so a specific page is
 // shareable, bookmarkable, and survives a refresh.
 
-export function matchesHref(
-  playerSlug: string | null,
-  page: number,
-  basePath = "",
-  queue: QueueScope = "solo",
-): string {
-  const params = new URLSearchParams();
-  if (playerSlug) params.set("player", playerSlug);
+export function matchesHref(playerSlug: string | null, page: number): string {
   // Every filter the page carries has to appear here, or turning a page resets
   // it — and a filter that resets on navigation is worse than none, because the
-  // page still looks filtered.
-  if (queue !== "solo") params.set("queue", queue);
-  // Page 1 is the canonical bare URL — no ?page=1 cluttering the common case.
+  // page still looks filtered. `view` included: without it, page 2 lands on the
+  // team-game tab, which is not paginated and has no page 2.
+  const params = new URLSearchParams({ view: SOLOQ_VIEW });
+  if (playerSlug) params.set("player", playerSlug);
   if (page > 1) params.set("page", String(page));
-  const query = params.toString();
-  return query ? `${basePath}/matches?${query}` : `${basePath}/matches`;
+  return `/matches?${params.toString()}`;
 }
 
 function PageLink({
@@ -70,17 +63,12 @@ export function MatchesPagination({
   totalPages,
   totalMatches,
   playerSlug,
-  queue = "solo",
-  basePath = "",
 }: {
   page: number;
   totalPages: number;
   /** Total matching *matches*, not rendered rows — one match can list several tracked players. */
   totalMatches: number;
   playerSlug: string | null;
-  queue?: QueueScope;
-  /** "/demo" on the public copy. */
-  basePath?: string;
 }) {
   if (totalMatches === 0) return null;
 
@@ -104,13 +92,13 @@ export function MatchesPagination({
       {totalPages > 1 && (
         <div className="flex items-center gap-2">
           <PageLink
-            href={page > 1 ? matchesHref(playerSlug, page - 1, basePath, queue) : null}
+            href={page > 1 ? matchesHref(playerSlug, page - 1) : null}
             label="Previous"
             icon={<ChevronLeft className="h-3.5 w-3.5" />}
             iconSide="start"
           />
           <PageLink
-            href={page < totalPages ? matchesHref(playerSlug, page + 1, basePath, queue) : null}
+            href={page < totalPages ? matchesHref(playerSlug, page + 1) : null}
             label="Next"
             icon={<ChevronRight className="h-3.5 w-3.5" />}
             iconSide="end"

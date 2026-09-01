@@ -1,17 +1,14 @@
-// Who the main team is.
+// The team, and the order it is read in.
 //
-// One question, one answer, one place. Before migration 026 it had four
-// implicit answers at once — every /team page selected the whole `players`
-// table, `flex-team.ts` inferred it per match from "five non-null player_ids on
-// one side", and `track_flex` on an account looked like a membership flag while
-// being read only by the sync. None of them could name a player who hadn't
-// played, which is most of what a team page needs to say.
+// Membership used to be a question this module answered: 026 made it
+// `players.team_role is not null`, and every team surface carried that
+// predicate. 028 made the column `not null unique`, so the table *is* the team
+// and the predicate has nothing to exclude — five rows, one per position.
 //
-// `players.team_role` is the answer. Non-null means on the team; the value is
-// the position, because a team ordered alphabetically is ordered wrong.
-//
-// The fold and the predicate are pure and I/O-free; only `loadTeamRoster` does
-// a read, and it takes a DataSource so the demo gets the same rule for free.
+// What is left here is the ordering (a team sorted alphabetically is sorted
+// wrong), the full-stack test the sync gates flex on, and the folds over flex
+// rows. All of it is pure except `loadTeamRoster`, which takes a DataSource so
+// the queue is the caller's choice.
 
 import { rows } from "@/lib/supabase/read";
 import type { DataSource } from "@/lib/data-source";
@@ -19,8 +16,9 @@ import { TEAM_ROLES, type TeamRole } from "@/lib/team/types";
 
 /**
  * How many of the team have to be in a Riot game before it counts as the team
- * playing it. Five, and not configurable: "the team" is five people on the
- * map, which is a fact about League and not a preference.
+ * playing it. Five, and not configurable: "the team" is five people on the map,
+ * which is a fact about League and not a preference. Since 028 it is also the
+ * size of the `players` table, enforced there.
  */
 export const FULL_STACK = 5;
 
@@ -29,28 +27,27 @@ export const TEAM_ROLE_ORDER: readonly TeamRole[] = TEAM_ROLES;
 
 const ROLE_RANK = new Map<string, number>(TEAM_ROLE_ORDER.map((role, i) => [role, i]));
 
-export type TeamMemberRow = {
+export type TeamMember = {
   id: string;
   slug: string;
   display_name: string;
   avatar_url: string | null;
-  team_role: string | null;
+  team_role: TeamRole;
+  // The best of their accounts' soloQ rank, mirrored onto `players` by the sync.
+  // Carried here rather than fetched again per surface: the roster is five rows,
+  // every list of them shows a rank, and a second query for three columns is a
+  // round trip to save nothing.
+  tier: string | null;
+  division: string | null;
+  league_points: number | null;
 };
-
-export type TeamMember = Omit<TeamMemberRow, "team_role"> & { team_role: TeamRole };
-
-export function isTeamMember<T extends { team_role: string | null }>(
-  player: T,
-): boolean {
-  return player.team_role !== null && ROLE_RANK.has(player.team_role);
-}
 
 /**
  * Role order, then name.
  *
- * The name tie-break is what makes it a *total* order, which matters the moment
- * there is a substitute: two people at mid would otherwise swap places between
- * renders for no reason a reader could see.
+ * The name tie-break costs nothing and keeps this a *total* order, so a row with
+ * a role the app doesn't know (a hand-written update, a future rename) sorts to
+ * the end deterministically instead of moving between renders.
  */
 export function sortTeamMembers<T extends { team_role: string | null; display_name: string }>(
   members: T[],
@@ -63,30 +60,26 @@ export function sortTeamMembers<T extends { team_role: string | null; display_na
   );
 }
 
-export const TEAM_MEMBER_COLUMNS = "id, slug, display_name, avatar_url, team_role";
+export const TEAM_MEMBER_COLUMNS =
+  "id, slug, display_name, avatar_url, team_role, tier, division, league_points";
 
 /**
- * The main team, in role order.
+ * The team, in role order.
  *
- * Filtered in SQL rather than fetched-then-filtered so the demo can't leak the
- * wider roster through a page that forgot to narrow, and so the partial index
- * from 026 is the thing answering the question.
+ * No predicate: since 028 every row in `players` is on the team, and a filter
+ * that is always true is one more thing a future page can get wrong while
+ * looking right.
  */
 export async function loadTeamRoster(source: DataSource): Promise<TeamMember[]> {
   const result = rows(
     await source.supabase
       .from(source.table("players"))
       .select(TEAM_MEMBER_COLUMNS)
-      .not("team_role", "is", null)
-      .returns<TeamMemberRow[]>(),
+      .returns<TeamMember[]>(),
     "team roster",
   );
 
-  // The `not is null` above is the real filter; isTeamMember re-checks the
-  // *value*, so a role that stopped being one of the five (a bad hand-written
-  // update, a future rename) drops the row instead of sorting it to the end
-  // where it would read as a team member with no position.
-  return sortTeamMembers(result.filter(isTeamMember)) as TeamMember[];
+  return sortTeamMembers(result);
 }
 
 /** Name lookups keyed by player id — the shape every team view already takes. */
@@ -111,9 +104,8 @@ export type SideMember = { teamId: number; playerId: string | null };
  * account the team usually flexes on — it is the same person in the same seat.
  *
  * `teamPlayerIds` is the roster as of *now*, which is the honest reading and
- * also the one with a consequence: a game played before a substitute joined the
- * roster is judged by today's roster, and one played before a member was added
- * was judged by the roster of the day it was synced. See the sync for what that
+ * also the one with a consequence: a game is judged by today's five, not by
+ * whoever was on the team the day it was played. See the sync for what that
  * means and how to recover it.
  */
 export function isFullStack(participants: SideMember[], teamPlayerIds: Set<string>): boolean {

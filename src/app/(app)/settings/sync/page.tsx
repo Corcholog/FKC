@@ -1,18 +1,24 @@
 import { createClient } from "@/lib/supabase/server";
-import { optional } from "@/lib/supabase/read";
+import { optional, rows } from "@/lib/supabase/read";
 import { formatRelativeTime } from "@/lib/format";
 import { RefetchDetailsForm } from "@/components/settings/refetch-details-form";
 import { SyncStatusSection, type SyncState } from "@/components/settings/sync-status-section";
+import { FlexDiscovery, type FlexAccount } from "@/components/settings/flex-discovery";
 import { SectionCard } from "@/components/section-card";
+
+type ScoutRow = {
+  puuid: string;
+  player_id: string;
+  riot_game_name: string;
+  riot_tag_line: string;
+  track_flex: boolean;
+};
 
 export default async function SettingsSyncPage() {
   const supabase = await createClient();
 
-  // sync_state uses .single(), so a missing singleton is already an error rather
-  // than a null. Kept optional: this whole tab is status, and losing the row
-  // shouldn't take the Riot key form down with it.
-  const syncState = optional(
-    await supabase
+  const [syncStateResult, accountsResult, playersResult] = await Promise.all([
+    supabase
       .from("sync_state")
       .select(
         "riot_key_valid, last_sync_status, last_sync_finished_at, last_error, " +
@@ -23,9 +29,27 @@ export default async function SettingsSyncPage() {
       // the row as `null`, so syncState narrowed to `never` inside the guard
       // below and every field access on it was a type error waiting to be tried.
       .single<SyncState>(),
-    "sync state",
-    null,
-  );
+    supabase
+      .from("player_accounts")
+      .select("puuid, player_id, riot_game_name, riot_tag_line, track_flex")
+      .eq("track_flex", true)
+      .order("riot_game_name")
+      .returns<ScoutRow[]>(),
+    supabase.from("players").select("id, display_name").returns<{ id: string; display_name: string }[]>(),
+  ]);
+
+  // sync_state uses .single(), so a missing singleton is already an error rather
+  // than a null. Kept optional: this whole tab is status, and losing the row
+  // shouldn't take the Riot key form down with it.
+  const syncState = optional(syncStateResult, "sync state", null);
+
+  const namesById = new Map(rows(playersResult, "roster").map((p) => [p.id, p.display_name]));
+  const scouts: FlexAccount[] = rows(accountsResult, "flex accounts").map((account) => ({
+    puuid: account.puuid,
+    riot_game_name: account.riot_game_name,
+    riot_tag_line: account.riot_tag_line,
+    playerName: namesById.get(account.player_id) ?? "Unknown player",
+  }));
 
   // Every "ago" here is formatted on the server and passed down as a string. The
   // sections below are client components, and formatting a timestamp in both
@@ -61,6 +85,8 @@ export default async function SettingsSyncPage() {
           </p>
         </SectionCard>
       )}
+
+      <FlexDiscovery scouts={scouts} />
 
       <SectionCard
         title="Backfill match detail"

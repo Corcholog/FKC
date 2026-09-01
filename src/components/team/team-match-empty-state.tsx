@@ -16,9 +16,8 @@ export function TeamMatchEmptyState({
 }: {
   what?: string;
   /**
-   * Shows the link to the entry form. Defaults to off so the public demo, which
-   * has no form to send anyone to, gets the safe version without having to
-   * remember anything.
+   * Shows the link to the entry form. Defaults to off, so a surface with no
+   * form to send anyone to gets the safe version without remembering anything.
    */
   canAdd?: boolean;
 }) {
@@ -31,7 +30,7 @@ export function TeamMatchEmptyState({
         block. It takes a couple of minutes a game.
       </p>
       {canAdd && (
-        <Link href="/team/matches/new" className={cn(buttonVariants({ size: "sm" }), "mt-1")}>
+        <Link href="/matches/new" className={cn(buttonVariants({ size: "sm" }), "mt-1")}>
           <Plus />
           Add a series
         </Link>

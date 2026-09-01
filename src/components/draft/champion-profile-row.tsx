@@ -10,7 +10,7 @@ import {
   type ChampionProfileFields,
   type DraftTagRow,
 } from "@/lib/draft/types";
-import { saveChampionProfile } from "@/app/(app)/draft/actions";
+import { saveChampionProfile } from "@/app/(app)/prep/actions";
 import { ChampionAvatar } from "@/components/champion-avatar";
 import { ChampionCounters } from "@/components/draft/champion-counters";
 import { TagMultiSelect } from "@/components/draft/tag-multi-select";

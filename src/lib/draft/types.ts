@@ -31,7 +31,7 @@ export type ChampionProfileRow = {
   tags: string[];
   notes: string | null;
   updated_at: string;
-  /** Private only — the demo view drops it and the demo never selects it. */
+  /** Who last wrote it. Nothing renders it; the write path is its only reader. */
   updated_by?: string | null;
 };
 
@@ -61,7 +61,7 @@ export type ChampionCounterRow = {
   counter_champion_id: number;
   target_champion_id: number;
   note: string | null;
-  /** Private only — the demo view drops it and the demo never selects it. */
+  /** Who last wrote it. Nothing renders it; the write path is its only reader. */
   created_by?: string | null;
   created_at: string;
   updated_at: string;
@@ -104,7 +104,7 @@ export type DraftCompRow = {
   champion_ids: number[];
   win_conditions: string[];
   notes: string | null;
-  /** Private only — the demo view drops it and the demo never selects it. */
+  /** Who last wrote it. Nothing renders it; the write path is its only reader. */
   created_by?: string | null;
   created_at: string;
   updated_at: string;
@@ -134,7 +134,7 @@ export const DRAFT_COMP_KIND_LABELS: Record<DraftCompKind, string> = {
  * on a wall of cards, which is what the graph view exists to draw. Comps don't
  * have it: every comp is five champions, so nothing properly contains anything,
  * the graph would be one detached region per row and no lines at all, and the
- * "which champions recur" read is what /team/drafts already answers over real
+ * "which champions recur" read is what /prep/picks already answers over real
  * games rather than over saved plans.
  */
 export const DRAFT_COMP_SHAPE: Record<DraftCompKind, { winConditions: boolean; graph: boolean }> = {

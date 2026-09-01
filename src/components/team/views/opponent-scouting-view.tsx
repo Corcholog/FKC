@@ -24,17 +24,14 @@ import { BarRow, MetaChip, SeriesScore, winRateTone } from "@/components/team/ui
 import { WinrateRing } from "@/components/winrate-ring";
 import { cn } from "@/lib/utils";
 
-// One opponent's scouting sheet — /team/opponents/[slug] and its demo.
+// One opponent's scouting sheet — /prep/opponents/[slug].
 //
-// "Their roster" is derived from the nicknames typed into enemy pick rows, so on
-// the demo it comes through demo_team_picks already replaced by a positional
-// label. That has a real cost worth knowing about: the label is derived from
-// (game, role), so two different toplaners on the same opponent collapse into
-// one "Rival TOP" and their pools merge. The shape of the section is honest; the
-// individual attribution inside it is not, on the demo only.
+// "Their roster" is derived from the nicknames typed into enemy pick rows, so it
+// is only as good as what was typed — two spellings of one person are two
+// people, and one spelling reused is one.
 //
-// `notesForm` is a slot because the private page's notes box writes to
-// team_opponents. The demo passes nothing and the section simply isn't there.
+// `notesForm` is a slot because the notes box writes to team_opponents. A
+// surface that passes nothing simply doesn't render the section.
 
 function BanList({
   bans,
@@ -142,7 +139,6 @@ export function OpponentScoutingView({
   games,
   version,
   championMap,
-  basePath = "",
   notesForm,
   banPlanForm,
 }: {
@@ -150,13 +146,12 @@ export function OpponentScoutingView({
   games: TeamGameView[];
   version: string;
   championMap: Map<number, ChampionInfo>;
-  basePath?: string;
   notesForm?: ReactNode;
   /**
    * The editor, as a render prop over the counts this view already derived —
    * so the editable list carries the same "they picked it 3×" annotation the
-   * read-only one does without counting twice. Omitted on the demo, which falls
-   * back to the read-only list.
+   * read-only one does without counting twice. Omitted, it falls back to the
+   * read-only list.
    */
   banPlanForm?: (pickCounts: BanPlanPickCounts) => ReactNode;
 }) {
@@ -178,7 +173,7 @@ export function OpponentScoutingView({
   return (
     <div className="flex flex-col gap-8">
       <Link
-        href={`${basePath}/team/opponents`}
+        href={`/prep/opponents`}
         className="flex w-fit items-center gap-1.5 text-sm text-grey-mid transition-colors hover:text-gold-bright"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -211,8 +206,7 @@ export function OpponentScoutingView({
       {/* The plan sits above the history, because it is the thing you act on
           and the history below is what justifies it. Without an editor it
           renders read-only, and disappears entirely when there is no plan —
-          the demo should show prep that exists, not an empty affordance for
-          something it cannot do. */}
+          better to show prep that exists than an empty affordance. */}
       {(banPlanForm || opponent.target_bans.length > 0) && (
         <section className="panel-hex flex flex-col gap-3 p-4">
           {banPlanForm ? (
@@ -387,7 +381,7 @@ export function OpponentScoutingView({
               return (
                 <Link
                   key={entry.series.id}
-                  href={`${basePath}/team/matches/${entry.series.id}`}
+                  href={`/matches/${entry.series.id}`}
                   className="panel-hex is-interactive flex flex-wrap items-center gap-3 px-4 py-2.5"
                 >
                   <span className="text-sm text-grey-light">{entry.series.played_on}</span>

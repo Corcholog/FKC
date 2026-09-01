@@ -1,4 +1,4 @@
-// Shared shape and rules for the hand-made champion tier lists (/tierlists).
+// Shared shape and rules for the hand-made champion tier lists (/prep/tierlists).
 //
 // Imported by the client board, the server actions and the read path alike, so
 // the constraints exist once. The database stores `tiers` as unvalidated jsonb —
@@ -53,34 +53,6 @@ export function defaultTiers(): Tier[] {
     label,
     color: TIER_PALETTE[i],
     championIds: [],
-  }));
-}
-
-// The scale the demo shows instead of whatever the row was actually called.
-//
-// A tier label is free text somebody typed for themselves, and `tiers` is stored
-// as one jsonb document — so demo_champion_tier_lists passes the labels through
-// with the rankings, which is the one place the demo's column-level projection
-// can't reach. The real ones on this roster include "I GOON", "chiches adc" and
-// "me mato": funny in a group chat, and the exact opposite of what a coaching
-// staff should be handed by a tool being pitched to them as analysis.
-//
-// Replaced by position rather than by lookup, so a label written tomorrow is
-// covered without anyone remembering to add an override. The demo's default for
-// free text has to be "safe", not "silent".
-const DEMO_TIER_LABELS = ["S", "A", "B", "C", "D", "F"];
-
-/**
- * Renames every row to a standard scale, keeping the ranking itself untouched.
- *
- * Only the label changes — which champions sit in which row, and the row's
- * colour and order, are the player's real opinion and are what the demo is
- * there to show.
- */
-export function relabelForDemo(tiers: Tier[]): Tier[] {
-  return tiers.map((tier, i) => ({
-    ...tier,
-    label: DEMO_TIER_LABELS[i] ?? `T${i + 1}`,
   }));
 }
 

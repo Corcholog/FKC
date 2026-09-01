@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSessionPlayer } from "@/lib/auth";
 import type { NoteFormState } from "./form-state";
 
@@ -13,28 +12,7 @@ const NOT_YOUR_NOTE = "You can only edit your own notes.";
 function revalidateNoteSurfaces() {
   revalidatePath("/", "page");
   revalidatePath("/matches", "page");
-  revalidatePath("/player/[slug]", "page");
-}
-
-// Notes feed the AI summaries — any add/edit/delete invalidates them. Only
-// flags; generation happens in the daily /api/summaries batch, since Gemini's
-// free tier is capped per day and note editing is bursty.
-//
-// force_regenerate, not just stale: that batch skips players with fewer than
-// MIN_NEW_GAMES new games, and a note is not a game. Without the override,
-// writing a note would do nothing visible until the player had queued five more
-// times — for the one input the group deliberately typed in themselves.
-async function markSummaryStale(supabase: SupabaseClient, playerId: string) {
-  await supabase
-    .from("player_ai_summaries")
-    .upsert(
-      { player_id: playerId, stale: true, force_regenerate: true },
-      { onConflict: "player_id" },
-    );
-  await supabase
-    .from("team_ai_summary")
-    .update({ stale: true, force_regenerate: true })
-    .eq("id", 1);
+  revalidatePath("/players/[slug]", "page");
 }
 
 export async function addNote(
@@ -46,7 +24,6 @@ export async function addNote(
 
     const matchParticipantId = formData.get("matchParticipantId") as string;
     const note = (formData.get("note") as string)?.trim();
-    const playerId = formData.get("playerId") as string;
 
     if (!matchParticipantId || !note) {
       return { error: "Note text is required." };
@@ -77,8 +54,6 @@ export async function addNote(
       author_user_id: user.id,
     });
     if (error) return { error: error.message };
-
-    await markSummaryStale(supabase, playerId);
     revalidateNoteSurfaces();
     return { success: true };
   } catch (e) {
@@ -95,7 +70,6 @@ export async function updateNote(
 
     const id = formData.get("id") as string;
     const note = (formData.get("note") as string)?.trim();
-    const playerId = formData.get("playerId") as string;
 
     if (!id || !note) {
       return { error: "Note text is required." };
@@ -110,8 +84,6 @@ export async function updateNote(
       .select("id");
     if (error) return { error: error.message };
     if (!data || data.length === 0) return { error: NOT_YOUR_NOTE };
-
-    await markSummaryStale(supabase, playerId);
     revalidateNoteSurfaces();
     return { success: true };
   } catch (e) {
@@ -119,7 +91,7 @@ export async function updateNote(
   }
 }
 
-export async function deleteNote(id: string, playerId: string): Promise<void> {
+export async function deleteNote(id: string): Promise<void> {
   const { supabase } = await requireSessionPlayer();
 
   const { data, error } = await supabase
@@ -129,7 +101,5 @@ export async function deleteNote(id: string, playerId: string): Promise<void> {
     .select("id");
   if (error) throw new Error(error.message);
   if (!data || data.length === 0) throw new Error(NOT_YOUR_NOTE);
-
-  await markSummaryStale(supabase, playerId);
   revalidateNoteSurfaces();
 }

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { DraftTagKind, DraftTagRow } from "@/lib/draft/types";
-import { createDraftTag, deleteDraftTag, renameDraftTag } from "@/app/(app)/draft/actions";
+import { createDraftTag, deleteDraftTag, renameDraftTag } from "@/app/(app)/prep/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {

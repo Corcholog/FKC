@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { SOLOQ_VIEW } from "@/components/matches/match-view-tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { QUEUE_SCOPE_LABELS, type QueueScope } from "@/lib/data-source";
 
 type Player = {
   id: string;
@@ -10,44 +10,44 @@ type Player = {
   display_name: string;
 };
 
-const QUEUES: QueueScope[] = ["solo", "flex", "ranked"];
-
+/**
+ * Whose solo queue history to show.
+ *
+ * There used to be a queue picker beside this one, because /matches read one of
+ * three participant views. It doesn't any more: flex is a team game and lives in
+ * the team-game half of this page, one row per game rather than one per player,
+ * so the only queue this list can be about is solo.
+ *
+ * `view=soloq` rides along on every link. Dropping it would send a player filter
+ * back to the team-game tab, which does not have one.
+ */
 export function MatchesFilter({
   players,
   selectedId,
-  queue,
-  basePath = "",
 }: {
   players: Player[];
   selectedId: string | null;
-  queue: QueueScope;
-  /** "/demo" on the public copy, so the filter stays inside its own route group. */
-  basePath?: string;
 }) {
   const router = useRouter();
 
-  // Both filters write the same URL, so each has to carry the other's value or
-  // changing one would silently reset the other. The default is left out rather
-  // than spelled in, so the plain /matches URL stays canonical.
-  const hrefFor = (player: string | null, nextQueue: QueueScope) => {
-    const params = new URLSearchParams();
+  const hrefFor = (player: string | null) => {
+    const params = new URLSearchParams({ view: SOLOQ_VIEW });
     if (player) params.set("player", player);
-    if (nextQueue !== "solo") params.set("queue", nextQueue);
-    const query = params.toString();
-    return query ? `${basePath}/matches?${query}` : `${basePath}/matches`;
+    return `/matches?${params.toString()}`;
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
     <Select
       value={selectedId ?? "all"}
       onValueChange={(value) => {
-        router.push(hrefFor(value === "all" ? null : value, queue));
+        router.push(hrefFor(value === "all" ? null : value));
       }}
     >
       <SelectTrigger className="w-44">
         <SelectValue>
-          {(value: string) => (value === "all" ? "All players" : players.find((p) => p.slug === value)?.display_name)}
+          {(value: string) =>
+            value === "all" ? "All players" : players.find((p) => p.slug === value)?.display_name
+          }
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -59,24 +59,5 @@ export function MatchesFilter({
         ))}
       </SelectContent>
     </Select>
-
-    <Select
-      value={queue}
-      onValueChange={(value) => {
-        router.push(hrefFor(selectedId, value as QueueScope));
-      }}
-    >
-      <SelectTrigger className="w-32">
-        <SelectValue>{(value: string) => QUEUE_SCOPE_LABELS[value as QueueScope]}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {QUEUES.map((q) => (
-          <SelectItem key={q} value={q}>
-            {QUEUE_SCOPE_LABELS[q]}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-    </div>
   );
 }

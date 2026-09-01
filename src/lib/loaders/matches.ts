@@ -1,6 +1,6 @@
-// The squad-wide match history — /matches and /demo/matches.
+// The roster-wide match history — /matches.
 //
-// Same fetch/build split as the other loaders here (demo-cache.ts says why):
+// Same fetch/build split as the other loaders here:
 // `fetchMatchesPageRows` returns plain arrays and can sit behind the data cache,
 // `buildMatchesPage` does the grouping and produces the entries the list renders.
 
@@ -41,7 +41,7 @@ export type MatchesPlayer = {
 
 export type MatchesListRow = {
   id: string;
-  /** Null on the demo — `demo_matches` drops the column. See MatchRowData.riotMatchId. */
+  /** See MatchRowData.riotMatchId. */
   riot_match_id: string | null;
   game_creation: string;
   game_duration_seconds: number;
@@ -84,7 +84,7 @@ export async function fetchMatchesPageRows(
   let matchQuery = source.supabase
     .from(source.table("matches"))
     .select(
-      `id, ${source.demo ? "" : "riot_match_id, "}game_creation, game_duration_seconds, ${participantsTable}!inner(player_id)`,
+      `id, riot_match_id, game_creation, game_duration_seconds, ${participantsTable}!inner(player_id)`,
       { count: "exact" },
     )
     .order("game_creation", { ascending: false })
@@ -98,7 +98,7 @@ export async function fetchMatchesPageRows(
   // Read the count off the result before `rows` narrows it to the data array.
   const totalMatches = matchListResult.count ?? 0;
 
-  // The demo selects no riot_match_id at all, so the key is missing rather than
+  // Missing rather than
   // null. Normalising here keeps the cached shape the same on both sides.
   const matchList = rows(matchListResult, "match history page").map((m) => ({
     ...m,

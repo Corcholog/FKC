@@ -1,15 +1,17 @@
-// Which sources of games a page is describing.
+// Which games a page is describing.
 //
-// The app now records three kinds, and they answer different questions:
+// The app records three kinds, and they answer different questions:
 //
-//   soloq  a Riot ranked solo/duo game — full detail, one tracked player
-//   flexq  a Riot ranked flex game — identical detail, usually the whole roster
+//   soloq  a Riot ranked solo/duo game — full detail, one player of ours
+//   flexq  a Riot ranked flex game — identical detail, the whole team
 //   team   a scrim, friendly or tournament official — a draft and a scoreboard,
 //          typed in or read from a .rofl, with no damage and no vision
 //
-// A scope is a set of them. Every page defaults to soloq alone, which is what
-// the app meant by "a game" before any of this existed, so nothing changes
-// under a page that wasn't given a scope.
+// A *source* is a named set of them. There used to be two vocabularies for this
+// — `ScopeName` here for /players/[slug] and `PlayerSource` in
+// lib/team/player-source.ts for /team/players — because one page was about a
+// person's solo queue and the other about their competitive record. Those are
+// one page now, so this is one vocabulary.
 //
 // Pure: no I/O, no React, no Supabase.
 
@@ -24,87 +26,98 @@ export const STAT_SOURCE_LABELS: Record<StatSource, string> = {
 };
 
 /**
- * The named scopes the UI offers.
+ * The named sources the UI offers.
  *
  * Presets rather than a free set of checkboxes: most combinations are not
  * questions anybody asks ("flex and scrims but not soloQ"), and a URL that can
  * express eight states is eight states to get right in every loader.
+ *
+ * "Competitive" is every hand-entered or replay-imported game — scrims,
+ * friendlies and officials alike. One word for "the games we prepared for";
+ * splitting it further belongs on /prep/scouting, which has a filter bar for
+ * exactly that.
  */
-export const SCOPES = {
-  /** What the app has always shown. The default everywhere. */
-  soloq: ["soloq"],
-  /** Both ranked queues — the same game, played alone or as a five. */
-  ranked: ["soloq", "flexq"],
-  /** How the roster does as a team: flex plus scrims, friendlies and officials. */
-  team: ["flexq", "team"],
+export const SOURCES = {
   /** Everything on record. */
   all: ["soloq", "flexq", "team"],
+  /** Scrims, friendlies and officials. */
+  competitive: ["team"],
+  /** Ranked flex — which, since the sync's gate, is only ever the five of them. */
+  flex: ["flexq"],
+  /** Solo/duo queue. */
+  soloq: ["soloq"],
 } as const satisfies Record<string, readonly StatSource[]>;
 
-export type ScopeName = keyof typeof SCOPES;
+export type SourceName = keyof typeof SOURCES;
 
-export const SCOPE_LABELS: Record<ScopeName, string> = {
-  soloq: "SoloQ",
-  ranked: "Ranked",
-  team: "Team",
+export const SOURCE_NAMES = Object.keys(SOURCES) as SourceName[];
+
+export const SOURCE_LABELS: Record<SourceName, string> = {
   all: "Everything",
+  competitive: "Competitive",
+  flex: "Flex",
+  soloq: "SoloQ",
 };
 
 /**
- * What each scope says it is measuring.
+ * What each source says it is measuring.
  *
- * Shown next to the switch, because the difference between "Ranked" and
- * "Everything" is not guessable from the word, and a player page that silently
- * changed what it was counting would be worse than one that never offered to.
+ * Shown next to the switch, because the difference between "Everything" and
+ * "Competitive" is not guessable from the word, and a page that silently changed
+ * what it was counting would be worse than one that never offered to.
  */
-export const SCOPE_CAPTIONS: Record<ScopeName, string> = {
-  soloq: "Solo/duo queue only.",
-  ranked: "Solo/duo and flex queue.",
-  team: "Flex queue and every game played as a team.",
+export const SOURCE_CAPTIONS: Record<SourceName, string> = {
   // Names what a team match cannot answer, because the panels below quietly
-  // keep reading the Riot games and a reader who assumed otherwise would take
-  // a narrower number for a wider one.
+  // keep reading the Riot games and a reader who assumed otherwise would take a
+  // narrower number for a wider one.
   all: "Every game on record. Rank, timing, lane matchups, damage and game length come from the ranked games only — a team match records none of them.",
+  competitive: "Scrims, friendlies and tournament officials. No damage, vision or LP — none of it is recorded for a game Riot's API doesn't serve.",
+  flex: "Ranked flex, which is only ever the five of us: the sync stores a flex game when it finds the whole team on one side, and drops it otherwise.",
+  soloq: "Solo/duo queue only.",
 };
 
-export const DEFAULT_SCOPE: ScopeName = "soloq";
+/**
+ * Everything, because this app is about a team that plays three kinds of game
+ * and showing one of them by default would understate two.
+ */
+export const DEFAULT_SOURCE: SourceName = "all";
 
-/** `?scope=ranked`, falling back to soloQ — the reading that changes nothing. */
-export function parseScope(value: string | string[] | undefined): ScopeName {
+/** `?source=flex`, falling back to everything — never to nothing. */
+export function parseSource(value: string | string[] | undefined): SourceName {
   const raw = Array.isArray(value) ? value[0] : value;
-  return raw && raw in SCOPES ? (raw as ScopeName) : DEFAULT_SCOPE;
+  return raw && raw in SOURCES ? (raw as SourceName) : DEFAULT_SOURCE;
 }
 
-export function sourcesFor(scope: ScopeName): readonly StatSource[] {
-  return SCOPES[scope];
+export function recordsFor(source: SourceName): readonly StatSource[] {
+  return SOURCES[source];
 }
 
-export function includes(scope: ScopeName, source: StatSource): boolean {
-  return (SCOPES[scope] as readonly StatSource[]).includes(source);
+export function includes(source: SourceName, record: StatSource): boolean {
+  return (SOURCES[source] as readonly StatSource[]).includes(record);
 }
 
 /**
- * Which participant view a scope reads.
+ * Which participant view a source reads.
  *
- * The Riot half of a scope maps onto the queue-scoped views from migration 024;
- * the team half is a different table and is loaded separately. A scope with no
- * Riot sources at all still has to name a view — `flex` is the harmless answer,
- * and no such scope exists today.
+ * The Riot half maps onto the queue-scoped views from migration 024; the team
+ * half is a different table and is loaded separately. A source with no Riot
+ * records still has to name a view — `flex` is the harmless answer, and
+ * `needsRankedGames` is false there so nothing reads it.
  */
-export function queueScopeFor(scope: ScopeName): QueueScope {
-  const solo = includes(scope, "soloq");
-  const flex = includes(scope, "flexq");
+export function queueScopeFor(source: SourceName): QueueScope {
+  const solo = includes(source, "soloq");
+  const flex = includes(source, "flexq");
   if (solo && flex) return "ranked";
   if (solo) return "solo";
   return "flex";
 }
 
-/** Whether a scope needs the team-match tables loaded at all. */
-export function needsTeamMatches(scope: ScopeName): boolean {
-  return includes(scope, "team");
+/** Whether this source needs the team-match tables loaded at all. */
+export function needsTeamMatches(source: SourceName): boolean {
+  return includes(source, "team");
 }
 
-/** Whether a scope reads any Riot game. False for a hypothetical team-only scope. */
-export function needsRankedGames(scope: ScopeName): boolean {
-  return includes(scope, "soloq") || includes(scope, "flexq");
+/** Whether this source reads any Riot game. False for "competitive". */
+export function needsRankedGames(source: SourceName): boolean {
+  return includes(source, "soloq") || includes(source, "flexq");
 }

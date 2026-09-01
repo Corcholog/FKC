@@ -1,6 +1,6 @@
 # Engineering Documentation
 
-As-built documentation for the Fake Clan SoloQ Tracker: what the system does, how each
+As-built documentation for the Fake Clan team tracker: what the system does, how each
 part works, and *why* it was built the way it was.
 
 This is deliberately separate from `docs/*.md` at the level above, which is the
@@ -10,19 +10,19 @@ disagree, the code and this folder win. Divergences are called out explicitly in
 
 ## What the app is
 
-A private web app for a friend group ("Fake Clan") to track their League of Legends
-Solo/Duo ranked games on the LAS server — nine tracked accounts at the time of writing. It
-syncs match and rank data from Riot's API once a day, stores it in Postgres, and renders
-dashboards, per-player pages, champion tierlists, cross-player insights, scrim and draft
-preparation, and AI-written recaps.
+A private web app for one five-person League of Legends team ("Fake Clan") to track every
+game they play: solo queue, ranked flex, and the scrims, friendlies and tournament officials
+that Riot's API does not serve. It syncs match and rank data once a day, stores it in
+Postgres, and renders the team's record, per-player depth across all three sources, the
+solo queue awards and draft preparation.
 
-Since Phase 17 it also serves **`/demo`**: a public, read-only, identity-stripped mirror of
-the whole app, built so a hiring staff could look at the tool without being given logins.
-The anonymization lives in Postgres, not in the render layer — [04, §10](04-auth-and-security.md)
-is the section to read on that, and it is the most security-sensitive part of the codebase.
+It was two trackers until ADR-050 — a soloQ tracker for a wider friend group *plus* a
+competitive tracker for five of them — and a lot of these docs still carry the reasoning from
+that period. Where a section describes the split, or the public `/demo` mirror that was
+deleted with it, it says so at the top and is kept for the argument rather than the fact.
 
-It runs entirely on free tiers: Vercel Hobby, Supabase Free, a Riot *personal* API key,
-and the Gemini free tier. **Almost every interesting decision in this codebase traces
+It runs entirely on free tiers: Vercel Hobby, Supabase Free, and a Riot *personal* API
+key. **Almost every interesting decision in this codebase traces
 back to a free-tier ceiling**, and that is the through-line worth following if you only
 read one thing.
 
@@ -36,12 +36,12 @@ system. Everything else can be read on demand.
 | 01 | [System overview](01-system-overview.md) | Stack, topology, request lifecycle, where the code lives |
 | 02 | [Data model](02-data-model.md) | Every table, the invariants that hold them together |
 | 03 | [Sync engine](03-sync-engine.md) | Riot API, rate limiting, the incremental walk, exclusion rules |
-| 04 | [Auth & security](04-auth-and-security.md) | Five Supabase clients, RLS, column grants, login flow, the public demo |
+| 04 | [Auth & security](04-auth-and-security.md) | Four Supabase clients, RLS, column grants, login flow |
 | 05 | [Stats & domain logic](05-stats-and-domain-logic.md) | The pure-function layer, aggregation conventions, rank math |
-| 06 | [AI layer](06-ai-layer.md) | Gemini, quota economics, prompt construction, error taxonomy |
+| 06 | [AI layer](06-ai-layer.md) | **Deleted feature.** Gemini, quota economics, prompts — kept for the reasoning |
 | 07 | [Frontend](07-frontend.md) | App Router structure, RSC data fetching, design tokens, charts |
 | 08 | [Operations](08-operations.md) | Env vars, deploys, cron, runbook, what breaks first |
-| 09 | [Decision log](09-decision-log.md) | The load-bearing decisions (ADR-001 to ADR-041), with context and consequences |
+| 09 | [Decision log](09-decision-log.md) | The load-bearing decisions (ADR-001 to ADR-052), with context and consequences |
 | 10 | [Known gaps](10-known-gaps.md) | What's missing, what's stale, what would break at 10× scale |
 
 ## Conventions used in these docs
@@ -49,11 +49,13 @@ system. Everything else can be read on demand.
 - File references are repo-relative and clickable: `src/lib/sync.ts:318`.
 - "The walk" always means the backwards traversal of a player's match history in
   `syncPlayerMatches`.
-- "Tracked player" means a row in `players` — someone in the friend group. The other
-  nine participants in any given match are "untracked".
-- "The batch" always means `/api/summaries`, the once-daily AI generation run.
-- "The demo" means the public `/demo` subtree and the `demo_*` views behind it. "The
-  private app" is everything else — the `(app)` route group and the base tables.
+- "Tracked player" means a row in `players`. Since migration 028 that is exactly the five
+  of them, one per position. The other participants in any given match are "untracked" —
+  including anybody who used to be on the roster and no longer is.
+
+- "A source" means one of the three kinds of game — `soloq`, `flexq`, `team` — and a
+  *named source* is a preset over them: `all`, `competitive`, `flex`, `soloq`
+  (`src/lib/scope.ts`). "A queue" is narrower and always means Riot's: 420 or 440.
 
 ## The one-paragraph version
 
@@ -63,11 +65,7 @@ newest, inserting any match it hasn't seen along with all ten participants' stat
 stops when it reaches a point it can prove is already covered. Every Riot call goes
 through a sliding-window rate limiter, and the whole run is bounded by a wall-clock
 deadline well short of Vercel's 60-second function ceiling — an interrupted run is
-normal and resumable, not an error. An hour later a second cron hits `/api/summaries`,
-which asks Gemini to write recaps for whichever players' data actually changed. Every
-page is a React Server Component that reads Postgres directly through Supabase with RLS
+normal and resumable, not an error. Every page is a React Server Component that reads Postgres directly through Supabase with RLS
 enforced, aggregates in JavaScript, and renders. There is no client-side data fetching
-anywhere except the sync button and the login form. The same page components render again
-under `/demo` for anyone with the link, reading a set of Postgres views that expose the
-same columns with every identity replaced and every free-text field withheld unless
-somebody explicitly wrote a replacement for it.
+anywhere except the sync button and the login form. Every route sits behind the session
+gate in `src/proxy.ts`; `/login` is the only page a signed-out visitor reaches.

@@ -4,11 +4,8 @@ import { useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
-  LayoutDashboard,
   Swords,
-  Trophy,
   LineChart,
-  ListOrdered,
   Shield,
   Network,
   Settings,
@@ -25,38 +22,31 @@ import type { LolalyticsLane } from "@/lib/lolalytics";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { SKIPPED_FLEX_HINT } from "@/lib/queues";
 
 // Browsing destinations only. Settings is deliberately not here: it's the admin
 // page, not somewhere you go to look at something, and it already sits visually
 // with /account on the right.
 //
-// Two halves, and the split is the app's whole shape: the clan group is every
-// tracked player on solo queue, the team group is the five who scrim, play
-// tournaments and queue flex together (players.team_role, migration 026).
+// Five, and flat. It used to be two labelled groups — a "clan" half covering
+// everyone on solo queue and a "main team" half covering five of them — because
+// the app was two trackers over one roster. It is one tracker now (ADR-050), so
+// there is nothing for a separator to separate. /soloq sits beside /team because
+// they are the same five people answering two different questions, not two
+// audiences.
 //
-// Rendered as a separator on the desktop row and as labelled sections in the
-// sheet. The row is eight links wide already and two words of heading would cost
-// more than they explain there; in the sheet the space is vertical and free.
-const NAV_GROUPS = [
-  {
-    label: "Clan",
-    items: [
-      { href: "/", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/roster", label: "Roster", icon: Users },
-      { href: "/matches", label: "Matches", icon: Swords },
-      { href: "/champions", label: "Champions", icon: Trophy },
-      { href: "/tierlists", label: "Tier Lists", icon: ListOrdered },
-      { href: "/insights", label: "Insights", icon: LineChart },
-    ],
-  },
-  {
-    label: "Main team",
-    items: [
-      { href: "/team", label: "Team", icon: Shield },
-      { href: "/draft", label: "Draft", icon: Network },
-    ],
-  },
+// /insights is gone with it (ADR-052): a cross-player section over five people
+// who are all on the same page anyway was one screen holding one chart worth
+// keeping, and that chart is on the front page now.
+//
+// /prep points at its first tab rather than at /prep, which has no index of its
+// own: sending the primary nav through a redirect costs a round trip on the one
+// link people press most.
+const NAV_ITEMS = [
+  { href: "/", label: "Team", icon: Shield },
+  { href: "/soloq", label: "SoloQ", icon: LineChart },
+  { href: "/matches", label: "Matches", icon: Swords },
+  { href: "/players", label: "Players", icon: Users },
+  { href: "/prep/draft", label: "Prep", icon: Network, match: "/prep" },
 ];
 
 
@@ -65,7 +55,7 @@ const NAV_GROUPS = [
  *
  * Prefix-matching, not equality: /team has four tabs under it, and an exact
  * match would leave the navbar highlighting nothing the moment you opened one.
- * The same bug applied to /player/[slug] and /tierlists/[slug] before this.
+ * The same bug applied to /players/[slug] and /prep/tierlists/[slug] before this.
  *
  * "/" is special-cased because every path starts with it.
  */
@@ -179,12 +169,6 @@ export function Navbar({
         // or a backfill looks stuck.
         if (data.partial) {
           toast.warning(`${result} Hit the rate limit — sync again to continue.`);
-        } else if (data.skippedFlexNoTeam) {
-          // Not an error and not something another sync fixes: flex is only
-          // stored when the main team played it, so with no team assigned there
-          // is nothing for the flex walk to find. Silence here would read as
-          // "nobody played flex".
-          toast.warning(`${result} Flex was skipped — ${SKIPPED_FLEX_HINT}`);
         } else {
           toast.success(result);
         }
@@ -211,19 +195,14 @@ export function Navbar({
           {/* The matchup fields need room, so the links collapse into the sheet
               one breakpoint later than they used to. */}
           <nav className="hidden items-center gap-1 xl:flex">
-            {NAV_GROUPS.map((group, i) => (
-              <div key={group.label} className="flex items-center gap-1">
-                {i > 0 && <span aria-hidden className="mx-1.5 h-4 w-px bg-border" />}
-                {group.items.map((item) => (
-                  <NavLink
-                    key={item.href}
-                    href={item.href}
-                    label={item.label}
-                    Icon={item.icon}
-                    active={isActive(pathname, item.href)}
-                  />
-                ))}
-              </div>
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                label={item.label}
+                Icon={item.icon}
+                active={isActive(pathname, item.match ?? item.href)}
+              />
             ))}
           </nav>
         </div>
@@ -258,7 +237,7 @@ export function Navbar({
             {!syncing && <Swords className="h-4 w-4" />}
           </Button>
 
-          {/* Settings lives here rather than in NAV_GROUPS — see the comment on
+          {/* Settings lives here rather than in NAV_ITEMS — see the comment on
               that array. Icon-only: it's the one destination nobody needs a
               label to find, and the row has no width to spare. */}
           <Link
@@ -324,23 +303,16 @@ export function Navbar({
                 className="px-4"
                 onOpened={() => setSheetOpen(false)}
               />
-              <nav className="flex flex-col gap-3 px-2">
-                {NAV_GROUPS.map((group) => (
-                  <div key={group.label} className="flex flex-col gap-1">
-                    <p className="px-3 text-[10px] font-semibold tracking-wider text-grey-mid uppercase">
-                      {group.label}
-                    </p>
-                    {group.items.map((item) => (
-                      <NavLink
-                        key={item.href}
-                        href={item.href}
-                        label={item.label}
-                        Icon={item.icon}
-                        active={isActive(pathname, item.href)}
-                        onNavigate={() => setSheetOpen(false)}
-                      />
-                    ))}
-                  </div>
+              <nav className="flex flex-col gap-1 px-2">
+                {NAV_ITEMS.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    href={item.href}
+                    label={item.label}
+                    Icon={item.icon}
+                    active={isActive(pathname, item.match ?? item.href)}
+                    onNavigate={() => setSheetOpen(false)}
+                  />
                 ))}
               </nav>
               {/* sm:hidden, same as it already was: from sm up these three are

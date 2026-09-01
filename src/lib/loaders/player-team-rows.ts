@@ -5,7 +5,7 @@
 // page joins the two.
 //
 // Same fetch/build split as its neighbours — this returns a plain array, so it
-// is safe behind the demo's data cache.
+// holds no I/O.
 
 import type { DataSource } from "@/lib/data-source";
 import { loadTeamGames } from "@/lib/team/queries";

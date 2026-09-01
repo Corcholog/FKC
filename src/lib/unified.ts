@@ -24,6 +24,15 @@ import type { TeamGameRow, TeamPickRow, TeamSeriesRow } from "@/lib/team/types";
 export type UnifiedRow = {
   /** Which record this came from. Carried so a page can split or label by it. */
   source: StatSource;
+  /**
+   * The game this row belongs to, for folds that group by it rather than by
+   * player — MVP counts being the one that exists (lib/score.ts).
+   *
+   * Opaque and only ever compared for equality, so the two sources can use
+   * their own ids without a shared scheme. They cannot collide: both are uuids
+   * from different tables, and a row's `source` already tells them apart.
+   */
+  match_key: string;
   /** Null for an untracked participant, and for an enemy or substitute pick. */
   player_id: string | null;
   team_position: string | null;
@@ -42,6 +51,13 @@ export type UnifiedRow = {
   damage_dealt_to_champions: number | null;
   gold_earned: number | null;
   vision_score: number | null;
+  /**
+   * 0-100 from lib/score.ts. Null on a team match, and for the same reason as
+   * the three above rather than as a special case: the formula reads damage,
+   * gold and vision, and a scrim typed in from a scoreboard records none of
+   * them. There is nothing to compute, so there is nothing to show.
+   */
+  performance_score: number | null;
 };
 
 /**
@@ -51,6 +67,7 @@ export type UnifiedRow = {
  * superset of columns and pass the same array to several aggregators.
  */
 export type ParticipantInput = {
+  match_id: string;
   player_id: string | null;
   team_position: string | null;
   champion_id: number;
@@ -63,6 +80,7 @@ export type ParticipantInput = {
   damage_dealt_to_champions: number;
   gold_earned?: number | null;
   vision_score?: number | null;
+  performance_score?: number | null;
   game_creation: string;
   game_duration_seconds: number;
 };
@@ -89,6 +107,7 @@ export function fromParticipant(
 ): UnifiedRow {
   return {
     source,
+    match_key: row.match_id,
     player_id: row.player_id,
     team_position: row.team_position,
     champion_id: row.champion_id,
@@ -103,6 +122,7 @@ export function fromParticipant(
     damage_dealt_to_champions: row.damage_dealt_to_champions,
     gold_earned: row.gold_earned ?? null,
     vision_score: row.vision_score ?? null,
+    performance_score: row.performance_score ?? null,
   };
 }
 
@@ -137,6 +157,9 @@ export function fromTeamPick(
 ): UnifiedRow {
   return {
     source: "team",
+    // The game, not the series: a Bo3 is three games and each is its own
+    // scoreboard, which is the grain every other source uses too.
+    match_key: pick.game_id,
     // Enemies and untracked substitutes have none, and stay out of per-player
     // aggregates for exactly the reason an untracked soloQ participant does.
     player_id: pick.player_id,
@@ -153,6 +176,7 @@ export function fromTeamPick(
     damage_dealt_to_champions: null,
     gold_earned: null,
     vision_score: null,
+    performance_score: null,
   };
 }
 

@@ -42,7 +42,9 @@ export function queueForId(queueId: number): TrackedQueue | null {
  *
  * SoloQ keeps the app's stated tracking start (docs/01_PRD.md §4.6) — it is a
  * product decision about what history the app claims to cover, not a ranked
- * reset. Flex starts in June, when the roster started playing it as a team.
+ * reset. Flex starts in May: the roster's first flex game as a team was in
+ * June, so the earlier date costs one wasted page of ids per account and buys
+ * the guarantee that nothing before it was silently out of range.
  *
  * Both are expressed in UTC from America/Argentina/Buenos_Aires (UTC-3, no DST
  * since 2009) — the same zone TRACKING_START_DATE and time-stats.ts use, so
@@ -51,8 +53,8 @@ export function queueForId(queueId: number): TrackedQueue | null {
 export const TRACKING_START: Record<TrackedQueue, Date> = {
   // 2026-07-29 12:00 ART
   solo: new Date("2026-07-29T15:00:00Z"),
-  // 2026-06-01 00:00 ART
-  flex: new Date("2026-06-01T03:00:00Z"),
+  // 2026-05-01 00:00 ART
+  flex: new Date("2026-05-01T03:00:00Z"),
 };
 
 /** The `player_accounts` column holding this queue's contiguity cursor. */

@@ -30,6 +30,17 @@ export type PlayerStatInput = {
   total_damage_taken?: number | null;
   pings?: Record<string, number> | null;
   first_blood_kill?: boolean | null;
+
+  /**
+   * The 0-100 performance score (migration 030), with a clock of its own like
+   * every other nullable metric here.
+   *
+   * Two distinct reasons for a null, and neither should count as a zero: the
+   * game predates migration 005 and cannot be scored, or it can be and no
+   * recompute has run yet. A team match is a third — lib/score.ts needs damage,
+   * gold and vision, and a hand-entered scrim records none of them.
+   */
+  performance_score?: number | null;
 };
 
 export type PlayerAgg = {
@@ -61,6 +72,11 @@ export type PlayerAgg = {
   // duration of the games that reported them, not of every game ever played.
   detailGames: number;
   detailDurationSeconds: number;
+  // Its own counter rather than reusing detailGames: a row can carry the
+  // migration-005 columns and still have no score, in the window between
+  // running the backfill and pressing "Recompute scores".
+  scoredGames: number;
+  totalScore: number;
   totalVisionScore: number;
   totalTimeSpentDead: number;
   pentaKills: number;
@@ -87,6 +103,8 @@ function emptyAgg(): PlayerAgg {
     csDurationSeconds: 0,
     detailGames: 0,
     detailDurationSeconds: 0,
+    scoredGames: 0,
+    totalScore: 0,
     totalVisionScore: 0,
     totalTimeSpentDead: 0,
     pentaKills: 0,
@@ -117,6 +135,11 @@ function accumulate(agg: PlayerAgg, row: PlayerStatInput) {
     agg.csGames += 1;
     agg.totalCs += row.total_cs;
     agg.csDurationSeconds += row.game_duration_seconds;
+  }
+
+  if (typeof row.performance_score === "number") {
+    agg.scoredGames += 1;
+    agg.totalScore += row.performance_score;
   }
 
   // vision_score is the marker for "this row was synced with full detail" — it
@@ -274,6 +297,18 @@ export function damagePerMinute(agg: PlayerAgg): number {
 // each one lived — so a per-game total mostly measures how long the games ran.
 // Rate per minute is what actually separates someone who wards well from
 // someone who plays 40-minute games.
+/**
+ * Mean performance score over the games that have one.
+ *
+ * Averaged over scoredGames, not games: a player whose history is half
+ * pre-backfill would otherwise be averaged against zeroes and come out looking
+ * like the worst player on the roster by a distance. Returns 0 when nothing is
+ * scored, which the award layer reads as "no answer" and drops.
+ */
+export function averagePerformanceScore(agg: PlayerAgg): number {
+  return agg.scoredGames === 0 ? 0 : agg.totalScore / agg.scoredGames;
+}
+
 export function visionScorePerMinute(agg: PlayerAgg): number {
   return agg.detailDurationSeconds <= 0
     ? 0

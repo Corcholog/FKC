@@ -13,7 +13,13 @@
 // Pure: no I/O, no React.
 
 import { allChampionsByPlayer, championWinRate, type ChampionAgg } from "@/lib/champion-stats";
-import { aggregatePlayerStats, kdaRatio, playerWinRate } from "@/lib/player-stats";
+import {
+  aggregatePlayerStats,
+  averagePerformanceScore,
+  kdaRatio,
+  playerWinRate,
+} from "@/lib/player-stats";
+import { mvpCountsByPlayer } from "@/lib/score";
 import { SOURCE_NAMES, recordsFor, type SourceName } from "@/lib/scope";
 import type { UnifiedRow } from "@/lib/unified";
 import type { TeamMember } from "@/lib/team/roster";
@@ -46,6 +52,25 @@ export type RosterCard = {
   /** Null when no game in this source recorded what it needs. */
   kda: number | null;
   champions: RosterChampion[];
+
+  /** Best soloQ rank across their accounts, mirrored onto `players` by the sync. */
+  tier: string | null;
+  division: string | null;
+  leaguePoints: number | null;
+
+  /** Mean performance score, and how many games carry one. Null when none do. */
+  avgScore: number | null;
+  scoredGames: number;
+
+  /**
+   * Games they were the best, and the worst, of ours in.
+   *
+   * Zero on a soloQ-only source and that is not a stat about the player: an MVP
+   * needs two of us in the same game. The card hides the pair rather than
+   * printing 0-0 wherever the source cannot produce one.
+   */
+  mvps: number;
+  ints: number;
 };
 
 export type RosterBoard = Record<SourceName, RosterCard[]>;
@@ -62,6 +87,9 @@ function toChampion(agg: ChampionAgg): RosterChampion {
 function cardsFor(team: TeamMember[], rows: UnifiedRow[]): RosterCard[] {
   const byPlayer = aggregatePlayerStats(rows);
   const pools = allChampionsByPlayer(rows);
+  // Grouped by game rather than by player, which is why it is a separate fold:
+  // being the best of us in a game is a fact about the game, not about a row.
+  const awards = mvpCountsByPlayer(rows);
 
   // Driven by the roster, not by the rows: a player with nothing in this source
   // renders as a card with zeros rather than disappearing, which is the whole
@@ -79,6 +107,13 @@ function cardsFor(team: TeamMember[], rows: UnifiedRow[]): RosterCard[] {
       winRate: agg ? playerWinRate(agg) : 0,
       kda: agg && agg.games > 0 ? kdaRatio(agg) : null,
       champions: (pools.get(member.id) ?? []).slice(0, POOL_SIZE).map(toChampion),
+      tier: member.tier,
+      division: member.division,
+      leaguePoints: member.league_points,
+      avgScore: agg && agg.scoredGames > 0 ? averagePerformanceScore(agg) : null,
+      scoredGames: agg?.scoredGames ?? 0,
+      mvps: awards.get(member.id)?.mvps ?? 0,
+      ints: awards.get(member.id)?.ints ?? 0,
     };
   });
 }

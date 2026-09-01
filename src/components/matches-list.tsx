@@ -42,7 +42,7 @@ export function MatchesList({
   return (
     <>
       {entries.map((entry) => {
-        const { match, viewer, opponent, allies, enemies, player } = entry;
+        const { match, viewer, opponent, allies, enemies, player, award } = entry;
         return (
           <MatchRow
             key={viewer.id}
@@ -58,6 +58,8 @@ export function MatchesList({
               totalCs: viewer.total_cs,
               teamPosition: viewer.team_position,
               visionScore: viewer.vision_score,
+              performanceScore: viewer.performance_score,
+              award,
               gameCreation: match.game_creation,
               gameDurationSeconds: match.game_duration_seconds,
               opponent,

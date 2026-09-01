@@ -20,6 +20,7 @@ import { rankSortKey } from "@/lib/rank";
 import {
   aggregateMainRoleStats,
   aggregatePlayerStats,
+  averagePerformanceScore,
   csPerMinute,
   damagePerMinute,
   deadTimeShare,
@@ -111,7 +112,7 @@ export async function fetchDashboardRows(source: DataSource): Promise<DashboardR
       supabase
         .from(participantsTable)
         .select(
-          `player_id, team_position, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, vision_score, total_time_spent_dead, penta_kills, objectives_stolen, total_damage_taken, pings, first_blood_kill, ${matchesTable}!inner(game_duration_seconds, game_creation)`,
+          `player_id, team_position, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, performance_score, vision_score, total_time_spent_dead, penta_kills, objectives_stolen, total_damage_taken, pings, first_blood_kill, ${matchesTable}!inner(game_duration_seconds, game_creation)`,
         )
         .not("player_id", "is", null)
         .range(from, to)
@@ -237,6 +238,7 @@ export function buildDashboard(data: DashboardRows): Dashboard {
 
   const csGames = (agg: PlayerAgg) => agg.csGames;
   const detailGames = (agg: PlayerAgg) => agg.detailGames;
+  const scoredGames = (agg: PlayerAgg) => agg.scoredGames;
 
   // Sub-text doubles as the honesty check on each tile: with no minimum-games
   // gate, a leader off two games should be visibly a leader off two games.
@@ -249,20 +251,36 @@ export function buildDashboard(data: DashboardRows): Dashboard {
   // full history.
   const detailSub = (games: number) => `${gamesSub(games)} with full detail`;
   const mainRoleDetailSub = (games: number) => `${mainRoleSub(games)} with full detail`;
+  const scoredSub = (games: number) => `${mainRoleSub(games)} scored`;
 
   const oneDecimal = (v: number) => v.toFixed(1);
 
   /** `detail` reads a migration-005 column, so it only has an answer once that data exists. */
-  type GatedSpec = AwardSpec & { detail?: boolean };
+  type GatedSpec = AwardSpec & { detail?: boolean; scored?: boolean };
 
   // Whether the roster has any migration-005 data at all. Until the settings
   // backfill has run, the tiles built on it would all be em dashes, so they're
   // dropped from their section rather than padding it out.
   const hasDetailedStats = [...allStats.values()].some((agg) => agg.detailGames > 0);
+  // Its own gate rather than riding on hasDetailedStats: the score is filled in
+  // by a different button (Settings -> Recompute scores), so there is a real
+  // window where the detail columns are backfilled and no game is scored yet.
+  // Two em-dash tiles in the middle of the halls is worse than two fewer tiles.
+  const hasScores = [...allStats.values()].some((agg) => agg.scoredGames > 0);
   const visible = (specs: GatedSpec[]): AwardSpec[] =>
-    specs.filter((spec) => hasDetailedStats || !spec.detail);
+    specs.filter((spec) => (hasDetailedStats || !spec.detail) && (hasScores || !spec.scored));
 
   const hallOfFame = visible([
+    {
+      label: "Best average score",
+      tone: "good",
+      scored: true,
+      ranking: award(averagePerformanceScore, "max", scoredGames),
+      format: oneDecimal,
+      sub: scoredSub,
+      metric:
+        "Mean performance score (0-100) over the player's main-role games, weighing damage, farm, gold, vision, the lane matchup and objectives against the other nine players in each game. Highest first.",
+    },
     {
       label: "Best KDA",
       tone: "good",
@@ -350,6 +368,16 @@ export function buildDashboard(data: DashboardRows): Dashboard {
   ]);
 
   const hallOfShame = visible([
+    {
+      label: "Worst average score",
+      tone: "bad",
+      scored: true,
+      ranking: award(averagePerformanceScore, "min", scoredGames),
+      format: oneDecimal,
+      sub: scoredSub,
+      metric:
+        "Mean performance score (0-100) over the player's main-role games. Same measure as the fame side, read from the bottom. Lowest first.",
+    },
     {
       label: "Worst KDA",
       tone: "bad",

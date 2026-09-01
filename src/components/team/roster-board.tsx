@@ -2,14 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { formatKdaRatio } from "@/lib/format";
-import { formatRole } from "@/lib/roles";
-import { avatarTint } from "@/lib/avatar-tint";
-import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/ddragon";
 import { DEFAULT_SOURCE, SOURCE_LABELS, SOURCE_NAMES, type SourceName } from "@/lib/scope";
+import type { ChampionInfo } from "@/lib/ddragon";
 import type { RosterBoard as Board } from "@/lib/loaders/roster-board";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { winRateTone } from "@/components/team/ui";
+import { RosterCard } from "@/components/team/roster-card";
 import { cn } from "@/lib/utils";
 
 // The five, across the top of the home page, with their champion pool on the
@@ -64,7 +60,7 @@ export function RosterBoard({
               onClick={() => setSource(name)}
               aria-pressed={name === source}
               className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                "label-nav px-2.5 py-1 transition-colors",
                 name === source
                   ? "bg-gold-muted text-white"
                   : "text-grey-light hover:bg-bg-tertiary hover:text-white",
@@ -76,88 +72,18 @@ export function RosterBoard({
         </nav>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {cards.map((card) => (
-          <Link
+          <RosterCard
             key={card.id}
-            href={`/players/${card.slug}`}
-            className="panel-hex group flex min-w-0 flex-col gap-2.5 p-3 transition-colors hover:border-gold-muted"
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <Avatar size="sm">
-                {card.avatarUrl && <AvatarImage src={card.avatarUrl} alt="" />}
-                <AvatarFallback style={avatarTint(card.displayName)}>
-                  {card.displayName.slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-white transition-colors group-hover:text-gold-bright">
-                  {card.displayName}
-                </p>
-                <p className="truncate text-[10px] font-semibold tracking-wider text-grey-mid uppercase">
-                  {formatRole(card.teamRole)}
-                </p>
-              </div>
-            </div>
-
-            {card.games === 0 ? (
-              <p className="text-[11px] text-grey-mid">No games</p>
-            ) : (
-              <p className="flex items-baseline gap-1.5 text-[11px] tabular-nums text-grey-mid">
-                <span className={cn("text-sm font-semibold", winRateTone(card.winRate))}>
-                  {card.winRate}%
-                </span>
-                <span>
-                  {card.wins}–{card.games - card.wins}
-                </span>
-                {card.kda !== null && <span>· {formatKdaRatio(card.kda)} KDA</span>}
-              </p>
-            )}
-
-            {/* The pool, inline. Win rate under each icon rather than on hover:
-                a tooltip on a card inside a link is a fight, and the number is
-                the reason the icon is there at all. */}
-            <div className="flex gap-1">
-              {card.champions.map((champion) => {
-                const icon = championIconUrl(champion.championId, version, championMap);
-                const name = championDisplayName(
-                  champion.championId,
-                  championMap,
-                  champion.championName,
-                );
-                return (
-                  <div
-                    key={champion.championId}
-                    className="flex min-w-0 flex-1 flex-col items-center gap-0.5"
-                    title={`${name} — ${champion.games} game${champion.games === 1 ? "" : "s"}, ${champion.winRate}%`}
-                  >
-                    {icon ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={icon}
-                        alt={name}
-                        className="h-7 w-7 rounded-md"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="h-7 w-7 rounded-md bg-gold-muted" />
-                    )}
-                    <span
-                      className={cn(
-                        "text-[9px] tabular-nums",
-                        winRateTone(champion.winRate),
-                      )}
-                    >
-                      {champion.winRate}%
-                    </span>
-                  </div>
-                );
-              })}
-              {/* Keeps the row height stable when somebody has a shallow pool,
-                  so the five cards stay the same height beside each other. */}
-              {card.champions.length === 0 && <div className="h-7" />}
-            </div>
-          </Link>
+            card={card}
+            version={version}
+            championMap={championMap}
+            // MVP compares our players inside one game, so a source that only
+            // ever has one of us in a game cannot produce one. See the prop's
+            // own comment for why that hides the pair rather than showing 0.
+            showAwards={source !== "soloq"}
+          />
         ))}
       </div>
     </section>

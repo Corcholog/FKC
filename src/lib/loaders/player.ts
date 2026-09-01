@@ -119,7 +119,7 @@ const ACCOUNT_COLUMNS =
 // puuid rides along so the page can narrow to one account. A participant row
 // carries the account that played it; `player_id` only carries the person.
 const OWN_ROW_COLUMNS =
-  "match_id, player_id, puuid, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, queue_id";
+  "match_id, player_id, puuid, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, performance_score, queue_id";
 
 // gold_earned, total_cs and damage_dealt_to_champions ride along for the lane
 // differentials: they are the enemy laner's copies of columns the player's own

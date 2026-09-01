@@ -44,7 +44,12 @@ export function RecentForm({
   accountNames?: Map<string, string>;
 }) {
   return (
-    <section className="flex flex-col gap-2">
+    // bleed-wide: the rows need more width than this page's reading column
+    // gives them, and widening the column would stretch the champion pool and
+    // the matchup tables with it. The width itself is --row-width-player in
+    // globals.css, deliberately narrower than /matches gives itself — this is a
+    // five-row preview inside a profile, not the full history page.
+    <section className="bleed-wide [--bleed-width:var(--row-width-player)] flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium tracking-wide text-grey-light uppercase">Recent form</h2>
         <Link
@@ -63,7 +68,7 @@ export function RecentForm({
           const viewer = participants.find((p) => p.player_id === playerId);
           if (!viewer) return null;
 
-          const { allies, enemies, opponent } = matchComposition(participants, viewer);
+          const { allies, enemies, opponent, award } = matchComposition(participants, viewer);
 
           return (
             <MatchRow
@@ -80,6 +85,8 @@ export function RecentForm({
                 totalCs: viewer.total_cs,
                 teamPosition: viewer.team_position,
                 visionScore: viewer.vision_score,
+                performanceScore: viewer.performance_score,
+                award,
                 gameCreation: m.game_creation,
                 gameDurationSeconds: m.game_duration_seconds,
                 opponent,

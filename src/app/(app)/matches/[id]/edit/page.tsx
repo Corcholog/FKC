@@ -71,7 +71,7 @@ export default async function EditTeamSeriesPage({
   const { series, opponent } = games[0];
 
   return (
-    <div className="flex flex-col gap-6">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <div className="flex flex-col gap-1">
         <Link
           href={`/matches/${series.id}`}
@@ -105,6 +105,6 @@ export default async function EditTeamSeriesPage({
           games: games.map(gameStateFromView),
         }}
       />
-    </div>
+    </main>
   );
 }

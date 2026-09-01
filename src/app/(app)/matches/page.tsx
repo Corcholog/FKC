@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/auth";
 import { rows } from "@/lib/supabase/read";
@@ -23,6 +25,10 @@ import { MatchViewTabs, SOLOQ_VIEW, type MatchesView } from "@/components/matche
 import { SoloqHistory } from "@/components/matches/soloq-history";
 import { TeamHistoryView } from "@/components/team/views/matches-view";
 import { TeamMatchEmptyState } from "@/components/team/team-match-empty-state";
+// A Link styled as a button, not a Button rendering a Link — base-ui's Button
+// wants a real <button> underneath.
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // Everything the team has played, under one filter.
 //
@@ -157,14 +163,24 @@ export default async function MatchesPage({
 function Shell({ tabs, children }: { tabs: React.ReactNode; children: React.ReactNode }) {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold text-white">Matches</h1>
-        <p className="text-sm text-grey-light">
-          Every game on record. Scrims, friendlies and officials are entered by hand or read
-          out of a replay; flex comes from Riot and sits beside them, one row per game rather
-          than one per player. SoloQ is counted the other way round, a row each time one of us
-          played — so the two numbers describe different things and will not add up.
-        </p>
+      {/* The only way into the entry form once anything has been entered — the
+          empty state below carries the other one, and it stops rendering the
+          moment there is a single game. This is the page the form belongs to:
+          it is where you come to look at what has been typed in. */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-2xl font-semibold text-white">Matches</h1>
+          <p className="text-sm text-grey-light">
+            Every game on record. Scrims, friendlies and officials are entered by hand or read
+            out of a replay; flex comes from Riot and sits beside them, one row per game rather
+            than one per player. SoloQ is counted the other way round, a row each time one of us
+            played — so the two numbers describe different things and will not add up.
+          </p>
+        </div>
+        <Link href="/matches/new" className={cn(buttonVariants({ size: "sm" }))}>
+          <Plus />
+          New series
+        </Link>
       </div>
 
       {tabs}

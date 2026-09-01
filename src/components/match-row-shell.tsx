@@ -52,10 +52,13 @@ export function MatchRowShell({
 
   const padding = roomy ? "p-3 @2xl:p-4" : "p-3";
 
+  // is-win/is-loss add the result wash and make the row glow its own colour on
+  // hover instead of gold; the border-l-4 utility still paints the left edge,
+  // which is why globals.css only ever sets `border-color` on those modifiers.
   const shellClass = cn(
     "panel-hex @container border-l-4",
     panel && "is-interactive",
-    win === null ? "border-l-border" : win ? "border-l-win" : "border-l-loss",
+    win === null ? "border-l-border" : win ? "is-win border-l-win" : "is-loss border-l-loss",
   );
 
   if (!panel) {

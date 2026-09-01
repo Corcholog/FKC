@@ -18,8 +18,8 @@ import { fromParticipant, fromTeamGames, type ParticipantInput, type UnifiedRow 
 import type { StatSource } from "@/lib/scope";
 
 const PARTICIPANT_COLUMNS =
-  "player_id, team_position, champion_id, champion_name, win, kills, deaths, assists, " +
-  "total_cs, damage_dealt_to_champions, gold_earned, vision_score";
+  "match_id, player_id, team_position, champion_id, champion_name, win, kills, deaths, assists, " +
+  "total_cs, damage_dealt_to_champions, gold_earned, vision_score, performance_score";
 
 type ParticipantRow = Omit<ParticipantInput, "game_creation" | "game_duration_seconds">;
 

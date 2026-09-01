@@ -40,14 +40,12 @@ export function SettingsTabs() {
             key={href}
             href={href}
             className={cn(
-              "relative shrink-0 px-3 py-2 text-sm font-medium transition-colors",
+              "label-nav relative shrink-0 px-3 py-2 transition-colors",
               active ? "text-gold-bright" : "text-grey-light hover:text-white",
             )}
           >
             {tab.label}
-            {active && (
-              <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-gold" />
-            )}
+            {active && <span className="absolute inset-x-2 -bottom-px h-0.5 bg-gold" />}
           </Link>
         );
       })}

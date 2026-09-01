@@ -13,9 +13,12 @@ function RosterRowSkeleton() {
   );
 }
 
+// max-w-6xl and gap-8 to match (app)/page.tsx exactly. They had drifted to
+// 7xl/6 here, so the whole dashboard visibly reflowed — wider, then narrower —
+// at the moment the data arrived.
 export default function DashboardLoading() {
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6">
       <div className="flex flex-col gap-2">
         <Skeleton className="h-7 w-40" />
         <Skeleton className="h-4 w-56" />

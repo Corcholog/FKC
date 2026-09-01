@@ -92,14 +92,14 @@ function NavLink({
       href={href}
       onClick={onNavigate}
       className={cn(
-        "relative flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        "label-nav relative flex items-center gap-2 px-3 py-2 transition-colors",
         active ? "text-gold-bright" : "text-grey-light hover:text-white",
       )}
     >
       <Icon className="h-4 w-4" />
       {label}
       {active && (
-        <span className="absolute inset-x-2 -bottom-[9px] hidden h-0.5 rounded-full bg-gold sm:block" />
+        <span className="absolute inset-x-2 -bottom-[9px] hidden h-0.5 bg-gold sm:block" />
       )}
     </Link>
   );
@@ -183,11 +183,19 @@ export function Navbar({
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-navy/95 backdrop-blur supports-backdrop-filter:bg-navy/80">
-      <div className="flex items-center justify-between gap-2 px-4 py-3 sm:px-6">
+      {/* Capped and centred to match the widest page shell (/prep). The bar
+          itself still spans the window — it's the chrome — but its contents line
+          up with the content under them instead of drifting to the edges on a
+          wide monitor. */}
+      <div className="mx-auto flex w-full max-w-[96rem] items-center justify-between gap-2 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2">
             <Crest />
-            <span className="font-heading hidden text-base font-semibold tracking-wide text-white sm:inline">
+            {/* Uppercase and tracked out like the nav links, but left on
+                --color-white rather than gold: gold-bright is what "you are
+                here" looks like in this bar, and a permanently gold wordmark
+                two inches away blunts it. */}
+            <span className="font-heading hidden text-base font-bold tracking-widest text-white uppercase sm:inline">
               Fake Clan
             </span>
           </Link>

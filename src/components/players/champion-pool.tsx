@@ -5,6 +5,7 @@ import { formatKdaRatio, formatPerMinute } from "@/lib/format";
 import { championDisplayName, type ChampionInfo } from "@/lib/ddragon";
 import { championKdaRatio, championWinRate, type ChampionAgg } from "@/lib/champion-stats";
 import {
+  averagePerformanceScore,
   csPerMinute,
   damagePerMinute,
   kdaRatio,
@@ -55,7 +56,17 @@ function Metric({ label, value }: { label: string; value: string | null }) {
 
 export function SourceSummary({ agg }: { agg: PlayerAgg }) {
   return (
-    <div className="panel-hex grid grid-cols-2 gap-4 p-4 sm:grid-cols-4">
+    // Three across rather than four: the performance score makes nine tiles, and
+    // 3x3 sits better than two full rows and a stranded ninth.
+    <div className="panel-hex grid grid-cols-2 gap-4 p-4 sm:grid-cols-3">
+      <Metric
+        label="Avg score"
+        // scoredGames, not games: a history that is half pre-backfill would
+        // otherwise average real scores against nothing and read far too low.
+        // Team matches never score at all, so on a scrim-only source this is a
+        // dash — the same answer CS/min and vision give there.
+        value={agg.scoredGames > 0 ? averagePerformanceScore(agg).toFixed(1) : null}
+      />
       <Metric label="Win rate" value={`${playerWinRate(agg)}%`} />
       <Metric label="KDA" value={formatKdaRatio(kdaRatio(agg))} />
       <Metric

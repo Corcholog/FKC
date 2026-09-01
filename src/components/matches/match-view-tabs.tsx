@@ -79,8 +79,12 @@ function Tab({
   return (
     <Link
       href={href}
+      // Chips, not the underline the prep and settings strips use, and
+      // deliberately so: those navigate between pages, this filters the one
+      // you're on. Same typographic register as them via .label-nav, different
+      // shape, because they aren't the same kind of control.
       className={cn(
-        "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+        "label-nav px-2.5 py-1 transition-colors",
         active ? "bg-gold-muted text-white" : "text-grey-light hover:bg-bg-tertiary hover:text-white",
         className,
       )}

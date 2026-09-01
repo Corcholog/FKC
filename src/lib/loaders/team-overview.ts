@@ -37,7 +37,7 @@ import { fromParticipant, type UnifiedRow } from "@/lib/unified";
 const PARTICIPANT_COLUMNS =
   // `id` rides along for the total order the paged read needs, nothing else.
   "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, " +
-  "kills, deaths, assists, total_cs, damage_dealt_to_champions, gold_earned, vision_score";
+  "kills, deaths, assists, total_cs, damage_dealt_to_champions, gold_earned, vision_score, performance_score";
 
 // The embed is named for whichever matches table was queried, and PostgREST
 // returns it under that same name. loaders/players.ts
@@ -58,6 +58,7 @@ type FlexRow = Omit<FlexGameInput, "game_creation" | "game_duration_seconds"> & 
   damage_dealt_to_champions: number;
   gold_earned: number | null;
   vision_score: number | null;
+  performance_score: number | null;
 };
 
 /** Flattened, so nothing downstream has to reach through the embed. */
@@ -72,6 +73,7 @@ export type FlexParticipantRow = FlexGameInput & {
   damage_dealt_to_champions: number;
   gold_earned: number | null;
   vision_score: number | null;
+  performance_score: number | null;
 };
 
 export type TeamOverviewRows = { flex: FlexParticipantRow[] };

@@ -86,8 +86,11 @@ export default async function PlayerDetailPage({
       sample={profile.sampleLabel}
     />
   );
-  const renderProfile = (one: PlayerProfile) => (
+  // Keyed by the account it covers — "all" for the combined view, then a puuid
+  // each. React needs one per element because these go into an array.
+  const renderProfile = (one: PlayerProfile, key: string) => (
     <PlayerProfileView
+      key={key}
       profile={one}
       version={version}
       championMap={championMap}
@@ -102,9 +105,12 @@ export default async function PlayerDetailPage({
   const perAccount =
     needsRankedGames(source) && profile.accounts.length > 1
       ? [
-          profile,
-          ...profile.accounts.map((account) => buildPlayerProfile(profileRows, account.puuid)),
-        ].map(renderProfile)
+          { key: "all", profile },
+          ...profile.accounts.map((account) => ({
+            key: account.puuid,
+            profile: buildPlayerProfile(profileRows, account.puuid),
+          })),
+        ].map(({ key, profile: one }) => renderProfile(one, key))
       : null;
 
   return (
@@ -116,7 +122,7 @@ export default async function PlayerDetailPage({
           views={perAccount}
         />
       ) : (
-        renderProfile(profile)
+        renderProfile(profile, "all")
       )}
 
       {/* Outside the account filter, because no account narrows it: this is its

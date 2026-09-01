@@ -10,6 +10,8 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireSession } from "@/lib/auth";
 import { RiotKeyInvalidError, refetchMatchDetails } from "@/lib/sync";
+import { recomputeScores } from "@/lib/score-recompute";
+import { clearExcludedFlexGames } from "@/lib/flex-recheck";
 
 import type { PlayerFormState } from "../form-state";
 
@@ -83,6 +85,82 @@ export async function refetchMatchDetailsAction(): Promise<PlayerFormState> {
       revalidatePath("/settings");
       return { error: "Riot API key is invalid or expired." };
     }
+    return { error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+/**
+ * Recomputes match_participants.performance_score from the rows already stored.
+ *
+ * Touches Riot not at all — unlike every other action in this file, which is
+ * why it has no RiotKeyInvalidError branch. The score is a cache of the pure
+ * function in lib/score.ts over data the database already holds, so this is the
+ * one maintenance button that works with an expired key.
+ *
+ * Two occasions call for it: right after migration 030, and after a change to
+ * the formula. The second needs `update match_participants set
+ * performance_score = null;` in the SQL editor first — see the header of
+ * lib/score-recompute.ts for why that is a deliberate manual step.
+ */
+export async function recomputeScoresAction(): Promise<PlayerFormState> {
+  try {
+    await requireSession();
+
+    const summary = await recomputeScores(createAdminClient());
+
+    revalidatePath("/settings");
+    revalidatePath("/");
+    revalidatePath("/matches");
+    revalidatePath("/soloq");
+    revalidatePath("/players");
+
+    if (summary.partial) {
+      return {
+        success: true,
+        message: `Scored ${summary.matchesScored} match(es). ${summary.remaining} row(s) left — run it again to continue.`,
+      };
+    }
+    return {
+      success: true,
+      message:
+        summary.matchesScored === 0
+          ? "Every match that can be scored already is."
+          : `Scored ${summary.matchesScored} match(es). All done.`,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Something went wrong." };
+  }
+}
+
+/**
+ * Makes the next sync re-judge every flex game it previously skipped.
+ *
+ * Needed whenever the roster or the set of linked accounts changes: the
+ * full-stack test that decides whether a flex game counts is applied once, when
+ * the game is first seen, and a game skipped under an older account list stays
+ * skipped. See lib/flex-recheck.ts.
+ *
+ * This only clears the way — it makes no Riot calls itself. The work happens on
+ * the next Sync, and a long history needs several.
+ */
+export async function recheckFlexGamesAction(): Promise<PlayerFormState> {
+  try {
+    await requireSession();
+
+    const summary = await clearExcludedFlexGames(createAdminClient());
+
+    revalidatePath("/settings");
+    revalidatePath("/");
+    revalidatePath("/matches");
+
+    return {
+      success: true,
+      message:
+        summary.markersCleared === 0
+          ? "No skipped flex games to re-check."
+          : `Cleared ${summary.markersCleared} skipped flex game(s) across ${summary.accountsReset} account(s). Press Sync to re-check them — it may take a few runs.`,
+    };
+  } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong." };
   }
 }

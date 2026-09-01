@@ -33,7 +33,11 @@ export function SoloqHistory({
   const { players, selectedPlayer, entries, totalMatches, totalPages } = page;
 
   return (
-    <div className="flex flex-col gap-4">
+    // bleed-wide on the section, not on the list: the rows need more width
+    // than the page column gives them, and widening only the list would leave
+    // the caption and the player filter hanging short of the rows they belong
+    // to. See globals.css.
+    <div className="bleed-wide [--bleed-width:var(--row-width-matches)] flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-grey-light">
           {selectedPlayer

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toParticipantRow } from "@/lib/participant-row";
+import { withPerformanceScores } from "@/lib/score";
 import { formatRank, ladderPoints } from "@/lib/rank";
 import {
   bansForTeam,
@@ -496,12 +497,20 @@ export async function refetchMatchDetails(admin: SupabaseClient): Promise<Refetc
         throw toSyncError(e);
       }
 
-      const participantRows = match.info.participants.map((p) =>
-        toParticipantRow(p, {
-          matchId: row.id as string,
-          playerId: playerIdByPuuid.get(p.puuid) ?? null,
-          queueId: match.info.queueId,
-        }),
+      // Scored here as well as on the insert path: this action's whole job is
+      // to fill in the migration-005 detail columns, which are exactly the
+      // inputs score.ts refuses to work without. A row that could not be
+      // scored before this refetch can be after it, so not rescoring would
+      // leave the backfill half-done.
+      const participantRows = withPerformanceScores(
+        match.info.participants.map((p) =>
+          toParticipantRow(p, {
+            matchId: row.id as string,
+            playerId: playerIdByPuuid.get(p.puuid) ?? null,
+            queueId: match.info.queueId,
+          }),
+        ),
+        match.info.gameDuration,
       );
 
       // (match_id, puuid) is unique, so this updates in place and preserves each
@@ -691,12 +700,18 @@ async function syncAccountQueue(
         continue;
       }
 
-      const participantRows = match.info.participants.map((p) =>
-        toParticipantRow(p, {
-          matchId: insertedMatch.id,
-          playerId: playersByPuuid.get(p.puuid)?.playerId ?? null,
-          queueId: match.info.queueId,
-        }),
+      // All ten rows are in hand here, which is the only place they are — see
+      // the header of docs/migrations/030_performance_score.sql for why the
+      // score is written rather than computed on read.
+      const participantRows = withPerformanceScores(
+        match.info.participants.map((p) =>
+          toParticipantRow(p, {
+            matchId: insertedMatch.id,
+            playerId: playersByPuuid.get(p.puuid)?.playerId ?? null,
+            queueId: match.info.queueId,
+          }),
+        ),
+        match.info.gameDuration,
       );
 
       const { error: insertParticipantsError } = await admin

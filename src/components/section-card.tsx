@@ -33,9 +33,7 @@ export function SectionCard({
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
-          {title}
-        </CardTitle>
+        <CardTitle className="label-micro font-heading text-grey-light">{title}</CardTitle>
         {action && <CardAction>{action}</CardAction>}
       </CardHeader>
       <CardContent className={contentClassName}>

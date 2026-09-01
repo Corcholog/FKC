@@ -11,6 +11,7 @@
 // take rows the caller already has.
 
 import { findLaneOpponent, sortByRole } from "@/lib/roles";
+import { mvpAndInt } from "@/lib/score";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllByIds } from "@/lib/supabase/fetch-all";
 import type { DataSource } from "@/lib/data-source";
@@ -24,7 +25,7 @@ import type { TeamComposChampion } from "@/components/match-row";
  * shows up as `undefined` at render, never as an error.
  */
 export const MATCH_ROW_COLUMNS =
-  "id, match_id, player_id, puuid, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs, vision_score";
+  "id, match_id, player_id, puuid, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs, vision_score, performance_score";
 
 export type MatchRowParticipant = {
   id: string;
@@ -51,6 +52,15 @@ export type MatchRowParticipant = {
   total_cs: number;
   /** Null on games synced before migration 005. */
   vision_score: number | null;
+  /**
+   * 0-100, from lib/score.ts, written at sync time (migration 030).
+   *
+   * Null for two different reasons the UI has to keep apart: the row predates
+   * migration 005 and has no detail columns to score, or it has them and
+   * nobody has pressed "Recompute scores" yet. Both render as an absent score
+   * rather than as a bad one.
+   */
+  performance_score: number | null;
 };
 
 /**
@@ -93,6 +103,15 @@ export type MatchComposition = {
   enemies: TeamComposChampion[];
   /** Null when Riot left the viewer's team_position empty — autofill, disconnects. */
   opponent: TeamComposChampion | null;
+  /**
+   * Whether the viewer had the best or the worst game of *our* players in it.
+   *
+   * Null almost always, and that is the honest answer rather than a gap: the
+   * comparison is between tracked players, and a soloQ match contains exactly
+   * one. In practice these two marks are a full-stack flex feature — see
+   * mvpAndInt in lib/score.ts for why it is scoped that way rather than by team.
+   */
+  award: "mvp" | "int" | null;
 };
 
 /**
@@ -115,10 +134,16 @@ export function matchComposition(
 
   const opponentParticipant = findLaneOpponent(participants, viewer);
 
+  // Computed here rather than in the row because this is the only place holding
+  // all ten participants — the row receives two champion strips by the time it
+  // renders, and the scores are gone by then.
+  const { mvp, int } = mvpAndInt(participants);
+
   return {
     allies: sortByRole(participants.filter((p) => p.team_id === viewer.team_id)).map(toChampion),
     enemies: sortByRole(participants.filter((p) => p.team_id !== viewer.team_id)).map(toChampion),
     opponent: opponentParticipant ? toChampion(opponentParticipant) : null,
+    award: mvp?.id === viewer.id ? "mvp" : int?.id === viewer.id ? "int" : null,
   };
 }
 

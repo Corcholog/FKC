@@ -80,6 +80,17 @@ export function privateSource(supabase: SupabaseClient, queue: QueueScope = "sol
 export const SOLOQ_PARTICIPANTS = "soloq_participants";
 
 /**
+ * The flex-only participant view, for the same kind of direct read.
+ *
+ * Worth its own constant for a reason soloQ's comment does not cover: only
+ * full-stack games are ever stored in queue 440, so selecting from this view is
+ * already "games the five played together" — no caller has to re-establish that,
+ * and none should try, because the roster check happens at write time against
+ * the accounts linked then. See lib/flex-recheck.ts.
+ */
+export const FLEX_PARTICIPANTS = "flex_participants";
+
+/**
  * The same view as a PostgREST embed, aliased back to the base table's name.
  *
  * `match_participants:soloq_participants!inner(...)` filters through the view

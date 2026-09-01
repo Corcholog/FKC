@@ -36,7 +36,7 @@ export function TeamSeriesView({
   const totalSeconds = timed.reduce((sum, g) => sum + (g.duration_seconds ?? 0), 0);
 
   return (
-    <div className="flex flex-col gap-6">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <Link
         href={`/matches`}
         className="flex w-fit items-center gap-1.5 text-sm text-grey-mid transition-colors hover:text-gold-bright"
@@ -93,6 +93,6 @@ export function TeamSeriesView({
           currentUserId={currentUserId}
         />
       ))}
-    </div>
+    </main>
   );
 }

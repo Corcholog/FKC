@@ -129,14 +129,21 @@ export default async function NewTeamSeriesPage() {
     seedLineup(supabase, players),
   ]);
 
+  // The page owns its container, as every page in this app does. The three
+  // routes under /matches used to inherit one from the old /team section layout
+  // and lost it when the routes flattened (ADR-050), which left the entry form
+  // running edge to edge. 6xl rather than the list's 5xl: a game is five roles
+  // and ten champion pickers wide.
   return (
-    <TeamSeriesForm
-      opponents={opponents}
-      roster={players}
-      defaultLineup={lineup}
-      champions={realChampions(championMap)}
-      version={version}
-      competitions={competitions}
-    />
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+      <TeamSeriesForm
+        opponents={opponents}
+        roster={players}
+        defaultLineup={lineup}
+        champions={realChampions(championMap)}
+        version={version}
+        competitions={competitions}
+      />
+    </main>
   );
 }

@@ -42,7 +42,7 @@ export function AwardTile({
   const body = (
     <div className="flex w-full items-center justify-between gap-2">
       <div className="flex min-w-0 flex-col items-start gap-1">
-        <p className="text-[11px] tracking-wide text-grey-light uppercase">{label}</p>
+        <p className="label-micro text-grey-light">{label}</p>
 
         <p className={`font-heading tabular-nums text-2xl font-semibold ${TONE_CLASS[tone]}`}>
           {player ? value : "—"}

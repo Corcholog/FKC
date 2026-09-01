@@ -13,7 +13,7 @@ export function SideBadge({ side, className }: { side: TeamSide; className?: str
   return (
     <span
       className={cn(
-        "rounded-sm px-1.5 py-0.5 text-[10px] font-semibold tracking-wider uppercase",
+        "label-micro px-1.5 py-0.5",
         side === "blue" ? "bg-cyan/15 text-cyan" : "bg-loss/15 text-loss",
         className,
       )}
@@ -27,7 +27,7 @@ export function ResultBadge({ win, className }: { win: boolean; className?: stri
   return (
     <span
       className={cn(
-        "rounded-sm px-1.5 py-0.5 text-[10px] font-semibold tracking-wider uppercase",
+        "label-micro px-1.5 py-0.5",
         win ? "bg-win/15 text-win" : "bg-loss/15 text-loss",
         className,
       )}
@@ -41,10 +41,7 @@ export function ResultBadge({ win, className }: { win: boolean; className?: stri
 export function MetaChip({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <span
-      className={cn(
-        "rounded-sm bg-bg-tertiary px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-grey-light uppercase",
-        className,
-      )}
+      className={cn("label-micro bg-bg-tertiary px-1.5 py-0.5 text-grey-light", className)}
     >
       {children}
     </span>

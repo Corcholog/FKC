@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { optional, rows } from "@/lib/supabase/read";
 import { formatRelativeTime } from "@/lib/format";
 import { RefetchDetailsForm } from "@/components/settings/refetch-details-form";
+import { RecomputeScoresForm } from "@/components/settings/recompute-scores-form";
+import { RecheckFlexForm } from "@/components/settings/recheck-flex-form";
 import { SyncStatusSection, type SyncState } from "@/components/settings/sync-status-section";
 import { FlexDiscovery, type FlexAccount } from "@/components/settings/flex-discovery";
 import { SectionCard } from "@/components/section-card";
@@ -93,6 +95,20 @@ export default async function SettingsSyncPage() {
         caption="Re-reads stored matches from Riot to fill columns added after they were synced. Time-boxed, so it may take several runs."
       >
         <RefetchDetailsForm />
+      </SectionCard>
+
+      <SectionCard
+        title="Recompute performance scores"
+        caption="Scores stored matches from data already in the database. No Riot calls. Time-boxed, so it may take several runs."
+      >
+        <RecomputeScoresForm />
+      </SectionCard>
+
+      <SectionCard
+        title="Re-check skipped flex games"
+        caption="Flex games are stored only when all five played. That test runs once per game, so games skipped under an older roster or account list need clearing before the sync will look again."
+      >
+        <RecheckFlexForm />
       </SectionCard>
     </div>
   );

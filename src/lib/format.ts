@@ -1,26 +1,48 @@
+// One ladder, two renderings. The long form reads as prose ("3 hours ago") and
+// the short one as a column ("3h"); keeping the thresholds in a single table is
+// what stops the same instant rounding to a different unit in the two places.
+//
+// `short` is not an abbreviation of `long` — "mo" for month exists because "m"
+// is already minutes, and a match list is one of the few places both can appear.
+const TIME_UNITS: { size: number; long: string; short: string }[] = [
+  { size: 60, long: "second", short: "s" },
+  { size: 60, long: "minute", short: "m" },
+  { size: 24, long: "hour", short: "h" },
+  { size: 7, long: "day", short: "d" },
+  { size: 4.345, long: "week", short: "w" },
+  { size: 12, long: "month", short: "mo" },
+  { size: Number.POSITIVE_INFINITY, long: "year", short: "y" },
+];
+
 export function formatRelativeTime(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const diffSec = Math.round(diffMs / 1000);
-
-  const units: [number, string][] = [
-    [60, "second"],
-    [60, "minute"],
-    [24, "hour"],
-    [7, "day"],
-    [4.345, "week"],
-    [12, "month"],
-    [Number.POSITIVE_INFINITY, "year"],
-  ];
-
-  let value = diffSec;
-  for (const [size, unit] of units) {
+  let value = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  for (const { size, long } of TIME_UNITS) {
     if (Math.abs(value) < size) {
       const rounded = Math.round(value);
-      return rounded <= 0 ? "just now" : `${rounded} ${unit}${rounded === 1 ? "" : "s"} ago`;
+      return rounded <= 0 ? "just now" : `${rounded} ${long}${rounded === 1 ? "" : "s"} ago`;
     }
     value /= size;
   }
   return "a while ago";
+}
+
+/**
+ * The same instant as a column value: "3h", "2d", "5mo".
+ *
+ * For places where the timestamp is one field in a dense row rather than a
+ * sentence — a match list, where the long form is most of the width of the
+ * column it sits in and none of the meaning.
+ */
+export function formatRelativeTimeShort(iso: string): string {
+  let value = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  for (const { size, short } of TIME_UNITS) {
+    if (Math.abs(value) < size) {
+      const rounded = Math.round(value);
+      return rounded <= 0 ? "now" : `${rounded}${short}`;
+    }
+    value /= size;
+  }
+  return "old";
 }
 
 export function isoDaysAgo(days: number): string {

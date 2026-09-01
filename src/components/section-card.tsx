@@ -2,10 +2,10 @@
 //
 // This markup — a Card whose only header is a small uppercase title, with an
 // optional caption *below* the content rather than a CardDescription above it —
-// was hand-rolled at every call site: once per section on /insights and six
-// times on the player page. It is the app's de-facto section chrome, so it may
-// as well be a component; the alternative is that the next section invents a
-// seventh slightly-different version of it.
+// was hand-rolled at every call site: six times on the player page alone. It is
+// the app's de-facto section chrome, so it may as well be a component; the
+// alternative is that the next section invents a seventh slightly-different
+// version of it.
 //
 // `caption` is deliberately not CardDescription. A description renders under the
 // title and reads as a subtitle; these captions state the sample gate or the
@@ -33,9 +33,7 @@ export function SectionCard({
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="font-heading text-xs tracking-wide text-grey-light uppercase">
-          {title}
-        </CardTitle>
+        <CardTitle className="label-micro font-heading text-grey-light">{title}</CardTitle>
         {action && <CardAction>{action}</CardAction>}
       </CardHeader>
       <CardContent className={contentClassName}>

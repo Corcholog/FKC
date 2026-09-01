@@ -52,13 +52,14 @@ logic from the I/O. That extraction is worth doing anyway.
 ## 2. No Postgres-side aggregation
 
 Every stats page selects all relevant `match_participants` rows and folds them in
-JavaScript. At nine players and a few hundred games that's a few thousand rows and it's
+JavaScript. At five players and a few hundred games that's a few thousand rows and it's
 genuinely fine. It breaks down when either the roster or the history grows by an order of
 magnitude.
 
 The migration path is clear: materialized views or RPC functions for the aggregates,
-keeping the same `XAgg` shapes so the rendering layer doesn't change. `/insights` is the
-page to convert first — it aggregates over the entire participant table.
+keeping the same `XAgg` shapes so the rendering layer doesn't change. The front page is
+the one to convert first — the roster board aggregates over the entire participant table
+for all five players, and now folds it a second time for the hour chart.
 
 **Budget for `statement_timeout` when doing it.** The `authenticator` role this project
 runs under is configured with `statement_timeout=8s` and `lock_timeout=8s`:
@@ -102,11 +103,11 @@ value-per-effort improvement available. It would also have caught the stale
 
 `/settings` is open to every signed-in user. That means any player can add or delete roster
 members, rotate the Riot key, remove another player's login (including deleting their
-`auth.users` row), set another player's password, and edit the clan AI context. Several of
+`auth.users` row), set another player's password, and edit the team AI context. Several of
 those actions take a plain string argument, so they're invocable as bare server-action
 POSTs without going near the UI.
 
-This is deliberate for a five-person friend group and is flagged in the roadmap as "not
+This is deliberate for a five-person team and is flagged in the roadmap as "not
 done, deliberately". It's also the first thing that must change if the app is ever shared
 beyond people who already trust each other completely — probably as a `players.is_admin`
 column plus RLS on the mutating paths.
@@ -149,10 +150,10 @@ that doc is a planning artifact. (This is part of why the planning docs stay unp
 see this folder's README.)
 
 **Player slugs aren't stable.** `slug` is regenerated from the Riot ID on rename, so
-`/player/[slug]` URLs break when someone changes their name. Harmless internally; would
+`/players/[slug]` URLs break when someone changes their name. Harmless internally; would
 matter if anything ever linked in from outside.
 
-**The clan crest is a placeholder.** `Crest()` in the navbar renders a styled `FC` div, and
+**The team crest is a placeholder.** `Crest()` in the navbar renders a styled `FC` div, and
 `public/` is empty.
 
 **Avatar upload isn't validated.** `settings/actions.ts` takes `file.type` from the client
@@ -164,20 +165,20 @@ fix, not yet done.
 **No security headers.** `next.config.ts` sets `images.remotePatterns` and nothing else —
 no CSP, `X-Frame-Options` or `Referrer-Policy`, and `poweredByHeader` is left on.
 
-**`/draft/counters` has no pagination.** It renders one card per champion the team has noted
+**`/prep/counters` has no pagination.** It renders one card per champion the team has noted
 answers *to*, and the underlying loader pages properly, so the page grows with the notes. The
 combobox and role filter are what keep it usable; past a few hundred annotated champions
-neither is enough. `/draft/champions` has the same shape but a fixed ceiling — there are only
+neither is enough. `/prep/champions` has the same shape but a fixed ceiling — there are only
 ~170 champions.
 
-**`/scrims/team` renders every matching game.** Same shape, one level worse: an unfiltered
+**`/prep/scouting` renders every matching game.** Same shape, one level worse: an unfiltered
 visit draws the entire archive as full draft cards. The filter is what keeps it usable, and
 the page is *for* filtering, so this is fine at a season's worth of games and won't be at
-five. The fix is the pagination `/matches` already has (ADR-024's `parsePage`), applied to
-the "Matching games" list only.
+five. The fix is the pagination the soloQ view of `/matches` already has (ADR-024's
+`parsePage`), applied to the "Matching games" list only.
 
 **The eight scrim games entered before the patch field existed have no patch.** The entry
-form had no such input at all until then, which is why `/scrims/team`'s patch filter had
+form had no such input at all until then, which is why `/prep/scouting`'s patch filter had
 nothing to filter — the column shipped in migration 012 and nothing ever wrote it. The form
 now carries a patch per game, **prefilled from the current DDragon version**, so this closes
 going forward; the existing eight stay null until somebody edits those series, and the
@@ -204,57 +205,109 @@ and `@dnd-kit` are statically imported into client bundles.
 **The match-row assembly used to be copy-pasted three times** — the `toChampion` +
 `allies`/`enemies`/`opponent` + `participantsByMatch` block, its byte-identical 14-column
 select, and a verbatim `ParticipantRow` in each of `page.tsx`, `matches/page.tsx` and
-`player/[slug]/page.tsx`. `src/lib/match-rows.ts` now owns all of it, and the demo's
-player page reuses the same module. Both entries are closed; the underlying reason they
-were dangerous — no generated database types, §3 — is not.
+`player/[slug]/page.tsx`. `src/lib/match-rows.ts` owns all of it now. Both entries are
+closed; the underlying reason they were dangerous — no generated database types, §3 — is
+not.
 
-## 7. The public demo's own gaps
+## 7. What deleting the demo closed, and what it didn't
 
-`/demo` is a public surface bolted onto an app that was private by construction, and it
-carries risks the rest of the app doesn't.
+`/demo` is gone (ADR-050, migration 027), and with it every gap this section used to list:
+the untested leak checks, the un-aliased opponent rosters, the summaries that went stale
+silently, the fixture path that never existed.
 
-**Nothing about it is tested, and it is the part where an untested regression is worst.**
-Every leak check so far has been manual: render the pages, then grep the RSC payload
-against a needle set built from the live database — real display names, slugs, puuids, the
-Riot IDs of untracked participants, tier labels, opponent names, enemy nicknames, `created_by`
-auth ids, match notes, `ai_context`, `clan_profile.context`. It found real problems (and,
-repeatedly, false positives worth knowing about: an untracked player named "Blue" against
-the draft board's "Blue side" heading, another named "Monk" against Riot's `MonkeyKing`
-asset key, and Next's own `"forbidden":"$undefined"` RSC boundary key). But it is a sweep
-somebody has to remember to run, and it proves nothing about the *next* page anybody adds.
+Worth recording what it actually cost while it was here, because the number is the argument
+against building one again casually. The views were cheap. The expensive part was the
+invariant they created — **every page needed an anonymized twin**, built from the same view
+component with the unsafe slots omitted rather than behind a `demo` boolean, or the public
+half silently fell behind. That is a tax on every route the app will ever add, and it was
+being paid for a surface with no audience.
 
-The mechanical parts are testable and would catch the realistic failure: assert that every
-`demo_*` view's column list is a subset of an allowlist, and that no page under `src/app/demo/`
-imports `createClient` from `lib/supabase/server`. Both are cheap. Neither exists.
+What it leaves behind:
 
-**`demo_scrim_picks` collapses an opponent's roster by position.** Enemy nicknames become
-`'Rival ' || team_position`, which has to be stable per person because `team-stats.ts` groups
-by `lower(player_name)` to derive a roster ([02, §13](02-data-model.md)). So a team that
-fielded two different toplaners across a season shows as one "Rival TOP" with their games
-merged. The demo's scouting page is therefore *wrong*, not merely vague, wherever that
-happened. Fixing it needs a per-person alias for enemy nicknames — a fourth mapping table,
-populated by hand.
+**The slot pattern outlived its reason.** `notesFor`, `actionsFor`, `summary`, `recentForm`,
+`syncStatus` and `recap` are all render props rather than flags because a flag would have let
+the public copy render something it shouldn't. Nothing public exists any more, and they are
+still the right shape — a page that has no note threads passes no function — but the
+*argument* in their headers is now historical, and a future reader should know that a plain
+boolean is no longer a security question.
 
-**Demo summaries go stale silently.** They are generated on a button press and published by
-hand, with no equivalent of `player_ai_summaries.stale` — nothing marks a summary as
-describing a roster state that has since moved. As long as the app keeps syncing, the
-numbers on `/demo/player/x` drift away from the prose above them, and only a person
-re-reading the page would notice.
+**No published fixture data.** There is still no way to develop against a plausible roster
+without a real one in the database.
 
-The clan recap has this worse than the player summaries do. It is about *current* form —
-this week's record, who is on a streak — so it dates in days rather than months, and it sits
-on the demo's front page. There is no `stale` flag on the demo side of any of it, because
-nothing there is written unattended; re-running it is somebody remembering to. That is the
-price of the review gate (ADR-039), not an oversight, but it is a price.
+## 7b. What flex, multi-account and team matches left open
 
-**A new column on a base table does not reach the demo, and a new demo page has to be
-remembered.** The first is the safe direction and is the point of ADR-034. The second is
-not: nothing structurally prevents adding `/demo/foo` that reads through the wrong client.
-The lint rule above is the missing guard.
+**None of it is tested, and it is the change most able to go silently wrong.** Queue
+scoping, puuid→player resolution and the flex gate all fail by producing a plausible number
+rather than an error — and the gate now fails by *not writing a row*, which is worse: a
+game rejected because the roster was misconfigured is not recoverable by re-running the
+sync, only by clearing marker rows. The pure modules — `queues.ts`, `scope.ts`,
+`unified.ts`, `team/roster.ts`, `team/history.ts`, `team/winrate-series.ts` — were written
+to the same no-I/O rule as everything in §1's table and are just as testable. `isFullStack`
+is the one that most deserves the repo's first test.
 
-**The demo layer has no fixture path.** Everything it shows comes from the live database
-through views, so there is no way to demo the demo — to develop against it without a real
-roster's data present.
+**A `select *` view does not follow its table.** Postgres expands the star at CREATE VIEW
+time, so adding a column to `match_participants` means recreating `soloq_participants`,
+`flex_participants` and `ranked_participants` in the same migration. Nothing enforces
+that; the column simply won't be visible through any of them.
+
+**Eight reads bypass `DataSource` and name `SOLOQ_PARTICIPANTS` by hand.** They are listed
+in [02 §3b](02-data-model.md). A ninth added later inherits nothing and will read both
+queues.
+
+**A team match can only be attributed to a player who was linked at entry time.** Picks
+carry `player_id` when the roster was matched and a typed nickname otherwise, so a game
+entered with a substitute's nickname never reaches that person's player page at any scope.
+Fixing it means editing the series, which is the same escape hatch the derived opponent
+rosters have.
+
+**Team matches are dated to a day, not a moment.** `played_on` is a `date` because nobody
+records what time a scrim started. Streaks and recent-form lists over a mixed scope
+therefore interleave a day's team games with that day's soloQ arbitrarily.
+`computeStreak` sorts its own input, so the result is stable rather than insertion-ordered
+— but it is day-accurate and no finer.
+
+**A flex row in the team history links out rather than opening a scoreboard.** The ten
+participants are all in `match_participants` and the panel could render every one of them,
+but nine of those are strangers, and a full scoreboard is a step toward republishing a lobby
+this app deliberately doesn't. The board shows the compositions; League of Graphs has the
+rest.
+
+**A partial flex stack is not stored at all** (ADR-048). A flex game one of them played
+with randoms is invisible everywhere, which is the intended reading of "flex is a team
+queue" — the source caption on `/players/[slug]` now says so rather than leaving it to be
+inferred.
+
+**The team is judged as of now, not as of the game.** `players.team_role` has no history,
+so a roster change re-labels the past: somebody who left is dropped from every fold that
+reads the roster, and their games stay in the record under a team they are no longer on. A
+`team_members` table with join and leave dates is the fix, and it was declined again in
+ADR-050 for a roster that has never changed.
+
+Migration 028 made this sharper rather than better. Deleting a player is now the *only* way
+to free a position, so replacing somebody is an explicit two-step act — which makes the
+change visible, and still does not record it.
+
+**`/players` loads every player's full history in every source** to build the grid, because
+the cards re-rank when the source switch moves. The front page does the same thing for the
+roster board and is now the heaviest read in the app; `/players` is the second, and the
+first that would want narrowing — either by folding per player on demand or by capping the
+pool the grid is built from.
+
+**A player page with several accounts ships several foldings.** The account filter is client
+state over folds computed server-side, one per account plus one for all of them
+([07 §17](07-frontend.md)). It is aggregates rather than rows and the roster's account count
+is small, so this is bounded — but it is bounded by a fact about this roster, not by
+anything in the code. Somebody with a dozen accounts would make it the wrong shape.
+
+**`settings/actions.ts` has been split** into `settings/actions/{roster,accounts,sync}.ts`
+over a plain `lib/settings/helpers.ts`. The blocker this entry used to describe was real —
+a `"use server"` module can only export async functions, so `revalidateRoster` and
+`PLACEHOLDER_EMAIL_DOMAIN` had nowhere to live — and extracting them into a non-action
+module was the whole fix.
+
+What it leaves open: nothing in `lib/settings/helpers.ts` authorises anything, and several
+of its exports hold the admin client. Every caller runs `requireSession()` first, and
+nothing enforces that they do.
 
 ## 8. Deliberate non-features
 
@@ -265,8 +318,8 @@ These are choices, not omissions:
   roughly doubles sync cost. Explicitly declined in the Riot integration notes.
 - **No light theme.** One permanent dark theme; a toggle would be dead weight.
 - **No public signup.** Accounts are created by hand, and there is no route that makes
-  one. `/demo` is public but is read-only and has no account behind it — it widened what a
-  stranger can *see*, not what they can *become*.
+  one, and every route in the app is behind the session gate — `/login` is the only path a
+  signed-out visitor reaches.
 - **No re-fetching of stored matches during a normal sync.** Match data is immutable once a
   game ends; `refetchMatchDetails` is the explicit manual exception.
 - **A summary can stay stale indefinitely.** `/api/summaries` only rewrites one after
@@ -294,20 +347,20 @@ will need.
 
 In the order it would actually hurt:
 
-1. **The Riot rate limit.** 50 players × a daily sync exceeds what 60-second invocations
-   can cover, even with perfect resumption. Fix: a production API key, or fan out across
-   multiple invocations with a work-queue table.
-2. **JavaScript aggregation.** `/insights` selects the entire participant table. At 50
-   players it's hundreds of thousands of rows into memory on every page view. `/draft` makes
+1. **The Riot rate limit.** The roster is fixed at five, so this only grows through
+   *accounts*: every smurf is another id-page call per queue per run. Fix: a production API
+   key, or fan out across multiple invocations with a work-queue table.
+2. **JavaScript aggregation.** The front page selects the entire participant table. At 50
+   players it's hundreds of thousands of rows into memory on every page view. `/prep/draft` makes
    the same trade on purpose for the reference panel — six unfiltered loads, filtered in the
    browser, because the board changes on every click and a round trip per click would make
    the panel feel broken (see the header of `src/lib/draft/context.ts`). It's a far smaller
-   dataset than `/insights` and it breaks later, but it breaks the same way, and
-   `loadDraftComps` already takes the filter options that would fix it.
+   dataset and it breaks later, but it breaks the same way, and `loadDraftComps` already
+   takes the filter options that would fix it.
 3. **The single-row sync lock.** Fine for one job; wrong the moment work is sharded across
    parallel invocations.
-4. **The Gemini per-day quota.** Capped at roster + 1 per day and usually well under it
-   since the `MIN_NEW_GAMES` floor skips anyone who barely played, but 50 active players
-   still means up to 51 calls — past the free tier on any busy day.
-5. **No admin role.** At any size beyond a friend group this becomes the first real
-   security problem, not the last.
+4. **Nothing, where the Gemini quota used to be.** The AI layer is deleted (ADR-051), so
+   the app's only metered third-party dependency is Riot.
+5. **No admin role.** Every signed-in player can rotate the Riot key, delete a teammate
+   and remove another player's login. Five people who trust each other is the only thing
+   holding it up.

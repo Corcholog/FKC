@@ -16,27 +16,5 @@ export const CHART_INK = {
   loss: "#e2504a",
 };
 
-// Categorical series colours, assigned in this fixed order and never cycled.
-// Validated against the #10151d chart surface for the OKLCH lightness band,
-// chroma floor, protan/deutan separation, normal-vision separation, and
-// contrast — do not substitute values by eye, and re-run the check if you do:
-//   node scripts/validate_palette.js "<hexes>" --mode dark --surface "#10151d"
-export const SERIES_COLORS = [
-  "#af7c00",
-  "#5e6bd4",
-  "#4ea954",
-  "#9e4aa4",
-  "#00a5b5",
-  "#b33736",
-];
-
-// Beyond this the palette would have to be cycled, which makes two players the
-// same colour. Charts cap their series here and say so instead.
-export const MAX_SERIES = SERIES_COLORS.length;
-
-export function seriesColor(index: number): string {
-  return SERIES_COLORS[index % SERIES_COLORS.length];
-}
-
 export const AXIS_TICK = { fill: CHART_INK.axis, fontSize: 11 };
 export const GRID_STROKE = CHART_INK.grid;

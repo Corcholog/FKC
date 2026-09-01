@@ -1,8 +1,8 @@
 // Bounded reads for the unbounded aggregate queries.
 //
 // Two separate PostgREST limits bite the "select every participant row and fold
-// it in JS" pattern this app uses on the dashboard, /team, /champions,
-// /insights and the player page:
+// it in JS" pattern this app uses on the front page, /soloq and the player
+// page:
 //
 // 1. **Max rows.** Supabase caps every response at the project's "Max rows"
 //    setting (1000 by default) and *truncates silently* — no error, no flag.

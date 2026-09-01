@@ -52,11 +52,10 @@ export function ChampionProfileTable({
   /** Every noted matchup — passed straight through to whichever row expands. */
   counters: ChampionCounterRow[];
   /**
-   * Drops every control that writes. Defaults to false so the private table is
-   * unchanged, and the public demo has to ask for it — but note that asking
-   * wrong is not a breach: every draft action calls requireSession() first and
-   * the base tables are RLS authenticated-only, so a control that slipped
-   * through would error rather than write.
+   * Drops every control that writes. Defaults to false, and getting it wrong is
+   * not a breach: every draft action calls requireSession() first and the base
+   * tables are RLS authenticated-only, so a control that slipped through would
+   * error rather than write.
    */
   readOnly?: boolean;
 }) {

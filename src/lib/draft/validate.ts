@@ -1,7 +1,7 @@
 // Server-side validation for the draft strategy tables.
 //
 // Lives here rather than inside the action for the same reason
-// lib/scrims/validate.ts does: a "use server" module may only export async
+// lib/team/validate.ts does: a "use server" module may only export async
 // functions, so anything in there is unreachable from another caller. This is
 // the copy that counts — server actions are reachable by direct POST, not only
 // through our own form.

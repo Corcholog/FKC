@@ -6,6 +6,7 @@ import {
   formatKillParticipation,
   formatPerMinute,
   formatRelativeTime,
+  formatRelativeTimeShort,
   kdaRatioForGame,
 } from "@/lib/format";
 import { championDisplayName, championIconUrl, type ChampionInfo } from "@/lib/ddragon";
@@ -14,6 +15,8 @@ import type { MatchNote } from "@/lib/match-notes";
 import { isSupport } from "@/lib/roles";
 import { MatchRowShell } from "@/components/match-row-shell";
 import { NotesSection } from "@/components/notes-section";
+import { cn } from "@/lib/utils";
+import { ScoreBadge } from "@/components/score-badge";
 
 export type TeamComposChampion = {
   championId: number;
@@ -23,12 +26,7 @@ export type TeamComposChampion = {
 };
 
 type MatchRowData = {
-  /**
-   * Null on the public demo. `demo_matches` has no riot_match_id on purpose: it
-   * is the single field that de-anonymizes a whole lobby, since pasting it into
-   * any third-party site returns all ten real Riot IDs. Only the notes panel
-   * uses it, and the demo has no notes panel either.
-   */
+  /** Null on a source that carries no Riot id. Only the notes panel uses it. */
   riotMatchId: string | null;
   championId: number;
   championName: string;
@@ -42,6 +40,10 @@ type MatchRowData = {
   teamPosition: string | null;
   /** Null on games synced before migration 005, which have no vision score at all. */
   visionScore: number | null;
+  /** 0-100 from lib/score.ts. Null when the game could not be scored — see ScoreBadge. */
+  performanceScore: number | null;
+  /** Best or worst game among our players in this match; null unless two-plus were in it. */
+  award: "mvp" | "int" | null;
   gameCreation: string;
   gameDurationSeconds: number;
   opponent: TeamComposChampion | null;
@@ -99,15 +101,25 @@ export function MatchRow({
   championMap,
   notes,
   playerName,
+  accountName,
 }: {
   match: MatchRowData;
   version: string;
   championMap: Map<number, ChampionInfo>;
-  /** Omitted on the public demo — no notes, and no riot_match_id to link out with. */
+  /** Omitted where there are no notes and no riot_match_id to link out with. */
   notes?: MatchRowNotes;
   /** Shown above the champion name when this row appears outside a single
-   * player's own page (e.g. a squad-wide feed) so it's clear whose game it is. */
+   * player's own page (e.g. a roster-wide feed) so it's clear whose game it is. */
   playerName?: string;
+  /**
+   * Which of their accounts played it — only when they have more than one.
+   *
+   * Silent for anybody with a single account, which is what keeps it useful: a
+   * Riot ID under every row on a page where it is always the same one is noise,
+   * and the same line under a smurf's game is the answer to "why is this Bronze
+   * game on a Diamond player's page".
+   */
+  accountName?: string;
 }) {
   const iconUrl = championIconUrl(match.championId, version, championMap);
   const displayName = championDisplayName(match.championId, championMap, match.championName);
@@ -145,14 +157,30 @@ export function MatchRow({
           <div className="h-10 w-10 shrink-0 rounded-md bg-gold-muted" />
         )}
         <div className="min-w-0">
-          {playerName && (
-            <p className="truncate text-[10px] font-medium tracking-wide text-gold-bright uppercase">{playerName}</p>
+          {(playerName || accountName) && (
+            <p className="truncate text-[10px] font-medium tracking-wide text-gold-bright uppercase">
+              {playerName}
+              {accountName && (
+                <span
+                  className={cn(
+                    "font-normal tracking-normal text-grey-mid normal-case",
+                    playerName && "ml-1.5",
+                  )}
+                >
+                  {accountName}
+                </span>
+              )}
+            </p>
           )}
           <p className="truncate text-sm font-medium text-white">{displayName}</p>
-          <p className="tabular-nums text-xs text-grey-light">
+          {/* truncate, like the two lines above it. The body face is monospace,
+              materially wider than a proportional one at the same size, and
+              without this the KDA line wraps and pushes the row taller than
+              its neighbours. */}
+          <p className="truncate tabular-nums text-xs text-grey-light">
             {formatKDA(match.kills, match.deaths, match.assists)} ({formatKdaRatio(
               kdaRatioForGame(match.kills, match.deaths, match.assists),
-            )} KDA) - {" "}
+            )} KDA){" "}
             {formatKillParticipation(match.kills, match.assists, teamKills)} KP
           </p>
         </div>
@@ -205,11 +233,39 @@ export function MatchRow({
         <p className="tabular-nums">{formatDuration(match.gameDurationSeconds)}</p>
       </div>
 
-      <div className="w-24 shrink-0 text-right">
+      {/* Its own column rather than another line in the stats block, so the
+          scores line up down the list and can be scanned as a column. Hidden on
+          the narrowest rows, where the KDA is the thing worth the width. */}
+      <div className="hidden w-10 shrink-0 items-center justify-end gap-1 @[520px]:flex @[700px]:w-14">
+        {/* Only ever set on a game several of us were in, so it reads as "of us,
+            in this game" without needing to say so. Title carries the rest.
+            Held back to @700px: below that its width comes straight out of the
+            champion name, and the score beside it says more. */}
+        {match.award && (
+          <span
+            title={
+              match.award === "mvp"
+                ? "Best performance score of our players in this game"
+                : "Lowest performance score of our players in this game"
+            }
+            className="hidden text-xs leading-none @[700px]:inline"
+          >
+            {match.award === "mvp" ? "🏆" : "😈"}
+          </span>
+        )}
+        <ScoreBadge score={match.performanceScore} />
+      </div>
+
+      <div className="w-16 shrink-0 text-right">
         <p className={`text-sm font-semibold ${match.win ? "text-win" : "text-loss"}`}>
           {match.win ? "Win" : "Loss"}
         </p>
-        <p className="text-xs text-grey-mid">{formatRelativeTime(match.gameCreation)}</p>
+        {/* "3h", not "3 hours ago": the long form was most of the width of
+            this column and none of its meaning, and the width it gives back
+            goes to the champion name. */}
+        <p className="tabular-nums text-xs text-grey-mid" title={formatRelativeTime(match.gameCreation)}>
+          {formatRelativeTimeShort(match.gameCreation)}
+        </p>
       </div>
     </MatchRowShell>
   );

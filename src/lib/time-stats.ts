@@ -17,66 +17,52 @@ export type TimeBucket = {
   wins: number;
 };
 
-export type HourWeekdayStats = {
-  /** [weekday 0=Mon..6=Sun][hour 0..23] */
-  grid: TimeBucket[][];
+/**
+ * The day, in 24 buckets.
+ *
+ * It used to carry a [weekday][hour] grid and a per-weekday total as well, for a
+ * 24×7 heatmap. That chart is gone (see components/charts/hour-bars.tsx), and
+ * folding 168 buckets nobody reads over every row the roster has played is not
+ * free on a page that folds them on every request.
+ */
+export type HourStats = {
   byHour: TimeBucket[];
-  byWeekday: TimeBucket[];
   totalGames: number;
-};
-
-export const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-const WEEKDAY_INDEX: Record<string, number> = {
-  Mon: 0,
-  Tue: 1,
-  Wed: 2,
-  Thu: 3,
-  Fri: 4,
-  Sat: 5,
-  Sun: 6,
 };
 
 // Intl is the only way to get a wall-clock hour in a fixed zone without pulling
 // in a date library — Date's own getters are always UTC or the host's zone.
-const PARTS_FORMAT = new Intl.DateTimeFormat("en-GB", {
+const HOUR_FORMAT = new Intl.DateTimeFormat("en-GB", {
   timeZone: ROSTER_TIME_ZONE,
-  weekday: "short",
   hour: "2-digit",
   hour12: false,
 });
 
-function localParts(iso: string): { weekday: number; hour: number } | null {
-  const parts = PARTS_FORMAT.formatToParts(new Date(iso));
-  const weekday = WEEKDAY_INDEX[parts.find((p) => p.type === "weekday")?.value ?? ""];
-  const hourRaw = parts.find((p) => p.type === "hour")?.value;
-  if (weekday === undefined || hourRaw === undefined) return null;
+function localHour(iso: string): number | null {
+  const raw = HOUR_FORMAT.formatToParts(new Date(iso)).find((p) => p.type === "hour")?.value;
+  if (raw === undefined) return null;
 
   // hour12: false still renders midnight as "24" in some ICU versions.
-  const hour = Number(hourRaw) % 24;
-  return Number.isNaN(hour) ? null : { weekday, hour };
+  const hour = Number(raw) % 24;
+  return Number.isNaN(hour) ? null : hour;
 }
 
 const emptyBucket = (): TimeBucket => ({ games: 0, wins: 0 });
 
-export function aggregateByTime(rows: TimeStatInput[]): HourWeekdayStats {
-  const grid = WEEKDAY_LABELS.map(() => Array.from({ length: 24 }, emptyBucket));
+export function aggregateByTime(rows: TimeStatInput[]): HourStats {
   const byHour = Array.from({ length: 24 }, emptyBucket);
-  const byWeekday = WEEKDAY_LABELS.map(emptyBucket);
   let totalGames = 0;
 
   for (const row of rows) {
-    const parts = localParts(row.game_creation);
-    if (!parts) continue;
+    const hour = localHour(row.game_creation);
+    if (hour === null) continue;
 
-    for (const bucket of [grid[parts.weekday][parts.hour], byHour[parts.hour], byWeekday[parts.weekday]]) {
-      bucket.games += 1;
-      if (row.win) bucket.wins += 1;
-    }
+    byHour[hour].games += 1;
+    if (row.win) byHour[hour].wins += 1;
     totalGames += 1;
   }
 
-  return { grid, byHour, byWeekday, totalGames };
+  return { byHour, totalGames };
 }
 
 export function bucketWinRate(bucket: TimeBucket): number | null {
@@ -86,53 +72,56 @@ export function bucketWinRate(bucket: TimeBucket): number | null {
 // ------------------------------------------------------------
 // Who is behind a cell.
 //
-// The heatmap's shade is a total, and a total hides which two people are
-// actually the ones queueing at 3am. These let a cell be clicked open into the
-// players that built it — see StatRankingDialog.
+// A bar's height is a total, and a total hides which two people are actually
+// the ones queueing at 3am. These let one be clicked open into the players that
+// built it — see StatRankingDialog.
 // ------------------------------------------------------------
 
 export type SlotOwnerInput = TimeStatInput & { player_id: string | null };
 
 export type SlotRecord = { ownerId: string; games: number; wins: number };
 
-// Stable string key for a grid cell, so the breakdown can travel to a client
-// component as a plain object rather than a nested array.
-export function timeSlotKey(weekday: number, hour: number): string {
-  return `${weekday}-${hour}`;
-}
-
-/** Cell key → the players who played in it, most games first. Empty cells are absent. */
-export function playersByTimeSlot(rows: SlotOwnerInput[]): Map<string, SlotRecord[]> {
-  const bySlot = new Map<string, Map<string, SlotRecord>>();
+/**
+ * Who played in each hour of the day, most games first.
+ *
+ * Keyed by hour rather than by (weekday, hour): the chart above it is 24 bars,
+ * not a 168-cell grid, and a breakdown finer than the thing it explains is a
+ * breakdown nobody can reach.
+ */
+export function playersByHour(rows: SlotOwnerInput[]): Map<number, SlotRecord[]> {
+  const byHour = new Map<number, Map<string, SlotRecord>>();
 
   for (const row of rows) {
     if (!row.player_id) continue;
-    const parts = localParts(row.game_creation);
-    if (!parts) continue;
+    const hour = localHour(row.game_creation);
+    if (hour === null) continue;
 
-    const key = timeSlotKey(parts.weekday, parts.hour);
-    const owners = bySlot.get(key) ?? new Map<string, SlotRecord>();
-    const record = owners.get(row.player_id) ?? { ownerId: row.player_id, games: 0, wins: 0 };
+    const owners = byHour.get(hour) ?? new Map<string, SlotRecord>();
+    const record = owners.get(row.player_id) ?? {
+      ownerId: row.player_id,
+      games: 0,
+      wins: 0,
+    };
     record.games += 1;
     if (row.win) record.wins += 1;
     owners.set(row.player_id, record);
-    bySlot.set(key, owners);
+    byHour.set(hour, owners);
   }
 
   return new Map(
-    [...bySlot.entries()].map(([key, owners]) => [
-      key,
+    [...byHour.entries()].map(([hour, owners]) => [
+      hour,
       [...owners.values()].sort((a, b) => b.games - a.games),
     ]),
   );
 }
 
-// Games started between these hours (local). Not a scientific cutoff — it's the
-// window where "one more game" stops being a good idea.
+// Midnight to 06:00, Buenos Aires. The window the "after midnight" caption on
+// the front page compares against the rest of the day.
 const LATE_NIGHT_FROM = 0;
 const LATE_NIGHT_TO = 6;
 
-export function lateNightRecord(stats: HourWeekdayStats): TimeBucket {
+export function lateNightRecord(stats: HourStats): TimeBucket {
   const total = emptyBucket();
   for (let hour = LATE_NIGHT_FROM; hour < LATE_NIGHT_TO; hour += 1) {
     total.games += stats.byHour[hour].games;
@@ -141,7 +130,7 @@ export function lateNightRecord(stats: HourWeekdayStats): TimeBucket {
   return total;
 }
 
-export function busiestHour(stats: HourWeekdayStats): number | null {
+export function busiestHour(stats: HourStats): number | null {
   let best: number | null = null;
   stats.byHour.forEach((bucket, hour) => {
     if (bucket.games > 0 && (best === null || bucket.games > stats.byHour[best].games)) best = hour;

@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { Loader2 } from "lucide-react";
-import { refetchMatchDetailsAction } from "@/app/(app)/settings/actions";
+import { refetchMatchDetailsAction } from "@/app/(app)/settings/actions/sync";
 import { emptyPlayerFormState } from "@/app/(app)/settings/form-state";
 import { Button } from "@/components/ui/button";
 

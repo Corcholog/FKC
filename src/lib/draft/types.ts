@@ -1,11 +1,11 @@
 // Row shapes and vocabulary for the draft strategy tables — champion
 // annotations, the counter matrix, and saved comps/synergies.
 //
-// The snake_case is deliberate, same call as lib/scrims/types.ts: these are
+// The snake_case is deliberate, same call as lib/team/types.ts: these are
 // PostgREST rows, not app-shaped objects. DRAFT_ROLES reuses Riot's own
 // TOP/JUNGLE/MIDDLE/BOTTOM/UTILITY strings so sortByRole/formatRole
 // (lib/roles.ts) work on champion_profiles.roles with no adapter, exactly the
-// reason scrim_picks.team_position does the same.
+// reason team_picks.team_position does the same.
 
 export const DRAFT_TAG_KINDS = ["function", "win_condition"] as const;
 export type DraftTagKind = (typeof DRAFT_TAG_KINDS)[number];
@@ -31,7 +31,7 @@ export type ChampionProfileRow = {
   tags: string[];
   notes: string | null;
   updated_at: string;
-  /** Private only — the demo view drops it and the demo never selects it. */
+  /** Who last wrote it. Nothing renders it; the write path is its only reader. */
   updated_by?: string | null;
 };
 
@@ -61,7 +61,7 @@ export type ChampionCounterRow = {
   counter_champion_id: number;
   target_champion_id: number;
   note: string | null;
-  /** Private only — the demo view drops it and the demo never selects it. */
+  /** Who last wrote it. Nothing renders it; the write path is its only reader. */
   created_by?: string | null;
   created_at: string;
   updated_at: string;
@@ -90,7 +90,7 @@ export const COMP_SIZE = 5;
 export const SYNERGY_MIN_SIZE = 2;
 export const SYNERGY_MAX_SIZE = 4;
 
-// Same fields, same app, same reasons as lib/scrims/validate.ts — reused
+// Same fields, same app, same reasons as lib/team/validate.ts — reused
 // rather than reinvented at a slightly different number.
 export const MAX_COMP_LABEL_CHARS = 80;
 export const MAX_COMP_NOTE_CHARS = 2000;
@@ -104,7 +104,7 @@ export type DraftCompRow = {
   champion_ids: number[];
   win_conditions: string[];
   notes: string | null;
-  /** Private only — the demo view drops it and the demo never selects it. */
+  /** Who last wrote it. Nothing renders it; the write path is its only reader. */
   created_by?: string | null;
   created_at: string;
   updated_at: string;
@@ -134,7 +134,7 @@ export const DRAFT_COMP_KIND_LABELS: Record<DraftCompKind, string> = {
  * on a wall of cards, which is what the graph view exists to draw. Comps don't
  * have it: every comp is five champions, so nothing properly contains anything,
  * the graph would be one detached region per row and no lines at all, and the
- * "which champions recur" read is what /scrims/drafts already answers over real
+ * "which champions recur" read is what /prep/picks already answers over real
  * games rather than over saved plans.
  */
 export const DRAFT_COMP_SHAPE: Record<DraftCompKind, { winConditions: boolean; graph: boolean }> = {

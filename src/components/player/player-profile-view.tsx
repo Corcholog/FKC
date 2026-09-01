@@ -1,78 +1,85 @@
-import Link from "next/link";
 import { championDisplayName, type ChampionInfo } from "@/lib/ddragon";
 import { formatWinLoss, formatWinRate } from "@/lib/rank";
 import { NOTABLE_STREAK } from "@/lib/streaks";
 import { avatarTint } from "@/lib/avatar-tint";
 import type { PlayerProfile } from "@/lib/loaders/player";
+import { allChampionsByPlayer } from "@/lib/champion-stats";
+import { aggregatePlayerStats } from "@/lib/player-stats";
+import { ChampionPoolTable, SourceSummary } from "@/components/players/champion-pool";
 import { RankBadge } from "@/components/rank-badge";
 import { WinrateRing } from "@/components/winrate-ring";
-import { LpChart } from "@/components/charts/lp-chart";
-import { HourHeatmap } from "@/components/charts/hour-heatmap";
+import { HourBars } from "@/components/charts/hour-bars";
 import { DurationCurve } from "@/components/charts/duration-curve";
 import { RoleSplit } from "@/components/player/role-split";
 import { DurationSplit } from "@/components/player/duration-split";
-import { SideSplit } from "@/components/player/side-split";
 import { LaneDiffPanel } from "@/components/player/lane-diff-panel";
 import { MatchupList } from "@/components/player/matchup-list";
-import { TopChampions } from "@/components/player/top-champions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionCard } from "@/components/section-card";
 
-// The player page, minus the two things the private and public versions don't
-// share.
+// One player, over whichever games the source switch selected.
 //
-// Those two are slots rather than flags. `summary` is the AI card, which the
-// demo has no counterpart for at all. `recentForm` is the match list, which
-// privately carries note threads, an author, and a "can this person write here"
-// check derived from the session — none of which exist for an anonymous visitor.
-// Passing `session` and `notes` down as optional props would put four
-// null-checks inside this component and leave the demo one forgotten branch away
-// from rendering somebody's review notes.
+// The page is in two halves and the seam is load-bearing. Above the fold,
+// everything folds `profile.scopedRows` — the champion pool, the headline
+// numbers, the roles, the streak — and those are honest for a scrim, a flex game
+// and a soloQ game alike, because `unified.ts` gives all three one row shape.
+// Below it, every panel reads the Riot history only: kickoff time, lane
+// matchups, damage and game length are things a hand-entered team match does not
+// record, and folding it in would not widen those numbers, it would corrupt
+// them. The source caption says so rather than leaving it to be inferred.
 //
-// Everything else is genuinely identical: the same aggregates over the same
-// column names, differing only in which tables they came from.
+// This renders once per account, not once per page — the account filter picks
+// which copy is in the tree (components/player/account-filter.tsx). Which is why
+// recent form is *not* in here: it is a separate five-row query that no account
+// filter narrows, so it sits outside the filter on the page, where what changes
+// and what doesn't are visibly on opposite sides of the line.
 export function PlayerProfileView({
   profile,
   version,
   championMap,
-  basePath = "",
-  summary,
-  recentForm,
+  sourceSwitch,
 }: {
   profile: PlayerProfile;
   version: string;
   championMap: Map<number, ChampionInfo>;
-  /** "" in the private app, "/demo" in the public one. */
-  basePath?: string;
-  summary?: React.ReactNode;
-  recentForm: React.ReactNode;
+  /**
+   * Which games this page is counting. A slot rather than a prop the view
+   * builds — the switch needs the page's own URL, which this component has no
+   * business knowing.
+   */
+  sourceSwitch?: React.ReactNode;
 }) {
   const {
     player,
     streak,
     streakLabel,
-    topChampions,
     roleSplit,
     matchups,
     worstMatchup,
     durationBuckets,
     survivalPoints,
     swing,
-    sideSplit,
     laneDiff,
     timeStats,
-    lpPoints,
     winRatePct,
+    scopedRows,
   } = profile;
+
+  // Folded here rather than in the loader because both are one pass over rows
+  // the profile already holds, and neither needs I/O. `scopedRows` is already
+  // this player's only — buildPlayerProfile scopes it — so the maps have at most
+  // one entry each.
+  const sourceAgg = aggregatePlayerStats(scopedRows).get(player.id);
+  const pool = allChampionsByPlayer(scopedRows).get(player.id) ?? [];
 
   const nemesisName = worstMatchup
     ? championDisplayName(worstMatchup.championId, championMap, worstMatchup.championName)
     : null;
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+    <div className="flex flex-col gap-6">
       <Card className="panel-hex panel-hex-clip">
         <CardContent className="flex items-center gap-4">
           <Avatar className="h-16 w-16">
@@ -124,28 +131,24 @@ export function PlayerProfileView({
         </CardContent>
       </Card>
 
-      {summary}
+      {sourceSwitch}
 
-      <SectionCard title="Rank over time">
-        <LpChart series={[{ id: player.id, name: player.display_name, points: lpPoints }]} />
-      </SectionCard>
+      {sourceAgg && sourceAgg.games > 0 ? (
+        <SourceSummary agg={sourceAgg} />
+      ) : (
+        <p className="panel-hex p-4 text-sm text-grey-mid">
+          No games recorded for this source yet.
+        </p>
+      )}
 
       <SectionCard
-        title="Top champions"
-        action={
-          topChampions.length > 0 ? (
-            <Link
-              href={`${basePath}/champions?player=${player.slug}`}
-              className="text-xs text-gold-bright hover:underline"
-            >
-              View all →
-            </Link>
-          ) : undefined
-        }
+        title="Champion pool"
+        caption="Every champion in the selected games. CS and damage carry their own clocks, so a pool holding scrims shows a dash where it has nothing to divide rather than a zero."
       >
-        <TopChampions champions={topChampions} version={version} championMap={championMap} />
+        <ChampionPoolTable pool={pool} version={version} championMap={championMap} />
       </SectionCard>
 
+      {/* Everything below reads the Riot history only — see the header. */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <SectionCard title="Roles">
           <RoleSplit byRole={roleSplit} />
@@ -182,17 +185,9 @@ export function PlayerProfileView({
         <LaneDiffPanel agg={laneDiff} />
       </SectionCard>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <SectionCard title="When they play">
-          <HourHeatmap stats={timeStats} />
-        </SectionCard>
-
-        <SectionCard title="Map side">
-          <SideSplit split={sideSplit} />
-        </SectionCard>
-      </div>
-
-      {recentForm}
-    </main>
+      <SectionCard title="When they play">
+        <HourBars stats={timeStats} />
+      </SectionCard>
+    </div>
   );
 }

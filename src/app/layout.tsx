@@ -21,8 +21,8 @@ const rajdhani = Rajdhani({
 });
 
 export const metadata: Metadata = {
-  title: "Fake Clan SoloQ Tracker",
-  description: "Private SoloQ tracker for Fake Clan",
+  title: "Fake Clan Team Tracker",
+  description: "Private team tracker for Fake Clan",
 };
 
 export default function RootLayout({

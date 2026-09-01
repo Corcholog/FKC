@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { runSync, RiotKeyInvalidError } from "@/lib/sync";
+import { parseQueues } from "@/lib/queues";
 import { notifyDiscord } from "@/lib/discord";
 import { championDisplayName, getChampionMap, getLatestVersion } from "@/lib/ddragon";
 
@@ -33,10 +34,20 @@ async function handleSync(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Which queues this run covers. Both by default, so the cron URL and the
+  // navbar's main button need no parameter and a malformed one degrades to
+  // "sync everything" rather than to "sync nothing" — a typo that silently
+  // synced nothing would look exactly like a working sync on a quiet day.
+  const queues = parseQueues(request.nextUrl.searchParams.get("queues"));
+
   const admin = createAdminClient();
 
   // Atomic claim: only proceed if the row isn't currently 'running', or if it
   // is but has been for longer than STALE_RUN_MS (a crashed previous run).
+  //
+  // One lock for every queue, not one per queue. A run is a run: the Riot
+  // rate limit is shared, the 60-second budget is shared, and two concurrent
+  // runs would spend the same allowance twice and both come back partial.
   // A plain read-then-write here would race under concurrent requests —
   // Postgres serializes concurrent UPDATEs on the same row, so this doesn't.
   const staleThreshold = new Date(Date.now() - STALE_RUN_MS).toISOString();
@@ -57,15 +68,26 @@ async function handleSync(request: NextRequest) {
   }
 
   try {
-    const summary = await runSync(admin);
+    const summary = await runSync(admin, { queues });
+
+    const finishedAt = new Date().toISOString();
+    // Only queues that actually finished get their timestamp stamped. A run
+    // that covered half of flex before the budget ran out has not synced
+    // flex "as of now", and a settings page saying it did is worse than one
+    // saying nothing — it is the number somebody checks before concluding
+    // the data is current.
+    const queueStamps = Object.fromEntries(
+      summary.completedQueues.map((q) => [`last_${q}_sync_at`, finishedAt]),
+    );
 
     await admin
       .from("sync_state")
       .update({
         last_sync_status: "success",
-        last_sync_finished_at: new Date().toISOString(),
+        last_sync_finished_at: finishedAt,
         riot_key_valid: true,
         last_error: null,
+        ...queueStamps,
       })
       .eq("id", 1);
 

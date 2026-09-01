@@ -19,14 +19,28 @@ export function MatchRowShell({
   win,
   noteCount,
   panel,
+  roomy = false,
   children,
 }: {
-  win: boolean;
+  /**
+   * Null means no result belongs to this row and the accent stays neutral.
+   * Nothing produces one today — the flex gate in lib/team/roster.ts stopped a
+   * game the roster played against itself from ever being stored — but the
+   * neutral state is a line of CSS and the alternative is a row that has to
+   * claim a loss it can't support.
+   */
+  win: boolean | null;
   noteCount: number;
+  /**
+   * More air around a taller row. The team match history draws ten champion
+   * portraits per row at up to 48px; the soloQ feed draws six at 32px and would
+   * only look loose with the same padding.
+   */
+  roomy?: boolean;
   /**
    * The notes UI, only mounted while open so a 50-row page isn't 50 live forms.
    *
-   * Omitted on the public demo, which carries no notes and no match link to put
+   * Omitted where there are no notes and no match link to put
    * in a panel. Without one the row renders as a plain div: an expand chevron
    * that opens onto nothing is worse than no chevron.
    */
@@ -36,16 +50,21 @@ export function MatchRowShell({
   const [open, setOpen] = useState(false);
   const panelId = useId();
 
+  const padding = roomy ? "p-3 @2xl:p-4" : "p-3";
+
+  // is-win/is-loss add the result wash and make the row glow its own colour on
+  // hover instead of gold; the border-l-4 utility still paints the left edge,
+  // which is why globals.css only ever sets `border-color` on those modifiers.
   const shellClass = cn(
     "panel-hex @container border-l-4",
     panel && "is-interactive",
-    win ? "border-l-win" : "border-l-loss",
+    win === null ? "border-l-border" : win ? "is-win border-l-win" : "is-loss border-l-loss",
   );
 
   if (!panel) {
     return (
       <div className={shellClass}>
-        <div className="flex w-full items-center gap-3 p-3 text-left">
+        <div className={cn("flex w-full items-center gap-3 text-left", padding)}>
           {children}
           {/* Kept as an empty spacer so rows line up with the interactive
               version if the two ever appear on one page. */}
@@ -62,7 +81,10 @@ export function MatchRowShell({
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex w-full items-center gap-3 p-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className={cn(
+          "flex w-full items-center gap-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          padding,
+        )}
       >
         {children}
 
@@ -82,7 +104,7 @@ export function MatchRowShell({
       </button>
 
       {open && (
-        <div id={panelId} className="border-t border-border p-3">
+        <div id={panelId} className={cn("border-t border-border", padding)}>
           {panel}
         </div>
       )}

@@ -1,13 +1,13 @@
 // The contextual panel's filters: a board goes in, the rows that match come out.
 //
-// **Why /draft loads all four tables unfiltered.** loadDraftComps takes filter
+// **Why /prep/draft loads all four tables unfiltered.** loadDraftComps takes filter
 // options and this file ignores every one of them, which looks like an
 // oversight and isn't. The board changes on every click, and a server round
 // trip per click would make the panel feel broken — so the four tables are
 // loaded once on the server and filtered here, in the browser, against whatever
 // is on the board at that moment. The whole dataset is ~170 profiles, a few
 // dozen tags, some hundreds of counters and maybe a hundred comps: less than
-// one page of /insights already pulls, and the same trade ADR-015 and ADR-024
+// one page of the roster board already pulls, and the same trade ADR-015 and ADR-024
 // document for every stats page in the app. The options on loadDraftComps exist
 // for callers that fetch one kind for one page; they stop being the wrong choice
 // here only if the counters table reaches five figures, which it won't.

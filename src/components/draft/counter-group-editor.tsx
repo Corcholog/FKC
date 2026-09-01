@@ -6,7 +6,7 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import type { ChampionInfo } from "@/lib/ddragon";
 import type { ChampionCounterRow } from "@/lib/draft/types";
-import { saveCounterGroup } from "@/app/(app)/draft/actions";
+import { saveCounterGroup } from "@/app/(app)/prep/actions";
 import { ChampionAvatar } from "@/components/champion-avatar";
 import { ChampionCombobox } from "@/components/champion-combobox";
 import { Button } from "@/components/ui/button";

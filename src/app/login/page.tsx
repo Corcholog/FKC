@@ -59,7 +59,7 @@ export default function LoginPage() {
         onSubmit={handleSubmit}
         className="w-full max-w-sm border border-border bg-bg-secondary p-8 shadow-[0_0_20px_-4px_rgba(200,155,60,0.12)]"
       >
-        <h1 className="font-heading mb-6 text-xl font-semibold text-white">Fake Clan SoloQ Tracker</h1>
+        <h1 className="font-heading mb-6 text-xl font-semibold text-white">Fake Clan Team Tracker</h1>
 
         <div className="mb-4 flex flex-col gap-1.5">
           <Label htmlFor="identifier" className="text-xs text-grey-light">

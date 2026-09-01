@@ -112,8 +112,8 @@ export function isBoardEmpty(board: GameBoard): boolean {
 // ------------------------------------------------------------
 // Fearless series
 // ------------------------------------------------------------
-// Five, not the ten lib/scrims/types.ts allows. That limit exists because the
-// scrim_games_number check constraint does and hand-entry shouldn't fight the
+// Five, not the ten lib/team/types.ts allows. That limit exists because the
+// team_games_number check constraint does and hand-entry shouldn't fight the
 // database; nothing is written from here, and no series this team plays is
 // longer than a Bo5. Five buttons fit in a row, ten are noise. A Bo7 is one
 // constant away.
@@ -142,7 +142,7 @@ function pickedInGame(board: GameBoard): number[] {
  * 2, to pick or to ban again. That asymmetry is the entire format, and it's the
  * one thing on this board a person cannot verify by looking — which is why it
  * lives here as its own function rather than inline in a component. Same rule
- * and same reasoning as usedEarlierInSeries in scrims/draft-form-state.ts; if
+ * and same reasoning as usedEarlierInSeries in team/draft-form-state.ts; if
  * an organiser ever counts bans too, these are the two functions that change.
  *
  * "Earlier" is `j < gameIndex`, not `j !== gameIndex`. The second is easier to
@@ -179,7 +179,7 @@ export type UnavailableReason = { kind: "taken" } | { kind: "carried"; game: num
  * "this game" half and is still used on its own.
  *
  * `fearless` off makes every game independent. Not every series is fearless;
- * `scrim_series.fearless` exists as a column for exactly that reason.
+ * `team_series.fearless` exists as a column for exactly that reason.
  */
 export function unavailableInSeries(
   series: SeriesBoard,

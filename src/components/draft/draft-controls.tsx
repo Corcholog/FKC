@@ -153,9 +153,9 @@ export function DraftControls({
           what's missing rather than just refusing — a greyed button with no
           explanation reads as broken.
 
-          Absent rather than disabled on the public demo: a disabled button is a
-          promise that signing in isn't what's missing, and here it is. Clearing
-          and the PNG export stay — the board is sessionStorage either way. */}
+          Absent rather than disabled when the board is read-only: a disabled
+          button is a promise that signing in isn't what's missing. Clearing and
+          the PNG export stay — the board is sessionStorage either way. */}
       {!readOnly && (
         <>
           <Button

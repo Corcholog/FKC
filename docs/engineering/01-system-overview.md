@@ -12,70 +12,65 @@
 | Scheduling | Vercel Cron (`vercel.json`) | Two daily jobs. Hobby caps *frequency* at once/day, not job count. |
 | Match data | Riot Games API (personal key) | The only source. Personal keys expire every 24h — see §4. |
 | Champion art | Data Dragon CDN | Free, no auth, versioned per patch. No image assets in the repo. |
-| AI | Gemini API (free tier) | Metered per day, which is the single constraint that shaped the whole AI design. |
-| Charts | Recharts 3 | The LP chart and tilt curve. The heatmap and duo matrix are plain CSS grid — see [07](07-frontend.md). |
+| Charts | Recharts 3 | One survival curve, for game length. The hour bars are plain CSS — see [07](07-frontend.md). |
 
 ## 2. Topology
 
 ```
    ┌────────────────────┐        ┌────────────────────┐
    │  Vercel Cron       │        │  Vercel Cron       │
-   │  0 10 * * *  (UTC) │        │  0 11 * * *  (UTC) │
-   │  = 07:00 Buenos As │        │  = 08:00 Buenos As │
+   │  0 10 * * *  (UTC) │        │  0 23 * * 0  (UTC) │
+   │  = 07:00 Buenos As │        │  Sunday wrap       │
    └─────────┬──────────┘        └─────────┬──────────┘
-             │ GET /api/sync                │ GET /api/summaries
+             │ GET /api/sync                │ GET /api/weekly
              │ Bearer CRON_SECRET           │ Bearer CRON_SECRET
              ▼                              ▼
    ┌──────────────────────┐       ┌──────────────────────┐
-   │ /api/sync            │       │ /api/summaries       │
-   │ maxDuration = 60     │       │ maxDuration = 60     │
-   │ • claims sync_state  │       │ • loads AI context   │
-   │ • runSync()          │       │ • team recap first   │
-   │ • records outcome    │       │ • stale players next │
-   └────┬─────────┬───────┘       └────┬─────────────┬───┘
-        │         │                    │             │
-        │  ┌──────▼──────┐             │      ┌──────▼──────┐
-        │  │ Riot API    │             │      │ Gemini API  │
-        │  │ americas +  │             │      │ (free tier) │
-        │  │ la2         │             │      └─────────────┘
+   │ /api/sync            │       │ /api/weekly          │
+   │ maxDuration = 60     │       │ • the week's record  │
+   │ • claims sync_state  │       │ • standings          │
+   │ • runSync()          │       │ • posts to Discord   │
+   │ • records outcome    │       │                      │
+   └────┬─────────┬───────┘       └────┬─────────────────┘
+        │         │                    │
+        │  ┌──────▼──────┐             │
+        │  │ Riot API    │             │
+        │  │ americas +  │             │
+        │  │ la2         │             │
         │  └─────────────┘             │
         │                              │
         ▼        service role          ▼
    ┌──────────────────────────────────────────────┐
    │            Supabase Postgres                  │
-   │  players · matches · match_participants ·     │
+   │  players · player_accounts · matches ·        │
+   │  match_participants (+ queue views) ·         │
    │  player_rank_history · match_notes ·          │
-   │  player_ai_summaries · team_ai_summary ·      │
-   │  clan_profile · sync_state · scrim_* ·        │
+   │  sync_state · team_* ·                        │
    │  draft_* · champion_*                         │
    │  + Storage bucket: avatars                    │
-   │  ─────────────────────────────────────────    │
-   │  demo_* views  (owner-executed projections)   │
-   │  demo_aliases · demo_text  (not public)       │
-   └────────▲──────────────────────▲──────────────┘
-            │ publishable key      │ publishable key
-            │ session JWT          │ **no session** → anon
-            │ RLS enforced         │ select granted on views only
-            │                      │
-   ┌────────┴───────────────┐  ┌───┴──────────────────────────┐
-   │ (app) Server Components│  │ /demo Server Components       │
-   │ src/proxy.ts gates them│  │ createPublicClient()          │
-   └────────▲───────────────┘  │ unstable_cache, 1h            │
-            │                  └───▲──────────────────────────┘
-            │ champion icons       │
-            └───────┬──────────────┘
+   └────────▲──────────────────────────────────────┘
+            │ publishable key
+            │ session JWT
+            │ RLS enforced
+            │
+   ┌────────┴───────────────┐
+   │ (app) Server Components│
+   │ src/proxy.ts gates them│
+   └────────▲───────────────┘
+            │ champion icons
+            └───────┬──────────
               ┌─────┴────────────┐
               │  DDragon CDN     │
               │  (24h revalidate)│
               └──────────────────┘
 ```
 
-Note the three arrows into Postgres. **The sync and the AI batch write with the service
-role key (RLS bypassed); private pages read with the publishable key and the visitor's
-session (RLS enforced); the demo reads with the publishable key and *no* session, so its
-JWT is `anon`, which RLS denies on every real table and which has `select` on the
-`demo_*` views only.** That split is the whole security model and is covered in
-[04](04-auth-and-security.md).
+Note the two arrows into Postgres. **The sync writes with the service role key (RLS
+bypassed); every page reads with the publishable key and the visitor's session (RLS
+enforced).** There used to be a third — a session-less `anon` client for the public
+demo, reading `demo_*` views that RLS denied on the base tables. That was the whole point of
+the security model in [04](04-auth-and-security.md); the demo is gone (ADR-050) and what is
+left is one door with a session in front of it.
 
 ## 3. Request lifecycle for a page view
 
@@ -94,10 +89,11 @@ Take `/player/some-guy-las` as the example.
 2. **`src/app/(app)/layout.tsx`** renders. It fetches the sync state, the session, the
    DDragon version and champion list, and (for a linked player) their most-played lane —
    all concurrently — then renders the navbar and the key-expired banner.
-3. **`src/app/(app)/player/[slug]/page.tsx`** runs as a Server Component. It fires one
-   `Promise.all` of five independent queries, then two dependent follow-ups once match
-   IDs are known, aggregates everything in JavaScript, and returns JSX.
-4. Client components (`LpChart`, `HourHeatmap`, `MatchupList`, `NotesSection`) receive
+3. **`src/app/(app)/players/[slug]/page.tsx`** runs as a Server Component. It fires one
+   `Promise.all` of independent queries, then dependent follow-ups once match IDs are
+   known, aggregates everything in JavaScript — once per account, so the account filter
+   needs no server — and returns JSX.
+4. Client components (`HourBars`, `MatchupList`, `AccountFilter`, `NotesSection`) receive
    plain serializable props. **No client component fetches data.**
 
 The only two places the browser talks to a backend directly are the login form
@@ -131,33 +127,36 @@ src/
 │   ├── layout.tsx              Root: fonts (Geist + Rajdhani), Toaster
 │   ├── globals.css             The entire design system — tokens + shadcn mapping
 │   ├── login/page.tsx          Public route
-│   ├── robots.ts               noindex, everything — the demo is a link, not a listing
-│   ├── demo/                   Public, read-only, anonymized mirror. Sibling of (app),
-│   │                           never a child — it must not inherit the private chrome
+│   ├── robots.ts               noindex, everything — nothing here is public
 │   ├── (app)/                  Route group: everything behind auth
 │   │   ├── layout.tsx          Navbar + key-expired banner
-│   │   ├── page.tsx            Dashboard (awards, activity, squad, team recap)
-│   │   ├── team/               Roster grid
-│   │   ├── matches/            Full match history, filterable by player
-│   │   ├── champions/          Per-player champion tierlist
-│   │   ├── insights/           Cross-player: LP race, duos, tilt, heatmap
-│   │   ├── player/[slug]/      Player detail: LP, champions, roles, recent form
+│   │   ├── page.tsx            The team: roster board, record, recent series
+│   │   ├── soloq/              The soloQ awards — hall of fame and shame
+│   │   ├── matches/            Every game under one filter, plus the series
+│   │   │                       entry form and one series' detail
+│   │   ├── players/            The five; [slug] is one of them in depth
+│   │   ├── prep/               Draft board, champion notes, counters, comps,
+│   │   │                       tier lists, scouting, pick/bans, opponents
 │   │   ├── notes/              Note CRUD server actions (no page.tsx, no route)
-│   │   ├── settings/           Roster CRUD, Riot key, AI context, logins
+│   │   ├── settings/           Roster CRUD, Riot key, sync controls, logins
 │   │   └── account/            Password change for the signed-in player
 │   └── api/
 │       ├── sync/route.ts       The daily sync (also the navbar button)
-│       ├── summaries/route.ts  The daily AI batch
-│       ├── weekly/route.ts     The weekly Discord recap
-│       └── demo-summaries/     The demo's analyst summaries — a button, never a cron
+│       └── weekly/route.ts     The weekly Discord recap
 ├── lib/
-│   ├── supabase/               Five clients: browser, server, proxy, public, admin
+│   ├── supabase/               Four clients: browser, server, proxy, admin
 │   ├── data-source.ts          `DataSource` — which set of tables a read goes to
-│   ├── loaders/                One loader per page, shared by the private and demo
-│   │                           versions: fetchXRows (cacheable) + buildX (pure)
+│   ├── loaders/                One loader per page: fetchXRows (plain arrays) +
+│   │                           buildX (a pure fold, no I/O)
 │   ├── riot.ts                 Riot HTTP client + DTO types + field whitelists
-│   ├── rate-limiter.ts         Sliding-window limiter (shared by Riot and Gemini)
+│   ├── rate-limiter.ts         Sliding-window limiter for the Riot client
 │   ├── sync.ts                 The sync engine — the densest file in the repo
+│   ├── queues.ts               Which queues are tracked, from when, and where
+│   │                           each one's cursor lives
+│   ├── scope.ts, unified.ts    Which sources a page counts, and the one row
+│   │                           shape that lets the aggregators mix them
+│   ├── team/roster.ts          Role order, and whether a Riot game was the team's
+│   ├── settings/helpers.ts     The non-action half of the settings writes
 │   ├── participant-row.ts      Riot DTO → database row mapping
 │   ├── ddragon.ts              Champion id ↔ display name ↔ icon URL
 │   ├── auth.ts                 Session helpers (React `cache`-deduped)
@@ -165,13 +164,12 @@ src/
 │   │   sessions.ts, streaks.ts, matchups.ts
 │   │                           The pure-function domain layer — no I/O
 │   ├── rank.ts                 Tier/division/LP ↔ sortable & plottable numbers
-│   ├── gemini.ts, summary.ts, summary-analyst.ts, ai-context.ts    The AI layer
 │   └── roles.ts, format.ts, slug.ts, lolalytics.ts, utils.ts
 └── components/
     ├── ui/                     shadcn primitives (Base UI under the hood)
     ├── charts/                 Recharts wrappers + the shared chart palette
-    ├── settings/, player/, insights/, account/, demo/
-    ├── scrims/views/           The body of each scrims page, minus its write actions
+    ├── settings/, player/, players/, matches/, prep/, account/
+    ├── team/views/             The body of each team-game page, minus its writes
     └── (top level)             match-row, award-tile, stat-ranking, navbar, …
 ```
 
@@ -192,13 +190,16 @@ It is also the first thing that would need to change at scale — see
 
 **Writes go through Server Actions, not API routes.** The API routes exist only because
 they need `maxDuration = 60` and either a cron entry point or a budget longer than an
-action should hold. Everything else — adding a player, writing a note, editing AI context
+action should hold. Everything else — adding a player, writing a note, linking an account
 — is a `"use server"` function returning a `PlayerFormState`/`NoteFormState` consumed by
 `useActionState`.
 
-**Most pages are read twice over: once private, once anonymized.** A loader in
+**A page reads one queue because of which source it was handed.** A loader in
 `src/lib/loaders/` takes a `DataSource` and calls `source.table("match_participants")`,
-which resolves to either the real table or its `demo_` view. The views expose the same
-column names, so there is no `if (demo)` branch inside a query and no second copy of a
-loader to drift. See [07](07-frontend.md) for the pattern and
-[04](04-auth-and-security.md) for why the safety lives in Postgres rather than here.
+which resolves to `soloq_participants`, `flex_participants` or `ranked_participants`. No
+loader writes `.eq("queue_id", 420)`, which is the point: a forgotten queue filter produces
+a plausible wrong number rather than an error. See [07 §14](07-frontend.md).
+
+This used to be two axes — the second swapped every table for its `demo_` view so one
+loader served the private app and the public demo. That half went with the demo (ADR-050);
+the queue half is the one that was still earning its keep.

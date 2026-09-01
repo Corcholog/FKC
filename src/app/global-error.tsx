@@ -33,7 +33,7 @@ export default function GlobalError({
           fontFamily: "system-ui, sans-serif",
         }}
       >
-        <title>Something went wrong — Fake Clan SoloQ Tracker</title>
+        <title>Something went wrong — Fake Clan Team Tracker</title>
 
         <h1 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600 }}>
           The app failed to load

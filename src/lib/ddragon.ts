@@ -15,7 +15,7 @@ type ChampionListResponse = {
 // Both DDragon fetches are awaited in the (app) layout, so an unguarded failure
 // here doesn't break a card — it takes down every authenticated page at once.
 // That made this the widest-blast-radius call in the app and the only external
-// one without error handling (Riot, Gemini and Supabase all have it).
+// one without error handling (Riot and Supabase both have it).
 //
 // Neither of these is load-bearing: champion *names* fall back to the stored
 // codename via championDisplayName, and championIconUrl already returns null on
@@ -108,7 +108,7 @@ export function championIconUrlById(ddragonId: string, version: string): string 
  *
  * DDragon versions carry a third segment that is a *build* rather than a patch —
  * it moves for asset fixes that nobody playing would call a new patch — and
- * `scrim_games.patch` wants the two-part number everyone says out loud. Keeping
+ * `team_games.patch` wants the two-part number everyone says out loud. Keeping
  * the build would also split one patch's games across several values, which is
  * the one thing a patch filter cannot survive.
  *

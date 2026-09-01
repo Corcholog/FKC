@@ -1,10 +1,9 @@
 // A stable colour per person, for when there is no photo to show.
 //
 // The avatar fallback renders initials on `bg-muted`, which is the same grey for
-// everyone. That was fine while it was the exception — most of the roster has an
-// uploaded photo. On /demo it is the rule: every player is anonymized, so every
-// avatar is a fallback, and five identical grey circles make the roster grid
-// unreadable at a glance.
+// everyone. That is fine while it is the exception — most of the roster has an
+// uploaded photo — and unreadable the moment two or three don't: identical grey
+// circles make the roster grid impossible to scan at a glance.
 //
 // Hue comes from the name, so it is deterministic across renders and across
 // machines — no state, no palette table to keep in sync. Saturation and

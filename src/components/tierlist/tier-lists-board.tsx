@@ -7,17 +7,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TierListExportNode } from "@/components/tierlist/tier-list-export-node";
 import { TierListView } from "@/components/tierlist/tier-list-view";
 
-// Everyone's tier list, stacked — /tierlists and /demo/tierlists.
+// Everyone's tier list, stacked — /prep/tierlists.
 //
-// `actionsFor` is a slot, the same shape as MatchesList's `notesFor`. Everything
-// that can change a list — Edit, Create, Delete — is a private-only control, and
-// handing this component a `demo` boolean to hide them behind would put the
-// public page one forgotten branch away from rendering a delete button. The demo
-// passes a function that returns only the PNG export, which writes nothing.
+// `actionsFor` is a slot, the same shape as MatchesList's `notesFor`: it returns
+// whichever of Edit, Delete and the PNG export a surface wants on each row. A
+// boolean prop to hide the writing ones behind would put that branch in here,
+// where it renders unless somebody remembers it.
 //
-// The export node stays on both sides: it renders off-screen, is captured
-// entirely in the browser, and its filename comes from the slug — which on the
-// demo is already the alias.
+// The export node renders off-screen and is captured entirely in the browser.
 export function TierListsBoard({
   entries,
   championsById,

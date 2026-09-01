@@ -47,7 +47,7 @@ function NoteItem({
     setDeleting(true);
     setDeleteError(null);
     try {
-      await deleteNote(note.id, playerId);
+      await deleteNote(note.id);
       setConfirmOpen(false);
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : "Failed to delete note.");

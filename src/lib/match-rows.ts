@@ -11,6 +11,8 @@
 // take rows the caller already has.
 
 import { findLaneOpponent, sortByRole } from "@/lib/roles";
+import { mvpAndInt } from "@/lib/score";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllByIds } from "@/lib/supabase/fetch-all";
 import type { DataSource } from "@/lib/data-source";
 // Type-only, so this stays a compile-time shape with no runtime import of the
@@ -23,12 +25,21 @@ import type { TeamComposChampion } from "@/components/match-row";
  * shows up as `undefined` at render, never as an error.
  */
 export const MATCH_ROW_COLUMNS =
-  "id, match_id, player_id, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs, vision_score";
+  "id, match_id, player_id, puuid, team_id, team_position, champion_id, champion_name, win, kills, deaths, assists, damage_dealt_to_champions, total_cs, vision_score, performance_score";
 
 export type MatchRowParticipant = {
   id: string;
   match_id: string;
   player_id: string | null;
+  /**
+   * The account that played it.
+   *
+   * Present on every participant row, tracked or not — it is the natural key of
+   * a Riot account and what `player_accounts` is keyed by. What it buys a match
+   * row is being able to say *which* of somebody's accounts a game was on,
+   * which `player_id` cannot: that names the person.
+   */
+  puuid: string;
   team_id: number;
   team_position: string | null;
   champion_id: number;
@@ -41,6 +52,15 @@ export type MatchRowParticipant = {
   total_cs: number;
   /** Null on games synced before migration 005. */
   vision_score: number | null;
+  /**
+   * 0-100, from lib/score.ts, written at sync time (migration 030).
+   *
+   * Null for two different reasons the UI has to keep apart: the row predates
+   * migration 005 and has no detail columns to score, or it has them and
+   * nobody has pressed "Recompute scores" yet. Both render as an absent score
+   * rather than as a bad one.
+   */
+  performance_score: number | null;
 };
 
 /**
@@ -83,6 +103,15 @@ export type MatchComposition = {
   enemies: TeamComposChampion[];
   /** Null when Riot left the viewer's team_position empty — autofill, disconnects. */
   opponent: TeamComposChampion | null;
+  /**
+   * Whether the viewer had the best or the worst game of *our* players in it.
+   *
+   * Null almost always, and that is the honest answer rather than a gap: the
+   * comparison is between tracked players, and a soloQ match contains exactly
+   * one. In practice these two marks are a full-stack flex feature — see
+   * mvpAndInt in lib/score.ts for why it is scoped that way rather than by team.
+   */
+  award: "mvp" | "int" | null;
 };
 
 /**
@@ -105,9 +134,51 @@ export function matchComposition(
 
   const opponentParticipant = findLaneOpponent(participants, viewer);
 
+  // Computed here rather than in the row because this is the only place holding
+  // all ten participants — the row receives two champion strips by the time it
+  // renders, and the scores are gone by then.
+  const { mvp, int } = mvpAndInt(participants);
+
   return {
     allies: sortByRole(participants.filter((p) => p.team_id === viewer.team_id)).map(toChampion),
     enemies: sortByRole(participants.filter((p) => p.team_id !== viewer.team_id)).map(toChampion),
     opponent: opponentParticipant ? toChampion(opponentParticipant) : null,
+    award: mvp?.id === viewer.id ? "mvp" : int?.id === viewer.id ? "int" : null,
   };
+}
+
+/**
+ * puuid → Riot ID, for accounts belonging to somebody who has more than one.
+ *
+ * Partial on purpose. A match row shows the account only when knowing it tells
+ * the reader something, and for a player with a single account it never does —
+ * so the map simply has no entry, and no surface needs a "does this person have
+ * smurfs" branch of its own.
+ *
+ * One read of a five-row table, so it is not worth the ceremony of paging.
+ */
+export async function multiAccountNames(
+  supabase: SupabaseClient,
+): Promise<Map<string, string>> {
+  const { data, error } = await supabase
+    .from("player_accounts")
+    .select("puuid, player_id, riot_game_name, riot_tag_line")
+    .returns<
+      { puuid: string; player_id: string; riot_game_name: string; riot_tag_line: string }[]
+    >();
+  if (error) throw new Error(error.message);
+
+  const countByPlayer = new Map<string, number>();
+  for (const account of data ?? []) {
+    countByPlayer.set(account.player_id, (countByPlayer.get(account.player_id) ?? 0) + 1);
+  }
+
+  return new Map(
+    (data ?? [])
+      .filter((account) => (countByPlayer.get(account.player_id) ?? 0) > 1)
+      .map((account) => [
+        account.puuid,
+        `${account.riot_game_name}#${account.riot_tag_line}`,
+      ]),
+  );
 }

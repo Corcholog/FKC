@@ -4,12 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { postWeeklyWrap } from "@/lib/weekly";
 
 // The Sunday wrap. Its own route rather than a day-of-week branch inside
-// /api/summaries, for the same reason the summaries batch is its own route
+// its own route rather than a server action, for the same reason the sync is
 // instead of a server action: one cron entry, one handler, and the schedule
 // lives in vercel.json where it can be read rather than in an `if` nobody
 // remembers.
 //
-// Cheaper than the other two jobs — no Riot calls and no Gemini, just two
+// Cheaper than the sync — no Riot calls at all, just two
 // Supabase reads and one webhook — but it keeps the same 60s ceiling for
 // consistency with them.
 export const maxDuration = 60;

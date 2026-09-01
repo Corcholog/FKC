@@ -20,17 +20,14 @@ import type {
   DraftTagRow,
 } from "@/lib/draft/types";
 
-// Three tables carry an author column that the demo views drop, and each is
-// asked for only when the source is private — the same treatment riot_match_id
-// and scrim_series.created_by get. Nothing renders them; the write path is
-// their only reader.
+// Three tables carry an author column. Nothing renders it; the write path is
+// its only reader.
 const TAG_COLUMNS = "id, slug, label, kind, created_at";
 const PROFILE_BASE = "champion_id, roles, tags, notes, updated_at";
 const COUNTER_BASE = "id, counter_champion_id, target_champion_id, note, created_at, updated_at";
 const COMP_BASE = "id, kind, label, champion_ids, win_conditions, notes, created_at, updated_at";
 
-const withAuthor = (base: string, column: string, source: DataSource) =>
-  source.demo ? base : `${base}, ${column}`;
+const withAuthor = (base: string, column: string) => `${base}, ${column}`;
 
 export async function loadDraftTags(
   source: DataSource,
@@ -49,7 +46,7 @@ export async function loadChampionProfiles(
 ): Promise<Map<number, ChampionProfileRow>> {
   const { data, error } = await source.supabase
     .from(source.table("champion_profiles"))
-    .select(withAuthor(PROFILE_BASE, "updated_by", source))
+    .select(withAuthor(PROFILE_BASE, "updated_by"))
     .returns<ChampionProfileRow[]>();
   if (error) throw new Error(error.message);
   return new Map((data ?? []).map((row) => [row.champion_id, row]));
@@ -61,14 +58,14 @@ export async function loadChampionProfiles(
  * draft-strategy feature that accumulates the way scrim picks do — a season
  * of noted matchups is exactly the shape that reaches PostgREST's silent
  * 1000-row truncation. Ordered on the unique pair, which is a total order, so
- * `.range()` paging can't overlap or skip — see lib/scrims/queries.ts:74-84
+ * `.range()` paging can't overlap or skip — see lib/team/queries.ts:74-84
  * for the same trap in the table this pattern is copied from.
  */
 export async function loadChampionCounters(source: DataSource): Promise<ChampionCounterRow[]> {
   return fetchAllRows<ChampionCounterRow>((from, to) =>
     source.supabase
       .from(source.table("champion_counters"))
-      .select(withAuthor(COUNTER_BASE, "created_by", source))
+      .select(withAuthor(COUNTER_BASE, "created_by"))
       .order("counter_champion_id")
       .order("target_champion_id")
       .range(from, to)
@@ -93,7 +90,7 @@ export async function loadChampionCounters(source: DataSource): Promise<Champion
  * Ordered `created_at desc, id`: a total order, so `.range()` paging can't
  * overlap or skip. The table is small today, but the ordering discipline costs
  * nothing here and the next person shouldn't have to work it out — see the
- * same trap documented in lib/scrims/queries.ts:74-84.
+ * same trap documented in lib/team/queries.ts:74-84.
  */
 export async function loadDraftComps(
   source: DataSource,
@@ -108,7 +105,7 @@ export async function loadDraftComps(
   return fetchAllRows<DraftCompRow>((from, to) => {
     let query = source.supabase
       .from(source.table("draft_comps"))
-      .select(withAuthor(COMP_BASE, "created_by", source));
+      .select(withAuthor(COMP_BASE, "created_by"));
     if (options?.kind) query = query.eq("kind", options.kind);
     if (options?.hasAllOf?.length) query = query.contains("champion_ids", options.hasAllOf);
     if (options?.hasAnyOf?.length) query = query.overlaps("champion_ids", options.hasAnyOf);

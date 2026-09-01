@@ -1,15 +1,16 @@
-// The dashboard — `/` and `/demo`.
+// The leaderboards on `/` — who is best and worst at what, over soloQ.
 //
-// The last page that was still a single 760-line file reading Supabase directly.
-// Splitting it followed the rule the other loaders here already follow (see
-// demo-cache.ts): `fetchDashboardRows` returns plain arrays and can sit behind
-// the demo's data cache, `buildDashboard` folds them into the shape the view
-// renders and holds no I/O.
+// It used to carry the activity feed too, which is why it read match rows and
+// all ten participants of each. That list is /matches?view=soloq with fewer
+// entries, and having it twice meant two definitions of "recent". What is left
+// is the awards, which nothing else computes.
 //
-// What stays out of here is everything the demo has no counterpart for —
-// sync_state, the AI recap, match notes, the session. Those are read by the
-// private page and handed to the view as slots, so the public version cannot
-// render them by forgetting a flag. See docs/engineering/07-frontend.md §14.
+// `fetchDashboardRows` returns plain arrays, `buildDashboard` folds them and
+// holds no I/O — the split every loader here follows.
+//
+// What stays out of here is everything that isn't a fold over match rows —
+// sync_state and the AI recap. Those are read by the page and handed to the view
+// as slots. See docs/engineering/07-frontend.md §14.
 
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { rows } from "@/lib/supabase/read";
@@ -17,15 +18,9 @@ import type { DataSource } from "@/lib/data-source";
 import { formatKdaRatio, isoDaysAgo } from "@/lib/format";
 import { rankSortKey } from "@/lib/rank";
 import {
-  groupParticipantsByMatch,
-  loadMatchRowParticipants,
-  matchComposition,
-  type MatchRowParticipant,
-} from "@/lib/match-rows";
-import type { MatchEntry, MatchesListRow } from "@/lib/loaders/matches";
-import {
   aggregateMainRoleStats,
   aggregatePlayerStats,
+  averagePerformanceScore,
   csPerMinute,
   damagePerMinute,
   deadTimeShare,
@@ -46,15 +41,7 @@ import { streaksByPlayer, type Streak } from "@/lib/streaks";
 // client module into a loader.
 import type { RankTone } from "@/components/stat-ranking";
 
-/** Matches read for the activity feed. More than it shows — see `activity`. */
-const ACTIVITY_MATCH_LIMIT = 15;
-/**
- * Rows rendered. One match that three tracked players were in is three rows, so
- * the fetch above has to over-read for this to fill.
- */
-const ACTIVITY_FEED_LIMIT = 10;
-
-/** A superset of `MatchesPlayer`, so these rows can carry the activity feed too. */
+/** Everything a leaderboard row needs to name and link a player. */
 export type DashboardPlayer = {
   id: string;
   slug: string;
@@ -85,22 +72,19 @@ export type DashboardRows = {
   players: DashboardPlayer[];
   /** One entry per tracked participation in the last 7 days. Only the count matters. */
   weekPlayerIds: string[];
-  matchList: MatchesListRow[];
   /** Every tracked player's whole history. The largest read on the site. */
   statRows: DashboardStatRow[];
-  /** All ten participants of each match in `matchList`. */
-  participants: MatchRowParticipant[];
 };
 
 export async function fetchDashboardRows(source: DataSource): Promise<DashboardRows> {
-  const { supabase, demo } = source;
+  const { supabase } = source;
   const matchesTable = source.table("matches");
   const participantsTable = source.table("match_participants");
   const weekAgoIso = isoDaysAgo(7);
 
   // Independent of each other — run them concurrently instead of paying for a
   // sequential round trip each.
-  const [playersResult, weekResult, matchListResult, awardRows] = await Promise.all([
+  const [playersResult, weekResult, awardRows] = await Promise.all([
     supabase.from(source.table("players")).select(PLAYER_COLUMNS).returns<DashboardPlayer[]>(),
 
     supabase
@@ -110,26 +94,12 @@ export async function fetchDashboardRows(source: DataSource): Promise<DashboardR
       .gte(`${matchesTable}.game_creation`, weekAgoIso)
       .returns<{ player_id: string }[]>(),
 
-    // Query from matches (true top-level order, proven safe) rather than
-    // ordering "through" an embedded match_participants collection.
-    //
-    // riot_match_id is not selected on the demo: demo_matches drops it, and
-    // asking a view for a column it doesn't have is a 42703, not a null.
-    supabase
-      .from(matchesTable)
-      .select(
-        `id, ${demo ? "" : "riot_match_id, "}game_creation, game_duration_seconds, ${participantsTable}!inner(player_id)`,
-      )
-      .not(`${participantsTable}.player_id`, "is", null)
-      .order("game_creation", { ascending: false })
-      .limit(ACTIVITY_MATCH_LIMIT)
-      .returns<MatchesListRow[]>(),
 
     // Every tracked player's full history, for the award tiles and the streaks.
     // Paged rather than a bare select: this is the whole roster's history in one
     // read, so it's the largest query on the site and the one where a silent
     // Max rows truncation would quietly rewrite who holds every award. Same
-    // treatment on /team, /champions and /insights.
+    // treatment on the front page's roster board.
     //
     // team_position comes back for two reasons: the performance awards are
     // scoped to each player's main role, and CS/min drops support games — see
@@ -142,7 +112,7 @@ export async function fetchDashboardRows(source: DataSource): Promise<DashboardR
       supabase
         .from(participantsTable)
         .select(
-          `player_id, team_position, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, vision_score, total_time_spent_dead, penta_kills, objectives_stolen, total_damage_taken, pings, first_blood_kill, ${matchesTable}!inner(game_duration_seconds, game_creation)`,
+          `player_id, team_position, win, kills, deaths, assists, total_cs, damage_dealt_to_champions, performance_score, vision_score, total_time_spent_dead, penta_kills, objectives_stolen, total_damage_taken, pings, first_blood_kill, ${matchesTable}!inner(game_duration_seconds, game_creation)`,
         )
         .not("player_id", "is", null)
         .range(from, to)
@@ -156,15 +126,8 @@ export async function fetchDashboardRows(source: DataSource): Promise<DashboardR
   const players = rows(playersResult, "roster");
   const weekPlayerIds = rows(weekResult, "this week's games").map((r) => r.player_id);
 
-  // The demo selects no riot_match_id at all, so the key is missing rather than
-  // null. Normalising here keeps the cached shape the same on both sides.
-  const matchList = rows(matchListResult, "recent matches").map((m) => ({
-    ...m,
-    riot_match_id: m.riot_match_id ?? null,
-  }));
-
   // The embed comes back under the table's own name, so read it off whichever
-  // one was queried rather than hardcoding "matches" — same as loaders/roster.
+  // one was queried rather than hardcoding "matches" — the same trap loaders/players.ts documents.
   const statRows: DashboardStatRow[] = awardRows.map((r) => {
     const embedded = (
       r as unknown as Record<
@@ -179,12 +142,7 @@ export async function fetchDashboardRows(source: DataSource): Promise<DashboardR
     };
   });
 
-  const participants = await loadMatchRowParticipants(
-    source,
-    matchList.map((m) => m.id),
-  );
-
-  return { players, weekPlayerIds, matchList, statRows, participants };
+  return { players, weekPlayerIds, statRows };
 }
 
 export type AwardSpec = {
@@ -212,13 +170,11 @@ export type Dashboard = {
   streaks: Map<string, Streak>;
   hallOfFame: AwardSpec[];
   hallOfShame: AwardSpec[];
-  /** One entry per tracked player per recent match, newest first. */
-  activity: MatchEntry[];
 };
 
 /** Pure. Rows in, everything the view renders out. */
 export function buildDashboard(data: DashboardRows): Dashboard {
-  const { players, weekPlayerIds, matchList, statRows, participants } = data;
+  const { players, weekPlayerIds, statRows } = data;
 
   const playersById = new Map(players.map((p) => [p.id, p]));
   const roster = [...players].sort((a, b) => rankSortKey(a) - rankSortKey(b));
@@ -282,6 +238,7 @@ export function buildDashboard(data: DashboardRows): Dashboard {
 
   const csGames = (agg: PlayerAgg) => agg.csGames;
   const detailGames = (agg: PlayerAgg) => agg.detailGames;
+  const scoredGames = (agg: PlayerAgg) => agg.scoredGames;
 
   // Sub-text doubles as the honesty check on each tile: with no minimum-games
   // gate, a leader off two games should be visibly a leader off two games.
@@ -294,20 +251,36 @@ export function buildDashboard(data: DashboardRows): Dashboard {
   // full history.
   const detailSub = (games: number) => `${gamesSub(games)} with full detail`;
   const mainRoleDetailSub = (games: number) => `${mainRoleSub(games)} with full detail`;
+  const scoredSub = (games: number) => `${mainRoleSub(games)} scored`;
 
   const oneDecimal = (v: number) => v.toFixed(1);
 
   /** `detail` reads a migration-005 column, so it only has an answer once that data exists. */
-  type GatedSpec = AwardSpec & { detail?: boolean };
+  type GatedSpec = AwardSpec & { detail?: boolean; scored?: boolean };
 
   // Whether the roster has any migration-005 data at all. Until the settings
   // backfill has run, the tiles built on it would all be em dashes, so they're
   // dropped from their section rather than padding it out.
   const hasDetailedStats = [...allStats.values()].some((agg) => agg.detailGames > 0);
+  // Its own gate rather than riding on hasDetailedStats: the score is filled in
+  // by a different button (Settings -> Recompute scores), so there is a real
+  // window where the detail columns are backfilled and no game is scored yet.
+  // Two em-dash tiles in the middle of the halls is worse than two fewer tiles.
+  const hasScores = [...allStats.values()].some((agg) => agg.scoredGames > 0);
   const visible = (specs: GatedSpec[]): AwardSpec[] =>
-    specs.filter((spec) => hasDetailedStats || !spec.detail);
+    specs.filter((spec) => (hasDetailedStats || !spec.detail) && (hasScores || !spec.scored));
 
   const hallOfFame = visible([
+    {
+      label: "Best average score",
+      tone: "good",
+      scored: true,
+      ranking: award(averagePerformanceScore, "max", scoredGames),
+      format: oneDecimal,
+      sub: scoredSub,
+      metric:
+        "Mean performance score (0-100) over the player's main-role games, weighing damage, farm, gold, vision, the lane matchup and objectives against the other nine players in each game. Highest first.",
+    },
     {
       label: "Best KDA",
       tone: "good",
@@ -396,6 +369,16 @@ export function buildDashboard(data: DashboardRows): Dashboard {
 
   const hallOfShame = visible([
     {
+      label: "Worst average score",
+      tone: "bad",
+      scored: true,
+      ranking: award(averagePerformanceScore, "min", scoredGames),
+      format: oneDecimal,
+      sub: scoredSub,
+      metric:
+        "Mean performance score (0-100) over the player's main-role games. Same measure as the fame side, read from the bottom. Lowest first.",
+    },
+    {
       label: "Worst KDA",
       tone: "bad",
       ranking: award(kdaRatio, "min"),
@@ -453,23 +436,6 @@ export function buildDashboard(data: DashboardRows): Dashboard {
     },
   ]);
 
-  const participantsByMatch = groupParticipantsByMatch(participants);
-
-  const activity: MatchEntry[] = matchList
-    .flatMap((match) => {
-      const matchParticipants = participantsByMatch.get(match.id) ?? [];
-      // Untracked participants have a null player_id and never get their own row.
-      return matchParticipants
-        .filter((p) => p.player_id)
-        .map((viewer) => ({
-          match,
-          viewer,
-          ...matchComposition(matchParticipants, viewer),
-          player: playersById.get(viewer.player_id as string),
-        }));
-    })
-    .slice(0, ACTIVITY_FEED_LIMIT);
-
   return {
     roster,
     gamesThisWeek: weekPlayerIds.length,
@@ -478,6 +444,5 @@ export function buildDashboard(data: DashboardRows): Dashboard {
     streaks,
     hallOfFame,
     hallOfShame,
-    activity,
   };
 }

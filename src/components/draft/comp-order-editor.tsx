@@ -84,7 +84,7 @@ function SortableChampion({
  * The champions a save will write, in the order it will write them.
  *
  * Doubles as the dialog's preview — it covers the board while open, so without
- * this "did I save blue or red" is unanswerable until you visit /draft/comps —
+ * this "did I save blue or red" is unanswerable until you visit /prep/comps —
  * and as the control for fixing that order. Champions arrive in draft order,
  * which is rarely how anyone reads a comp; dragging them into TOP→SUP is what
  * makes the saved row legible later.

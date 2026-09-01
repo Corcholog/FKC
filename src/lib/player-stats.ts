@@ -8,7 +8,15 @@ export type PlayerStatInput = {
   deaths: number;
   assists: number;
   total_cs: number;
-  damage_dealt_to_champions: number;
+  /**
+   * Null when the source doesn't record it — a team match, which is typed in
+   * from a scoreboard that has no damage column. Never null on a Riot row.
+   *
+   * Null rather than 0, and the distinction is the whole point: 0 is a real
+   * damage figure and would drag an average down, where null means the game
+   * simply doesn't answer the question.
+   */
+  damage_dealt_to_champions: number | null;
   game_duration_seconds: number;
 
   // Added by migration 005. Null on every row synced before it, and on any
@@ -22,6 +30,17 @@ export type PlayerStatInput = {
   total_damage_taken?: number | null;
   pings?: Record<string, number> | null;
   first_blood_kill?: boolean | null;
+
+  /**
+   * The 0-100 performance score (migration 030), with a clock of its own like
+   * every other nullable metric here.
+   *
+   * Two distinct reasons for a null, and neither should count as a zero: the
+   * game predates migration 005 and cannot be scored, or it can be and no
+   * recompute has run yet. A team match is a third — lib/score.ts needs damage,
+   * gold and vision, and a hand-entered scrim records none of them.
+   */
+  performance_score?: number | null;
 };
 
 export type PlayerAgg = {
@@ -30,7 +49,14 @@ export type PlayerAgg = {
   kills: number;
   deaths: number;
   assists: number;
+  // Damage has its own clock for the same reason CS does, one step further on:
+  // CS excludes support games, damage excludes whole *sources*. A team match
+  // records no damage at all, so counting its minutes in the denominator would
+  // divide a real numerator by a duration that never contributed to it — DPM
+  // quietly halved on any mixed aggregate, with the number still rendering.
+  damageGames: number;
   totalDamage: number;
+  damageDurationSeconds: number;
   totalDurationSeconds: number;
   // CS accumulates over non-support games only, with its own game count and
   // duration: support CS/min is structurally low, so folding those games in
@@ -46,6 +72,11 @@ export type PlayerAgg = {
   // duration of the games that reported them, not of every game ever played.
   detailGames: number;
   detailDurationSeconds: number;
+  // Its own counter rather than reusing detailGames: a row can carry the
+  // migration-005 columns and still have no score, in the window between
+  // running the backfill and pressing "Recompute scores".
+  scoredGames: number;
+  totalScore: number;
   totalVisionScore: number;
   totalTimeSpentDead: number;
   pentaKills: number;
@@ -63,13 +94,17 @@ function emptyAgg(): PlayerAgg {
     kills: 0,
     deaths: 0,
     assists: 0,
+    damageGames: 0,
     totalDamage: 0,
+    damageDurationSeconds: 0,
     totalDurationSeconds: 0,
     csGames: 0,
     totalCs: 0,
     csDurationSeconds: 0,
     detailGames: 0,
     detailDurationSeconds: 0,
+    scoredGames: 0,
+    totalScore: 0,
     totalVisionScore: 0,
     totalTimeSpentDead: 0,
     pentaKills: 0,
@@ -89,13 +124,22 @@ function accumulate(agg: PlayerAgg, row: PlayerStatInput) {
   agg.kills += row.kills;
   agg.deaths += row.deaths;
   agg.assists += row.assists;
-  agg.totalDamage += row.damage_dealt_to_champions;
+  if (typeof row.damage_dealt_to_champions === "number") {
+    agg.damageGames += 1;
+    agg.totalDamage += row.damage_dealt_to_champions;
+    agg.damageDurationSeconds += row.game_duration_seconds;
+  }
   agg.totalDurationSeconds += row.game_duration_seconds;
 
   if (!isSupport(row.team_position)) {
     agg.csGames += 1;
     agg.totalCs += row.total_cs;
     agg.csDurationSeconds += row.game_duration_seconds;
+  }
+
+  if (typeof row.performance_score === "number") {
+    agg.scoredGames += 1;
+    agg.totalScore += row.performance_score;
   }
 
   // vision_score is the marker for "this row was synced with full detail" — it
@@ -239,7 +283,9 @@ export function csPerMinute(agg: PlayerAgg): number {
 }
 
 export function damagePerMinute(agg: PlayerAgg): number {
-  return agg.totalDurationSeconds <= 0 ? 0 : agg.totalDamage / (agg.totalDurationSeconds / 60);
+  return agg.damageDurationSeconds <= 0
+    ? 0
+    : agg.totalDamage / (agg.damageDurationSeconds / 60);
 }
 
 // ------------------------------------------------------------
@@ -251,6 +297,18 @@ export function damagePerMinute(agg: PlayerAgg): number {
 // each one lived — so a per-game total mostly measures how long the games ran.
 // Rate per minute is what actually separates someone who wards well from
 // someone who plays 40-minute games.
+/**
+ * Mean performance score over the games that have one.
+ *
+ * Averaged over scoredGames, not games: a player whose history is half
+ * pre-backfill would otherwise be averaged against zeroes and come out looking
+ * like the worst player on the roster by a distance. Returns 0 when nothing is
+ * scored, which the award layer reads as "no answer" and drops.
+ */
+export function averagePerformanceScore(agg: PlayerAgg): number {
+  return agg.scoredGames === 0 ? 0 : agg.totalScore / agg.scoredGames;
+}
+
 export function visionScorePerMinute(agg: PlayerAgg): number {
   return agg.detailDurationSeconds <= 0
     ? 0

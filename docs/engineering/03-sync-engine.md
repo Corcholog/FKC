@@ -24,13 +24,27 @@ Four endpoints are used, and only four:
 
 ```ts
 // src/lib/riot.ts
-getPuuidByRiotId()        GET /riot/account/v1/accounts/by-riot-id/{name}/{tag}   (americas)
-getRankedSoloMatchIds()   GET /lol/match/v5/matches/by-puuid/{puuid}/ids?queue=420 (americas)
-getMatchById()            GET /lol/match/v5/matches/{matchId}                      (americas)
-getRankedSoloEntry()      GET /lol/league/v4/entries/by-puuid/{puuid}              (la2)
+getPuuidByRiotId()   GET /riot/account/v1/accounts/by-riot-id/{name}/{tag}          (regional)
+getMatchIds()        GET /lol/match/v5/matches/by-puuid/{puuid}/ids?queue&startTime (regional)
+getMatchById()       GET /lol/match/v5/matches/{matchId}                            (regional)
+getLeagueEntries()   GET /lol/league/v4/entries/by-puuid/{puuid}                    (platform)
 ```
 
-`queue=420` filters server-side, so flex/normals/ARAM never cost a call or a row.
+`queue` filters server-side, so a walk for one queue never spends a detail call on
+another, and normals/ARAM never cost a call or a row. `startTime` matters for the same
+reason at a different scale: flex history reaches back years and the app tracks it from
+June, so without a floor the walk would page through everything older to discover it
+isn't wanted.
+
+`getLeagueEntries` returns **every** queue the account is ranked in from one response, so
+flex rank costs nothing on top of solo.
+
+**The two routing schemes stopped being academic when the roster gained a BR account.**
+BR and LAS are different platforms (`br1` vs `la2`, so rank is a different host) and the
+same region (both `americas`, so match history and Riot ID lookup are not). `riot.ts`
+throws on a platform it doesn't know rather than defaulting to `LA2` — that default
+returns an empty entry list for a BR account, which reads as "unranked forever" with
+nothing in any log to say why.
 
 ## 2. Rate limiting: the number that drives everything
 
@@ -175,8 +189,14 @@ that assumption, and both happen routinely:
    game. That one game exists, so the walk stops at it, and the new player's real
    history is never backfilled.
 
-The fix is `players.synced_through`: **the oldest `game_creation` this player's history
-is confirmed *contiguous* down to.** Not "the newest match seen" — contiguity.
+The fix is a cursor: **the oldest `game_creation` this history is confirmed *contiguous*
+down to.** Not "the newest match seen" — contiguity.
+
+Since migration 023 it lives on `player_accounts`, and there are two of them —
+`synced_through_solo` and `synced_through_flex`. Two rather than one because the queues
+have different tracking start dates (`src/lib/queues.ts`), so a single value could not
+describe both: it would either claim flex coverage back to July that doesn't exist, or
+re-walk soloQ to June every run.
 
 ```ts
 // src/lib/sync.ts:347 — inside the page loop
@@ -242,7 +262,7 @@ Strictly *under* 15:00 matters: an FF15 surrender lands at ~900–960s, so it st
 as the real loss it is. Only games that ended before the 15-minute mark could arrive are
 dropped.
 
-Plus `queueId !== 420` as defensive insurance, even though the id query already filtered
+Plus a tracked-queue membership test, even though the id query already filtered
 server-side.
 
 ## 7. The route: locking and failure recording
@@ -284,9 +304,10 @@ when the key is invalid.
 
 ## 8. Two more entry points into the same engine
 
-**`backfillPlayerHistory(admin, playerId)`** — one player, `synced_through` forced to
-`null`, full walk from the tracking start. Called by `updatePlayer` when a Riot ID edit
-resolves to a genuinely different puuid.
+**`backfillAccountHistory(admin, puuid)`** — one account, both cursors forced to `null`,
+full walk from each queue's tracking start. Called whenever an account is attached to a
+player, because nothing stored says anything about its coverage and waiting for the daily
+sync to find it 200 ids at a time is not a backfill.
 
 **`refetchMatchDetails(admin)`** — re-reads match detail for matches already stored and
 rewrites their participant rows. Only needed after a migration widens what's captured
@@ -299,6 +320,85 @@ rewrites their participant rows. Only needed after a migration widens what's cap
 - Processes oldest-`fetched_at` first and bumps `fetched_at` as it goes, so an
   interrupted run leaves unprocessed rows at the front of the queue. **The index is the
   resume mechanism.**
+
+## 8b. Two queues, one walk each
+
+`syncAccountQueue(admin, account, queue, …)` is the old `syncPlayerMatches` with three
+things parameterised: the queue id, the cursor column, and the tracking start. `runSync`
+loops accounts × requested queues, skipping any account whose `track_*` flag for that queue
+is false.
+
+**The walk is ordered by `last_walked_at`, oldest first, and that is a bug fix rather than
+a nicety.** The loop used to restart at the same player every run, which was invisible
+while the tracking window was a few weeks — one run covered everybody. A backfill spanning
+several runs, which is exactly what flex-since-June is, turns that into starvation: the
+first account is walked five times and the fifth is never walked at all.
+
+**A game the other queue's walk turns up is kept.** The exclusion rule tests membership of
+every tracked queue rather than equality with the queue being walked, so stumbling on a
+flex game during a soloQ walk stores and counts it instead of burning the detail call. The
+other queue's cursor is untouched, which stays correct: finding one of its games says
+nothing about its contiguity.
+
+**`/api/sync?queues=` picks the scope**, defaulting to both — so the cron URL and the
+navbar button need no parameter, and an unrecognised value degrades to "sync everything"
+rather than to "sync nothing", which would look exactly like a working sync on a quiet day.
+One lock still covers every queue: the rate limit and the 60-second budget are shared, so
+two concurrent runs would spend the same allowance twice and both come back partial. Only a
+queue that *finished* stamps its `sync_state.last_*_sync_at`.
+
+## 8c. A flex game is the team's, or it is nobody's
+
+Flex is a queue the main team plays *as* the team, and this app has no use for any other
+kind: three of the roster plus two friends is a real game for those three and says nothing
+about the team, which is the only subject the flex rows have. So the exclusion rule gained
+a clause — a flex match is kept when **five of the main team were on one side**
+(`isFullStack`, `lib/team/roster.ts`), and otherwise gets the same treatment as a remake.
+
+**Resolved through `player_id`, not puuid.** It is the same person in the same seat
+whichever of their accounts they queued on, which is exactly the distinction migration 023
+made possible.
+
+**"Not stored" means no participant rows.** The `matches` row is still written, marked
+`excluded` — the reason is in §5 and it is the same one remakes have: *an unrecorded match
+id is one the walk would re-fetch on every future sync forever*. Every read path joins
+through the participant views, so a match with none is invisible to every stat.
+
+**What it does not save is the detail call.** An id page returns ids; the lineup is only
+knowable from the response. So the saving is rows and render-time noise, not Riot budget —
+and that changes which account is worth walking, see below.
+
+**The judgement is made against the roster as it stands now.** A game skipped before a
+roster change stays skipped. Recovering it means deleting those `excluded` marker
+rows for queue 440 and nulling the flex cursors, then re-syncing.
+
+**This used to be defensible against a misconfigured roster.** With fewer than five people
+assigned, no flex game could qualify, so the queue was dropped from the run and
+`SyncSummary.skippedFlexNoTeam` reported the skip — "no flex arrived" and "flex cannot
+arrive" look identical from outside, and only one of them is fixed by pressing Sync again.
+Migration 028 made `team_role` `not null` on a five-row table, so that state is unreachable
+and both the branch and the hint are gone.
+
+The reasoning is kept because it is why the walk still costs what it does: walking it would
+spend a detail call on every
+game to reject it *and* leave marker rows that block reconsidering them once the roster is
+set up. "No flex arrived" and "flex cannot arrive" look identical from outside, and only
+one of them is fixed by pressing Sync again.
+
+### One tracked account finds them all
+
+A qualifying flex game contains five of the team, so with a five-person roster **every one
+of them is in every game** — and all five accounts return the same match ids. Formally,
+with `N` members and a five-player threshold a game can omit at most `N - 5` of them, so
+`N - 4` accounts cover every possible lineup. At `N = 5` that is one.
+
+The detail call is already paid once (`riot_match_id` is unique; the second inserter takes
+the `23505` branch), so what the extra accounts cost is id pages — four wasted calls per
+run, and four times that during a backfill.
+
+**And the right one to walk is the account that plays flex *only* with the team**, because
+every game that isn't theirs still costs a detail call to find that out. `/settings/team`
+names the tracked accounts and says when there are more than `N - 4` of them.
 
 ## 9. Cost model
 

@@ -40,6 +40,10 @@ able to defend out loud.
 
 ## ADR-003 — `players.id` is the Riot puuid
 
+> **Superseded by ADR-044.** Kept as written: it was right for a roster where every
+> person had exactly one account, and the reasoning below is still what makes
+> `player_accounts.puuid` a primary key.
+
 **Context.** Every entity needs an identity. Riot IDs (`name#tag`) are renameable; puuids
 are not.
 
@@ -625,7 +629,7 @@ must always agree.
 top of the draft and the K/D/A/CS, which is exactly the kind of weight that stops people
 entering anything. The cost is that nothing can say who first-picked or who countered whom.
 Side is recorded and blue picks first, so `hadFirstPick` is as close as this data gets, and
-`/scrims/drafts` says so on the page rather than implying more precision than it has. Ban
+`/team/drafts` says so on the page rather than implying more precision than it has. Ban
 *order* is kept, because you type bans in order anyway and it's free.
 
 ---
@@ -636,8 +640,8 @@ Side is recorded and blue picks first, so `hadFirstPick` is as close as this dat
 Reusing `matches` and `match_participants` with a queue id of 0 is the obvious move, and it
 would have made `MatchRow` and every stat module work on scrims for free.
 
-**Decision.** Four new tables — `scrim_opponents`, `scrim_series`, `scrim_games`,
-`scrim_picks`. Reuse the *column names*, not the tables.
+**Decision.** Four new tables — `team_opponents`, `team_series`, `team_games`,
+`team_picks`. Reuse the *column names*, not the tables.
 
 **Context for why the obvious move fails.** Three things, in increasing order of severity:
 
@@ -655,11 +659,11 @@ would have made `MatchRow` and every stat module work on scrims for free.
    missing one is not a crash. It's a scrim quietly counting toward somebody's ranked KDA
    award, which nobody notices until the number is wrong and nobody knows why.
 
-The two domains also answer different questions. Nothing on `/scrims` wants an LP graph, and
+The two domains also answer different questions. Nothing on `/team` wants an LP graph, and
 nothing on the dashboard wants a ban list.
 
 **Consequence.** The reuse that was actually worth having is name-level, and it's total.
-`scrim_picks.team_position` holds Riot's own `TOP/JUNGLE/MIDDLE/BOTTOM/UTILITY` strings, so
+`team_picks.team_position` holds Riot's own `TOP/JUNGLE/MIDDLE/BOTTOM/UTILITY` strings, so
 `sortByRole`, `formatRole` and `mainRole` from `lib/roles.ts` take scrim rows with no
 adapter — `sortByRole` is already generic over `{ team_position: string | null }`. And a
 pick joined to its game is structurally a `ChampionStatInput`, so `topChampionsByPlayer`,
@@ -667,7 +671,7 @@ pick joined to its game is structurally a `ChampionStatInput`, so `topChampionsB
 `byWinRateThenGames` all work unchanged (`damage_dealt_to_champions` is passed as 0 —
 scrims don't record damage, and nothing renders a damage column for them).
 
-Bans are `integer[]` on `scrim_games` rather than rows, following `match_participants.items`:
+Bans are `integer[]` on `team_games` rather than rows, following `match_participants.items`:
 a ban carries no role and no player, the order is the data, and there are at most five a
 side. Opponent *rosters* are derived from the nicknames on enemy picks rather than stored,
 so scouting costs no extra entry step — the price is that a typo splits one person in two,
@@ -677,11 +681,11 @@ The soloq side of the app was not touched by any of this, which was the point.
 
 ## ADR-030 — Notes on a scrim game are an authored thread, not a text column
 
-**Context.** ADR-029's tables shipped `scrim_games.notes`, a single `text` column, and the
+**Context.** ADR-029's tables shipped `team_games.notes`, a single `text` column, and the
 entry form never grew a field for it — so a game's notes were rendered but unwritable. When
 the ask came in ("users should be able to write notes on every scrim match"), the cheap fix
 was to add the missing textarea and make it editable in place, the way `OpponentNotesForm`
-edits `scrim_opponents.notes`.
+edits `team_opponents.notes`.
 
 That fix is wrong for this shape of data. A scouting note on an opponent is one team's
 shared summary and genuinely wants one field. A scrim game is reviewed by five people who
@@ -690,8 +694,8 @@ two of them typing means one set of observations disappears with nothing to indi
 existed. The app already had the right shape for this — `match_notes` is a thread of
 authored rows — and the group already knows that UI from soloq match rows.
 
-**Decision.** `scrim_game_notes`, mirroring `match_notes`. Migration 013 creates it, copies
-any existing `scrim_games.notes` across (attributed to the series' `created_by`, keeping the
+**Decision.** `team_game_notes`, mirroring `match_notes`. Migration 013 creates it, copies
+any existing `team_games.notes` across (attributed to the series' `created_by`, keeping the
 original `created_at`), and drops the column. In practice it copied nothing, since the column
 was never writable — it runs the copy first because "I'm sure it's empty" is not a reason to
 drop somebody's text.
@@ -714,7 +718,7 @@ not. So notes get `select_all` + author-scoped insert/update/delete.
 **Consequence.** The entry form finally gets its per-game note field, and what's typed there
 becomes the first row of that game's thread rather than a separate entry-time field sitting
 beside a thread that says the same thing. Notes load via `fetchAllByIds` on the two pages
-that render them and nowhere else — prose feeds no aggregate, so `/scrims`, `/scrims/drafts`
+that render them and nowhere else — prose feeds no aggregate, so `/team`, `/team/drafts`
 and the scouting pages don't pay for it. `revalidateScrimNotes()` is likewise narrower than
 `revalidateScrims()`: writing a sentence shouldn't recompute every stat on the site.
 
@@ -762,7 +766,7 @@ under a question nobody can read.
 this team plays a champion in, what it's *for* (engage, poke, wave clear), and a note. The
 app has never had a champions table. Names, icons and the numeric id space come from Data
 Dragon at request time (`src/lib/ddragon.ts`, 24h cache with an uncached retry on failure),
-and `champion_tier_lists`, `scrim_picks` and `scrim_games.ally_bans` already store bare
+and `champion_tier_lists`, `team_picks` and `team_games.ally_bans` already store bare
 `integer` ids with no foreign key.
 
 The alternative — a `champions` table seeded from DDragon — is the obvious relational
@@ -859,6 +863,10 @@ table would need.
 
 ## ADR-034 — Anonymize in Postgres, not in the render layer
 
+> **Superseded by ADR-050.** The public demo is deleted (migration 027). Kept as written:
+> it records why the demo was built the way it was, which is the part worth having if
+> anything like it is ever wanted again.
+
 **Context.** A member of the group applied for a coaching role, showed this app as the tool
 the group analyses itself with, and the hiring staff wanted to look at it. They obviously
 cannot be given logins. The requirement that follows is not "the pages display aliases" —
@@ -892,6 +900,10 @@ so a name that turns out to be too on-the-nose is one `update` away.
 ---
 
 ## ADR-035 — One deployment with public routes, not a separate demo project
+
+> **Superseded by ADR-050.** The public demo is deleted (migration 027). Kept as written:
+> it records why the demo was built the way it was, which is the part worth having if
+> anything like it is ever wanted again.
 
 **Context.** The alternative shape is a second Vercel project pointed at a scrubbed copy of
 the database, or a fork with fixtures.
@@ -960,7 +972,7 @@ one to engineer for.
 text somebody typed, and `compTitle()` already falls back to champion names, so an
 un-overridden comp reads as its portraits rather than as a gap.
 
-Six tables get **no view at all**: `match_notes`, `scrim_game_notes`, `player_ai_summaries`,
+Six tables get **no view at all**: `match_notes`, `team_game_notes`, `player_ai_summaries`,
 `team_ai_summary`, `clan_profile`, `sync_state`. The last is the most important — it holds
 the plaintext Riot key and a `last_error` in which Riot embeds puuids.
 
@@ -971,6 +983,10 @@ reference pages lose nothing, because nobody had written notes on them.
 ---
 
 ## ADR-038 — The demo's AI is a second prompt profile, not the same prompt with aliases
+
+> **Superseded by ADR-050.** The public demo is deleted (migration 027). Kept as written:
+> it records why the demo was built the way it was, which is the part worth having if
+> anything like it is ever wanted again.
 
 **Context.** The private player summary is written *for the person it is about*: it opens
 with what their friends wrote, quotes their own match notes back at them, and answers "how
@@ -1000,6 +1016,10 @@ as an untranslated leftover rather than as a choice.
 ---
 
 ## ADR-039 — Generated public text lands in a draft row, and publishing is a second write
+
+> **Superseded by ADR-050.** The public demo is deleted (migration 027). Kept as written:
+> it records why the demo was built the way it was, which is the part worth having if
+> anything like it is ever wanted again.
 
 **Context.** `/api/demo-summaries` generates prose that appears on a page with no login in
 front of it. The whole point of that feature is that a person reads it first.
@@ -1046,7 +1066,7 @@ where they had a particular champion on the map.
 Two independent choices fall out of that: where the filter state lives, and where the
 narrowing happens.
 
-**Decision.** The filter is `searchParams`, parsed by a pure `parseScrimFilter`, and applied
+**Decision.** The filter is `searchParams`, parsed by a pure `parseTeamMatchFilter`, and applied
 by a pure predicate over the array `loadScrimGames` already returned. `TeamFilterBar` is a
 client component whose only job is to `router.push` a new query string.
 
@@ -1065,7 +1085,7 @@ version.
 The costs, both real:
 
 - **Every matching game renders.** There is no pagination, so a narrow filter is fast and
-  a bare `/scrims/team` grows with the archive. Same shape as `/draft/counters` and listed
+  a bare `/team/scouting` grows with the archive. Same shape as `/draft/counters` and listed
   in [10](10-known-gaps.md).
 - **The champion filters are AND, and over picks only.** That is the right default — "we
   faced K'Sante *and* Maokai" is a question about a composition, and OR returns nearly
@@ -1073,7 +1093,7 @@ The costs, both real:
   about a champion that was *banned*. Both are additions to `filters.ts` rather than
   redesigns, and neither was worth guessing at before somebody wanted it.
 
-No migration. `scrim_series.kind` has distinguished `'scrim' | 'friendly' | 'official'`
+No migration. `team_series.kind` has distinguished `'scrim' | 'friendly' | 'official'`
 since migration 012, which is the axis a tier-2 team actually needs — practice separated
 from the games that counted — so the filter this ADR is about needed no new column.
 
@@ -1082,17 +1102,17 @@ from the games that counted — so the filter this ADR is about needed no new co
 ## ADR-041 — A ban plan is a column, and it is not the ban history
 
 **Context.** The scouting page already answers "what have they banned against us" and "what
-have we banned against them", both from `scrim_games`. Neither is what a coach writes down
+have we banned against them", both from `team_games`. Neither is what a coach writes down
 before a series. That is a *decision* — these three are coming off the board on Saturday —
 and it was living in whatever chat the team happened to use, which is where prep goes to
 die.
 
-**Decision.** `scrim_opponents.target_bans integer[]`, ordered by priority, capped at five
+**Decision.** `team_opponents.target_bans integer[]`, ordered by priority, capped at five
 (migration 020). One column, not a table, and deliberately separate from the ban history it
 sits next to on the page.
 
 **Consequences.** A plan has no attributes of its own: no author, no per-entry note, no
-history. That is an array, and the same call `scrim_games.ally_bans` made in 012 and
+history. That is an array, and the same call `team_games.ally_bans` made in 012 and
 `draft_comps.champion_ids` in 017. If a plan ever grows a reason per champion, *that* is
 when it becomes a table; nothing here makes that harder.
 
@@ -1129,6 +1149,10 @@ having worked.
 
 ## ADR-042 — The demo's front page is the dashboard, and its recap is missing on purpose
 
+> **Superseded by ADR-050.** The public demo is deleted (migration 027). Kept as written:
+> it records why the demo was built the way it was, which is the part worth having if
+> anything like it is ever wanted again.
+
 **Context.** `/demo` opened on the roster grid — `/team`'s page, not `/`'s. That was the
 shape the demo was built in: the roster is the cheapest page to anonymize, and the dashboard
 was the one page still reading Supabase inline in a 760-line `page.tsx`, so it was the
@@ -1162,6 +1186,10 @@ which is why it is the front page in the private app too.
 ---
 
 ## ADR-043 — The demo's recap is a second prompt profile, and the anonymising happens in the gatherer
+
+> **Superseded by ADR-050.** The public demo is deleted (migration 027). Kept as written:
+> it records why the demo was built the way it was, which is the part worth having if
+> anything like it is ever wanted again.
 
 **Context.** ADR-042 shipped the demo dashboard without its recap card, and said why: the
 private recap is written nightly in the group's own voice, opening with
@@ -1201,3 +1229,337 @@ Two smaller calls:
   the deploy from the migration: before 021 ran, the view didn't exist, the read was a
   `42P01` in the log, and the dashboard rendered whole without it. That was verified in that
   order rather than assumed.
+
+---
+
+## ADR-044 — A player is a person; the accounts are rows
+
+**Context.** ADR-003 made `players.id` the Riot puuid, and the reasoning held for two
+years: one person, one account, and the sync could compare `match_participants.player_id`
+straight against `participant.puuid`. Three things broke it at once — the roster plays flex
+on accounts that are not the ones they solo queue on, somebody added a soloQ account on BR
+while the rest are on LAS, and smurfs existed all along with nowhere to put them.
+
+**Decision.** `players.id` becomes a surrogate `uuid`. `player_accounts` holds one row per
+puuid, with its own platform, rank snapshot, per-queue cursors and per-queue tracking
+flags. The sync resolves participants through a `puuid → player` map.
+
+**Consequence.** The lookup ADR-003 was avoiding is now unavoidable, and it costs one Map
+built once per run — which was never the real expense. Three things stay denormalised on
+`players` rather than becoming joins: the primary account's Riot ID, the best soloQ rank by
+`ladderPoints`, and `wins`/`losses` (still counted through `soloq_participants`, so flex
+cannot inflate a rank badge). That is what let every rank surface in the app go untouched.
+
+It also **retires the account swap**. Pointing a roster slot at a different Riot account
+used to be an UPDATE of a primary key, which threw the old account's history away; it is an
+insert now, and both are kept. ADR-003's `ON UPDATE CASCADE` machinery, and migration 022
+which existed to fix a gap in it, are dead weight rather than load-bearing.
+
+---
+
+## ADR-045 — Flex shares the match tables; the queue filter becomes a view
+
+**Context.** ADR-029 gave scrims their own tables, and its argument was not about shape —
+it was that *every soloQ read path joins participants with no queue filter*, so shared rows
+would poison a dozen modules where missing one produces a wrong number rather than an
+error. Flex has the identical Riot payload, so separate tables would duplicate the sync
+writer, the row mapper and every query. But the objection is exactly the same.
+
+**Decision.** Flex rows go into `matches`/`match_participants` with `queue_id`
+denormalised onto the participant row, and every existing read is pointed at a
+queue-scoped **view** — `soloq_participants` — through `DataSource`, which already existed
+to swap table names for the demo.
+
+**Consequence.** The filter stops being something anybody has to remember: a page reads
+soloQ because of which view it was handed. `privateSource()` defaults to `solo`, so every
+page written before flex reads exactly what it read before, untouched. Two costs, both
+named in [10](10-known-gaps.md): `select *` in a view is expanded at creation, so adding a
+participant column means recreating three views; and eight reads bypass `DataSource` and
+name the view by hand.
+
+Team matches stay in their own tables regardless, and that is not inconsistency. A flex
+game is a Riot match with a queue id and ten resolvable accounts. A team match has an
+opponent, a draft nobody can recover from the API, no damage, and is typed in or read from
+a `.rofl`. Same statistics, different records.
+
+---
+
+## ADR-046 — A unified row is shaped like a participant row
+
+**Context.** Three sources of games, and a page that can count any combination of them.
+The obvious design is a common interface with adapters on both sides, and a second set of
+aggregators over it.
+
+**Decision.** The unified row *is* a `match_participants` row — snake_case column names
+included — and the existing aggregators take it as-is. What a source cannot answer is
+`null`, never `0`.
+
+**Consequence.** No new aggregation code, and no chance of the mixed numbers disagreeing
+with the soloQ ones, because they are computed by the same functions. `lib/team/stats.ts`
+had already proved this with `toChampionStatInput`; the only thing new is generalising it.
+
+The `null` half is what made it honest, and it forced one real change: damage needed its
+own clock in both `player-stats.ts` and `champion-stats.ts`. Without it, a mixed aggregate
+divides a real damage total by minutes from games that never recorded any — DPM halved,
+with the number still rendering. That is the same two-clock rule CS and the migration-005
+detail metrics already followed, and it is a no-op on Riot rows.
+
+---
+
+## ADR-047 — A flex game counts as "the team" only at five
+
+> **Superseded by ADR-048.** The threshold survives unchanged; where it is applied does
+> not. Kept as written because the argument below is why the gate exists at all.
+
+**Context.** Team-wide statistics mix team matches with flex. A team match is
+unambiguous: one opponent, and `win` is ours. Flex is not — the roster queues as a five,
+as a three with friends, and occasionally against itself.
+
+**Decision.** Split flex three ways (`lib/flex-team.ts`). Five tracked players on one side
+is the team and joins the team record. Fewer is some of the roster, and counts in the
+per-player table only. Tracked players on both sides is a civil war and counts nowhere —
+it is reported as a number and never as a result.
+
+**Consequence.** The overview shows two numbers that count different things, and says so.
+The alternative — treating any flex game with a tracked player as a team game — inflates
+the record with games the team did not play and inverts on the civil wars, which is the
+kind of wrong that looks plausible. The threshold is a constant (`FULL_STACK`) rather than
+a setting, because "the team" is five people and that is not a preference.
+
+---
+
+## ADR-048 — The main team is a column, and the flex rule moves to write time
+
+> **Partly superseded by ADR-050.** The column and the write-time gate both stand; what
+> changed is that `team_role` is now `not null` and unique, so "who is on the team" has
+> stopped being a question any read has to ask. The flex gate is unchanged.
+
+**Context.** This app had become two trackers sharing a database — a soloQ tracker for a
+group of friends, and a competitive tracker for five of them across scrims, tournaments and
+ranked flex — and nothing in the schema said which was which. Every `/team` page selected
+the whole `players` table with no predicate. The only rule that existed was ADR-047's, and
+it is a rule about *a match*: it can decide whether one flex game was the team's and it
+cannot name a player who did not play, which is most of what a team page needs to say.
+
+`track_flex` on `player_accounts` looked like the missing flag and was not. It is a
+Riot-call budget, read only by the sync.
+
+**Decision.** `players.team_role` — nullable, one of the five positions, non-null meaning
+"on the main team". `lib/team/roster.ts` is the single reader. And ADR-047's threshold
+moves from render time into `runSync`: a flex match is stored only when five of the team
+were on one side, resolved through `player_id`.
+
+**Consequence.** Two of ADR-047's three cases become unwritable — a partial stack never
+lands, and five of the team on one side of a ten-player game leaves no room for the team on
+the other — so `flex-team.ts`, the civil-war branch, the nullable `win` and the two chips
+explaining what the record excluded all went. The rule is enforced once, where the data
+enters, rather than in every fold that reads it.
+
+Three things follow that are worth stating rather than discovering:
+
+**A skipped game stays skipped.** The gate judges against the roster as it stands now, so
+adding a sixth member later does not recover games passed over before. Recovery is deleting
+those `excluded` marker rows and nulling the flex cursors.
+
+**It saves rows, not Riot calls.** An id page returns ids, so the lineup is only knowable
+from the detail response — which is spent either way. What it does change is that walking
+more than `N - 4` accounts for flex is now provably redundant, since every qualifying game
+contains five of the team (see [03 §8c](03-sync-engine.md)).
+
+**Membership decides what is counted; it does not decide what is named.** The name lookups
+under `/team` still read every player, because a substitute who played a scrim needs their
+name rendered. Narrowing those would print "Unknown" rather than leaving them out — a
+different bug, and a quieter one.
+
+---
+
+## ADR-049 — Two halves, and where a control lives
+
+> **Superseded by ADR-050.** There are no longer two halves to navigate between. The rule
+> the second half of this entry states — *a different query is a route, the same data viewed
+> differently is `useState`* — survives it and is still the one in force.
+
+**Context.** Once the team stopped meaning "everyone", the app had two subjects and one
+flat navbar of seven links, no two of which announced which subject they belonged to.
+
+**Decision.** The navigation groups into **Clan** (dashboard, roster, matches, champions,
+tier lists, insights — everyone, on solo queue) and **Main team** (the `/team` section and
+the draft tools). `/team/roster` moved out to `/roster`, where it always belonged: it is
+nine players sorted by soloQ rank. `/settings` became a section with five tabs, following
+the pattern `/team` and `/draft` already set.
+
+**Consequence.** The split is now visible without being explained. It also settles a
+recurring question — *should this control be a link or client state* — by making the answer
+structural: **a different query is a route, the same data viewed differently is `useState`**.
+The scope switch, the roster rail and the source tabs on `/team/players` are links; the
+win-rate toggle is state, because all three of its series are computed in one pass and
+handed over together.
+
+The cost is the desktop row, which is eight links wide and separated by a rule rather than
+by headings — two words of section label cost more there than they explain. The sheet gets
+real labels, because vertical space is free.
+
+
+---
+
+## ADR-050 — One tracker, and the roster is the table
+
+**Context.** This app was two trackers sharing a database: a soloQ tracker for a group of
+friends, and a competitive tracker for five of them. ADR-048 made that split explicit with
+`players.team_role`, and ADR-049 made it visible in the navigation. Both were the right
+answer to "how do two subjects share one deployment".
+
+There is one subject now. The app tracks a five-person team across solo queue, ranked flex
+and the games it plays as a team — and once the wider group stopped being an audience,
+every structure that existed to keep the two apart became a structure with nothing on the
+far side of it.
+
+**Decision.** Four things, and they only make sense together:
+
+**The `players` table is the team.** `team_role` becomes `not null` and unique — five rows,
+one per position, enforced by a deferrable unique constraint (migration 028). Every player
+without a role is deleted, along with the matches nobody left in them played.
+`loadTeamRoster` stops filtering, because there is nothing to filter out.
+
+**The `/team` prefix is deleted.** `/` is the team overview with the soloQ leaderboards
+under it; `/matches` merges the team-game history with the paginated soloQ one behind a
+single filter; `/players` and `/players/[slug]` merge the roster grid, the team's per-player
+page and the old player profile. Draft prep, tier lists, scouting, pick/ban aggregates and
+opponents collapse into `/prep`.
+
+**One vocabulary for "which games".** `lib/scope.ts`'s four-preset `ScopeName` and
+`lib/scope.ts`'s `PlayerSource` were separate because one page was about a
+person's solo queue and the other about their competitive record. Those are one page now, so
+there is one set of names: `all | competitive | flex | soloq`.
+
+**The public demo is deleted** — routes, views, alias tables and the analyst-summary
+generator (migration 027).
+
+**Consequence.** The demo is the one worth stating plainly, because its cost was never the
+views. It was the invariant they created: *every page needed an anonymized twin*, built from
+the same view component with the unsafe slots omitted. That doubled the price of every route
+in the app, forever, and it is gone. So is `DataSource`'s demo axis; the queue axis stays,
+because that one still prevents a class of silent wrong number.
+
+Enforcing the roster at five buys a rule the sync used to have to defend against. It skipped
+the whole flex queue when fewer than five people had a role, and reported the skip, because
+"no flex arrived" and "flex cannot arrive" look identical from outside. That state is now
+unreachable, so `SKIPPED_FLEX_HINT` and the branch behind it are gone.
+
+**What it costs.** A substitute cannot be a row in `players`. They remain representable
+where it matters — `team_picks.player_name` records a nickname for anyone unlinked, and the
+name lookups on the match surfaces stay wide so a departed player's scrim still renders with
+a name on it. But a flex game a sub played is judged by `isFullStack`, which wants five of
+the five, so it is rejected. That was the trade taken knowingly for a roster that has never
+changed.
+
+And roster *history* is still not modelled. `team_role` has no join or leave date, so a
+change re-labels the past. Enforcing five makes such a change a deliberate swap rather than
+a quiet addition, which is at least visible — it is not the same as recording it.
+
+---
+
+## ADR-051 — Cutting the app back to what gets read
+
+**Context.** ADR-050 merged two trackers into one and moved everything to where it belonged.
+It did not ask whether each thing was worth keeping. Running the result for a while answered
+that: several panels were built because the data supported them, not because anybody looked
+at them, and a few were actively misleading at this sample size.
+
+**Decision.** Delete, in each case for a reason rather than for tidiness:
+
+**The AI layer, entirely.** Gemini wrote a nightly recap per player and one for the team.
+Gone: `/api/summaries` and its cron, `lib/{gemini,summary,ai-context,player-signals}.ts`,
+the Settings AI tab, both summary cards, `player_ai_summaries`, `team_ai_summary`,
+`team_profile`, `players.ai_context` and `players.ai_summary_enabled` (migration 029).
+Roughly 2,400 lines and a whole free-tier dependency. Match notes stay — they were the
+input, and they are also the thing people actually wrote.
+
+**The cumulative win-rate curve**, and `lib/team/winrate-series.ts` with it. Over tens of
+games a cumulative line is mostly its own first few points; it moved with the sample rather
+than with the team.
+
+**The flex section** — the "who turns up" table and its record ring. Every stored flex game
+has all five in it by construction (ADR-048), so a table counting appearances was a column
+of identical numbers.
+
+**Blue side / red side.** Kept in exactly one place: the opponent scouting sheet, where the
+question is "how do we do against *them* on blue" and the sample is a series rather than a
+season. Dropped from the home page and the player page, where it was a coin flip drawn as a
+bar.
+
+**Civil wars**, and the branch in `duo-stats.ts` that computed them. Five people who queue
+together on purpose rarely land on opposite sides.
+
+**The 24×7 hour heatmap**, replaced by 24 bars — height is games, fill is win rate
+(`components/charts/hour-bars.tsx`). 168 cells over a few hundred games meant almost every
+cell was empty and the ones that weren't couldn't be compared. The readable signal was
+always one axis.
+
+**And two moves rather than deletions.** The soloQ awards became `/soloq`, a section beside
+`/team`: same five people, different question, and one page trying to be both was answering
+neither first. The per-player champion pool moved onto the roster cards on the home page, so
+the five of them, their record and what they play is one row instead of three sections.
+
+**Consequence.** The home page is the roster board, the record, the recent series and the
+head-to-head — four things, where it had nine. The filter across the roster is client state
+over four server-computed foldings (`lib/loaders/roster-board.ts`), which is the exception to
+"a different query is a route" and earns it: they are the same query, folded four ways, so
+switching should not cost a round trip.
+
+**What the deletions cost.** The AI summaries were the only prose in the app, and match
+notes are now the only place a person's own account of a game lives. Nothing writes anything
+unattended any more, which is a smaller app in a way that is worth noticing rather than
+only celebrating.
+
+---
+
+## ADR-052 — No rank over time, no cross-player page, and filters that are not routes
+
+**Context.** ADR-051 cut the surfaces nobody read. Three more things stayed longer than they
+earned, and each was the last of its kind rather than one of many.
+
+**Decision.**
+
+**Every rank-over-time surface is deleted.** `lp-chart.tsx` (the most involved component in
+the app at ~400 lines), the LP race, the per-account LP series on a player page,
+`chart-legend.tsx`, and the validated six-colour `SERIES_COLORS` palette that existed
+because a chart drew one line per player. `player_rank_history` is *not* dropped: the sync
+still writes it and the Sunday Discord recap still reads it, and "you gained 40 LP this
+week" turns out to be the one sentence people wanted from that chart. A chart's job is to
+let somebody find a shape in a series; over a season of daily points at this roster's
+volume, the shape was always "they are roughly where they were", and the recap says that in
+one line without a screen of its own.
+
+**`/insights` is deleted.** It was the cross-player page from when the roster was nine
+people who mostly didn't play together. At five who queue as a five, "who plays with whom"
+has one answer, the civil wars were already gone (ADR-051), and the tilt curve and duo
+matrix were reading a sample too thin to rank. `duo-stats.ts` and `sessions.ts` survive —
+the Sunday recap uses both — and **the hour chart moved to the front page**, beside the
+record, where it costs no query at all: it folds the rows the roster board already read.
+
+**Two filters stopped being routes.** The account filter on `/players/[slug]` was
+`?account=<puuid>`, on the argument that a different set of games is a different query. It
+isn't one here — the page reads every account's rows either way, because the game count
+beside each account is what makes the filter legible and a narrowed read cannot report on
+the accounts you didn't pick. So the page folds one profile per account and the filter
+picks between folds already in hand, the same shape the roster board already used. The rule
+is written down in [07 §17](07-frontend.md): the test is not "does this change what's on
+screen", it is **does this change what the server has to read**.
+
+**The champion pool opens rather than lists.** Five rows, then a button. A pool is a short
+head and a long tail of one-offs, and thirty rows of tail pushed every panel below it off
+the screen.
+
+**Consequence.** `HourWeekdayStats` became `HourStats`: `aggregateByTime` returned a
+[weekday][hour] grid and per-weekday totals for the 24×7 heatmap ADR-051 replaced, and
+folding 168 buckets nobody reads over every row the roster has played is not free on a page
+that now folds them on every request. The navbar is five items. `player_rank_history` has
+exactly one reader left, which is worth stating out loud: it is now a table the app writes
+daily and reads weekly, and if the recap ever goes, it goes with it.
+
+**What it costs.** A player page for somebody with several accounts ships one folding per
+account rather than one. That is aggregates, never rows, and it is bounded by a fact about
+this roster rather than by anything in the code — [10 §](10-known-gaps.md) records it as
+such. And rank history is now genuinely invisible in the app: the only way to see where
+somebody was ranked a month ago is the Sunday message in Discord, or the table itself.

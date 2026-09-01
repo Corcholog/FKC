@@ -29,7 +29,7 @@ export function CounterList({
   version: string;
   /** Which id on the row is the champion to show — the reading direction. */
   otherSideOf: (row: ChampionCounterRow) => number;
-  /** Undefined on the public demo — the rows become plain text, not buttons. */
+  /** Undefined on a read-only surface — the rows become plain text, not buttons. */
   onOpen?: () => void;
   emptyLabel: string;
 }) {

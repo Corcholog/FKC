@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { DRAFT_COMP_KIND_LABELS, type DraftCompKind } from "@/lib/draft/types";
-import { deleteDraftComp } from "@/app/(app)/draft/actions";
+import { deleteDraftComp } from "@/app/(app)/prep/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,7 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-/** Confirm-then-delete, same idiom as scrims/delete-series-button.tsx. */
+/** Confirm-then-delete, same idiom as team/delete-series-button.tsx. */
 export function DeleteCompButton({
   compId,
   kind,

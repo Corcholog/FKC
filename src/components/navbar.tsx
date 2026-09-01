@@ -4,18 +4,15 @@ import { useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
-  LayoutDashboard,
-  Users,
   Swords,
-  Trophy,
   LineChart,
-  ListOrdered,
   Shield,
   Network,
   Settings,
   Menu,
   Loader2,
   UserRound,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -28,31 +25,37 @@ import { cn } from "@/lib/utils";
 
 // Browsing destinations only. Settings is deliberately not here: it's the admin
 // page, not somewhere you go to look at something, and it already sits visually
-// with /account on the right. Keeping it out is what left room for Scrims
-// without making this row tighter than it already is.
+// with /account on the right.
 //
-// Draft is the eighth slot. Seven links plus the matchup search, Sync, the
-// settings gear, the account link and Sign out were already tight at 1024px —
-// adding an eighth without more room would have been the row's actual breaking
-// point, not just a squeeze — so the collapse below moved from lg to xl at the
-// same time. Below xl, all eight links live in the sheet, same as before.
+// Five, and flat. It used to be two labelled groups — a "clan" half covering
+// everyone on solo queue and a "main team" half covering five of them — because
+// the app was two trackers over one roster. It is one tracker now (ADR-050), so
+// there is nothing for a separator to separate. /soloq sits beside /team because
+// they are the same five people answering two different questions, not two
+// audiences.
+//
+// /insights is gone with it (ADR-052): a cross-player section over five people
+// who are all on the same page anyway was one screen holding one chart worth
+// keeping, and that chart is on the front page now.
+//
+// /prep points at its first tab rather than at /prep, which has no index of its
+// own: sending the primary nav through a redirect costs a round trip on the one
+// link people press most.
 const NAV_ITEMS = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/team", label: "Team", icon: Users },
+  { href: "/", label: "Team", icon: Shield },
+  { href: "/soloq", label: "SoloQ", icon: LineChart },
   { href: "/matches", label: "Matches", icon: Swords },
-  { href: "/champions", label: "Champions", icon: Trophy },
-  { href: "/tierlists", label: "Tier Lists", icon: ListOrdered },
-  { href: "/insights", label: "Insights", icon: LineChart },
-  { href: "/scrims", label: "Scrims", icon: Shield },
-  { href: "/draft", label: "Draft", icon: Network },
+  { href: "/players", label: "Players", icon: Users },
+  { href: "/prep/draft", label: "Prep", icon: Network, match: "/prep" },
 ];
+
 
 /**
  * Whether a nav item owns the current page.
  *
- * Prefix-matching, not equality: /scrims has four tabs under it, and an exact
+ * Prefix-matching, not equality: /team has four tabs under it, and an exact
  * match would leave the navbar highlighting nothing the moment you opened one.
- * The same bug applied to /player/[slug] and /tierlists/[slug] before this.
+ * The same bug applied to /players/[slug] and /prep/tierlists/[slug] before this.
  *
  * "/" is special-cased because every path starts with it.
  */
@@ -89,17 +92,34 @@ function NavLink({
       href={href}
       onClick={onNavigate}
       className={cn(
-        "relative flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        "label-nav relative flex items-center gap-2 px-3 py-2 transition-colors",
         active ? "text-gold-bright" : "text-grey-light hover:text-white",
       )}
     >
       <Icon className="h-4 w-4" />
       {label}
       {active && (
-        <span className="absolute inset-x-2 -bottom-[9px] hidden h-0.5 rounded-full bg-gold sm:block" />
+        <span className="absolute inset-x-2 -bottom-[9px] hidden h-0.5 bg-gold sm:block" />
       )}
     </Link>
   );
+}
+
+/**
+ * "3 soloQ, 2 flex" — or "no new matches" when a run found nothing.
+ *
+ * Split by queue rather than one total because the two are worth different
+ * amounts of attention: a sync that turns up flex games means the team played
+ * together, and a bare "5 new match(es)" hides that.
+ */
+function formatNewMatches(byQueue: Record<string, number> | undefined): string {
+  const parts = [
+    [byQueue?.solo ?? 0, "soloQ"],
+    [byQueue?.flex ?? 0, "flex"],
+  ] as const;
+  const found = parts.filter(([count]) => count > 0);
+  if (found.length === 0) return "no new matches";
+  return found.map(([count, label]) => `${count} ${label}`).join(", ");
 }
 
 export function Navbar({
@@ -131,6 +151,10 @@ export function Navbar({
     router.refresh();
   }
 
+  // No queue parameter: the navbar button is the "just bring everything up to
+  // date" affordance and covers both queues. Aiming a sync at one queue is a
+  // deliberate act that belongs next to the per-queue timestamps in Settings,
+  // not behind a dropdown on a button most people press without reading.
   async function handleSync() {
     setSyncing(true);
     try {
@@ -139,7 +163,7 @@ export function Navbar({
       if (!res.ok) {
         toast.error(data.error ?? "Sync failed.");
       } else {
-        const result = `Synced: ${data.newMatches} new match(es), ${data.playersProcessed} player(s).`;
+        const result = `Synced: ${formatNewMatches(data.newMatchesByQueue)}, ${data.playersProcessed} player(s).`;
         // A partial run isn't a failure — Riot's rate limit ran the sync out of
         // time, and the next one resumes from the same point. Say so, though,
         // or a backfill looks stuck.
@@ -159,11 +183,19 @@ export function Navbar({
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-navy/95 backdrop-blur supports-backdrop-filter:bg-navy/80">
-      <div className="flex items-center justify-between gap-2 px-4 py-3 sm:px-6">
+      {/* Capped and centred to match the widest page shell (/prep). The bar
+          itself still spans the window — it's the chrome — but its contents line
+          up with the content under them instead of drifting to the edges on a
+          wide monitor. */}
+      <div className="mx-auto flex w-full max-w-[96rem] items-center justify-between gap-2 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2">
             <Crest />
-            <span className="font-heading hidden text-base font-semibold tracking-wide text-white sm:inline">
+            {/* Uppercase and tracked out like the nav links, but left on
+                --color-white rather than gold: gold-bright is what "you are
+                here" looks like in this bar, and a permanently gold wordmark
+                two inches away blunts it. */}
+            <span className="font-heading hidden text-base font-bold tracking-widest text-white uppercase sm:inline">
               Fake Clan
             </span>
           </Link>
@@ -177,7 +209,7 @@ export function Navbar({
                 href={item.href}
                 label={item.label}
                 Icon={item.icon}
-                active={isActive(pathname, item.href)}
+                active={isActive(pathname, item.match ?? item.href)}
               />
             ))}
           </nav>
@@ -286,7 +318,7 @@ export function Navbar({
                     href={item.href}
                     label={item.label}
                     Icon={item.icon}
-                    active={isActive(pathname, item.href)}
+                    active={isActive(pathname, item.match ?? item.href)}
                     onNavigate={() => setSheetOpen(false)}
                   />
                 ))}

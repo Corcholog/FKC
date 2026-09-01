@@ -5,66 +5,71 @@
 ```
 src/app/
 ├── layout.tsx                Root: fonts, <Toaster />. No auth logic.
-├── robots.ts                 Disallow everything (see §14)
-├── login/page.tsx            Public route. "use client".
-├── demo/                     Public, read-only, anonymized. A *sibling* of (app), so
-│   │                         none of the private chrome or queries can reach in. §14
-│   ├── layout.tsx            DemoNavbar + a permanent, non-dismissible banner
-│   ├── page.tsx              /demo                    Dashboard + what the tool is
-│   ├── player/[alias]/       /demo/player/x           Mirrors /player/[slug]
-│   ├── team/, matches/, champions/, tierlists/, insights/
-│   ├── scrims/               Own layout — *not* the private one, which carries the
-│   │                         "New scrim" button that is the door to the write path
-│   └── draft/                Board + reference panel, minus every save action
+├── robots.ts                 Disallow everything — every route is behind the session
+├── login/page.tsx            The only public route, and the only "use client" page
 └── (app)/                    Route group — parentheses = no URL segment
     ├── layout.tsx            Navbar + key banner. Everything inside is authed.
-    ├── page.tsx              /              Dashboard
+    ├── page.tsx              /              The team: the roster board (five cards,
+    │                                        record + champion pool, ?source filter as
+    │                                        client state), the combined record, recent
+    │                                        series and head-to-head
+    ├── soloq/page.tsx        /soloq         The solo queue awards — hall of fame and
+    │                                        shame, over ranked solo only
     ├── loading.tsx           Route-level skeleton
-    ├── team/page.tsx         /team          Roster grid
-    ├── matches/page.tsx      /matches       History, ?player=slug filter, ?page=N
-    ├── champions/page.tsx    /champions     Per-player tierlist, ?player=slug
-    ├── insights/page.tsx     /insights      Cross-player analysis
-    ├── player/[slug]/page.tsx  /player/x    Detail: LP chart, top champions, roles,
-    │                                        matchups, heatmap, recent form
-    ├── tierlists/            /tierlists     Hand-made rankings; [slug] is the editor
-    ├── scrims/               Section with its own layout + tab strip (see below)
-    │   ├── layout.tsx        Heading, tabs, "New scrim" — wraps everything under it
-    │   ├── page.tsx          /scrims                  Overview: records, players
-    │   ├── team/             /scrims/team             The filtered team view — §15
-    │   ├── history/          /scrims/history          Every series, drafts rendered
-    │   ├── drafts/           /scrims/drafts           Pick/ban aggregates
-    │   ├── opponents/        /scrims/opponents        Teams; [slug] is the scouting page
-    │   ├── new/              /scrims/new              The entry form
-    │   ├── [id]/             /scrims/x                One series
+    ├── matches/              Every game on record, under one filter — §15
+    │   ├── page.tsx          /matches       ?view=all|flex|scrim|friendly|official is one
+    │   │                                    row per team game; ?view=soloq is the paginated
+    │   │                                    per-player list, with ?player= and ?page=
+    │   ├── new/              /matches/new             The series entry form
+    │   ├── [id]/             /matches/x               One series, plus [id]/edit
     │   └── actions.ts        Save / delete series, opponent notes, game-note CRUD
+    ├── players/
+    │   ├── page.tsx          /players       The five in role order, ?source=
+    │   └── [slug]/page.tsx   /players/x     One player: the account filter, champion
+    │                                        pool (top 5, opens), summary, roles,
+    │                                        matchups, hours, recent form. ?source= is
+    │                                        a link; the account is client state
+    ├── prep/                 Section with its own layout + tab strip. Everything you look
+    │   │                     at before a game rather than after it.
+    │   ├── layout.tsx        Heading, tabs — wraps everything under it
+    │   ├── draft/            /prep/draft              Board + reference panel
+    │   ├── champions/        /prep/champions          Lane roles + function tags
+    │   ├── comps/            /prep/comps              Saved five-champion sides
+    │   ├── synergies/        /prep/synergies          Saved 2-4 champion combos — §16
+    │   ├── counters/         /prep/counters           Who answers whom
+    │   ├── tierlists/        /prep/tierlists          Hand-made rankings; [slug] edits one
+    │   ├── scouting/         /prep/scouting           The filtered game view — §15
+    │   ├── picks/            /prep/picks              Our pick/ban aggregates
+    │   ├── opponents/        /prep/opponents          Teams; [slug] is the scouting sheet
+    │   ├── actions.ts        Champion profiles, tags, counters, comps
+    │   └── tierlists/actions.ts
+    ├── settings/             Section with its own layout + tab strip
+    │   ├── page.tsx          /settings                Roster: add, edit, accounts, roles
+    │   ├── sync/             /settings/sync           Riot key, per-queue sync, flex
+    │   │                                              discovery, detail backfill
+    │   └── actions/          roster.ts · accounts.ts · sync.ts, over the plain
+    │                         lib/settings/helpers.ts — see 10 §7b for why that split
+    │                         needed the helpers extracted first
     ├── notes/                No page.tsx, so no route — just the note CRUD server
     │   ├── actions.ts        actions and their form-state type, shared by every
     │   └── form-state.ts     surface that renders a match row.
-    ├── draft/                Section with its own layout + tab strip, see docs/features/
-    │   │                     draft-strategy/ for the phased build-out
-    │   ├── layout.tsx        Heading, tabs — wraps everything under it
-    │   ├── page.tsx          /draft                   Board + reference panel (Phases 4-7)
-    │   ├── champions/        /draft/champions         Lane roles + function tags (Phase 1)
-    │   ├── comps/            /draft/comps             Saved five-champion sides (Phase 3)
-    │   ├── synergies/        /draft/synergies         Saved 2-4 champion combos (Phase 3),
-    │   │                                              cards or graph — §16
-    │   └── counters/         /draft/counters          Who answers whom (Phase 2)
-    ├── settings/             Roster CRUD, Riot key, AI context, logins
     └── account/page.tsx      Password change
 ```
 
+There used to be a second tree beside `(app)`: `demo/`, a public anonymized mirror of every
+page. It is gone (ADR-050), along with the rule that every route needed a twin.
+
 The `(app)` route group is what lets one layout wrap every authenticated page without
-adding an `/app` prefix to any URL. `/login` sits outside it precisely so it doesn't get
-the navbar. `/demo` sits outside it for a stronger version of the same reason: the private
-layout reads `sync_state` and the session, and its navbar carries a Sync button, an
-account email and a link to `/settings`. Inheriting any of that on a public page would be
-either a leak or a 500.
+adding an `/app` prefix to any URL. `/login` sits outside it precisely so it doesn't get the
+navbar — that layout reads `sync_state` and the session, and its navbar carries a Sync
+button, an account email and a link to `/settings`, none of which mean anything to somebody
+who isn't signed in.
 
 **Every page except `/login` is a Server Component.** No `"use client"`, no `useEffect`
 data fetching, no loading state management. Client components exist only where
 interactivity genuinely requires them.
 
-### The navbar has eight slots now, and each new section costs one
+### The navbar has five slots, and each new section costs one
 
 `NAV_ITEMS` in `components/navbar.tsx` was seven links, tight even before Draft: adding
 Scrims meant **Settings moved out** of the array into the right-hand cluster as a gear icon
@@ -82,8 +87,8 @@ back at `lg` without cutting something.
 
 Both Scrims' and Draft's sub-pages are **tabs under one nav slot**, not four or five more
 of them. The tab strip lives in the section's own `layout.tsx` so each tab stays a server
-component with its own query; only the strip itself (`components/scrims/scrim-tabs.tsx`,
-`components/draft/draft-tabs.tsx`) is a client component, because only it needs
+component with its own query; only the strip itself (`components/prep/prep-tabs.tsx`,
+`components/settings/settings-tabs.tsx`) is a client component, because only it needs
 `usePathname`. Draft's shell is `max-w-[96rem]` against scrims' `max-w-6xl` — the simulator
 puts five pick slots either side of a champion grid, and §13's reference panel wants a
 column beside all of it. Below 96rem that cap is a no-op, so the only screens it changes are
@@ -96,8 +101,8 @@ clip the underline that caused it. They wrap instead.
 
 ### Active state is prefix-matched
 
-`active={pathname === item.href}` meant `/scrims/history` lit nothing — and that had always
-been true of `/player/[slug]` and `/tierlists/[slug]` too, it just wasn't noticed because
+`active={pathname === item.href}` meant `/matches/x` lit nothing — and that had always
+been true of `/players/[slug]` and `/prep/tierlists/[slug]` too, it just wasn't noticed because
 those are leaf pages you arrive at by clicking through. `isActive()` special-cases `/`
 (every path starts with it) and prefix-matches the rest.
 
@@ -215,7 +220,7 @@ several tracked players were in renders a row each, so a 50-match page can show 
 50 rows. Paginating by the query unit is what keeps the offset arithmetic honest.
 
 **Out-of-range pages 404.** Page 1 always renders — an empty roster is a valid empty state
-— but `page > 1` with no results calls `notFound()`, consistent with how `/champions`
+— but `page > 1` with no results calls `notFound()`, consistent with how `/players/[slug]`
 treats an unknown `?player=`.
 
 The nav is a plain Server Component of `<Link>`s (`matches-pagination.tsx`), so the page
@@ -255,7 +260,7 @@ Four consistent properties:
 - **Postgres error codes are translated.** `23505` (unique violation) becomes "This
   player's Riot ID or display name is already tracked."
 - **`revalidatePath` is explicit per affected route**, including the dynamic form:
-  `revalidatePath("/player/[slug]", "page")`.
+  `revalidatePath("/players/[slug]", "page")`.
 
 Cleanup on failure is handled properly in both directions: a failed player insert deletes
 the avatar it just uploaded; a failed player-link deletes the auth user it just created.
@@ -277,8 +282,8 @@ resolved by the server; the champion map arrives as a `Map` prop from the parent
 
 ## 7. Loading states
 
-Every route with meaningful data has a `loading.tsx` — dashboard, matches, champions,
-insights, player, settings. They're **structural skeletons** that mirror the
+Every route with meaningful data has a `loading.tsx` — the front page, matches, the
+player page, tier lists, settings. They're **structural skeletons** that mirror the
 real layout (`RosterRowSkeleton`, `MatchRowSkeleton`) rather than a spinner, so the page
 doesn't reflow when data arrives.
 
@@ -337,42 +342,20 @@ stat columns align.
 
 ## 9. Charts
 
-`src/components/charts/`. Recharts for the LP chart and tilt curve; **plain CSS grid for
-the heatmap and duo matrix** — a grid of colored squares doesn't need a charting library.
+`src/components/charts/`. One Recharts component is left — the game-length survival curve
+— and **the hour bars are plain CSS**: 24 divs whose height is games and whose fill is win
+rate does not need a charting library.
 
-`chart-theme.ts` holds the shared visuals, with two decisions worth calling out:
+`chart-theme.ts` holds the shared visuals, and one decision is worth calling out:
 
 **Literal hexes, not `var(--color-*)`.** Recharts writes colors into SVG *presentation
 attributes*, where custom-property support is inconsistent enough not to bet a chart on.
 The file mirrors `globals.css` and says so.
 
-**The categorical palette is validated, not picked by eye.**
-
-```ts
-// Validated against the #10151d chart surface for the OKLCH lightness band,
-// chroma floor, protan/deutan separation, normal-vision separation, and contrast
-export const SERIES_COLORS = ["#af7c00", "#5e6bd4", "#4ea954", "#9e4aa4", "#00a5b5", "#b33736"];
-export const MAX_SERIES = SERIES_COLORS.length;
-```
-
-`MAX_SERIES` is enforced rather than cycled: `/insights` charts the top 6 players by rank
-and shows a caption saying so, because a seventh line reusing a color makes two players
-indistinguishable. Cycling a palette is the standard behaviour and it's a bug.
-
-### The LP chart
-
-The most involved component in the app (`lp-chart.tsx`, ~400 lines):
-
-- **A real time axis** (`t` = epoch ms), so an idle week reads as a gap, not a step.
-- **`mergeSeries`** builds one row per distinct timestamp across all players, so a single
-  `LineChart` can draw players whose sync times don't line up. Missing values stay
-  `undefined` and are bridged with `connectNulls` rather than plotted as zero.
-- **`ladderDomain`** rounds out to whole divisions so the axis never ends mid-division, and
-  keeps a visible band when LP has barely moved.
-- Tooltips use `formatLadderPointsDetailed` (with LP); ticks use `formatLadderPoints`
-  (without) — see [05 §2](05-stats-and-domain-logic.md) for why those are two functions.
-- Optional avatar end-caps on `/insights`, so a six-line race is readable without
-  cross-referencing a legend.
+The validated six-colour categorical palette went with the LP chart (ADR-052). It existed
+because a chart drew one line per player and a seventh would have had to reuse a colour;
+nothing draws per-player series any more, and a palette kept for a chart that no longer
+exists is a palette that drifts out of validation unnoticed.
 
 ## 10. The drill-down pattern
 
@@ -381,21 +364,25 @@ The most involved component in the app (`lp-chart.tsx`, ~400 lines):
 > Every headline number in the app is the top of an ordered list that was thrown away on
 > the way to rendering it. This dialog is that list.
 
-Award tiles, heatmap cells, and tilt-curve points are all clickable, and all open the same
+Award tiles and the hour bars are clickable, and both open the same
 dialog with the full standings — every contender in order, with the value and the sample
 size behind it. Each carries a `metric` line stating plainly what's being measured, and
 the leader is tinted in the same tone as the tile that opened it, so "worst KDA" opens on
 a red number at rank 1 and reads as the same statement rather than a mistake.
 
 The general principle: **an aggregate that can't be decomposed invites distrust.** A
-roster-wide heatmap cell is exactly the shape of number someone looks at and thinks "that
+roster-wide bar for 3am is exactly the shape of number someone looks at and thinks "that
 isn't me" — so let them check.
 
-## 11. The scrim draft board
+## 11. The draft board
 
-`components/scrims/draft-board.tsx` is the densest component in the app — twenty
+`components/team/compare-board.tsx` is the densest component in the app — twenty
 champions, ten stat lines and a result, per game — so its layout is load-bearing rather
 than decorative.
+
+It takes two plain arrays of champions rather than a game, which is what lets one board
+render a hand-entered scrim (`draft-board.tsx` is the adapter) and a ranked flex game in the
+match history, where there is no opponent row and no draft anybody typed.
 
 ### Role-paired rows, not two team lists
 
@@ -438,8 +425,8 @@ three-ban format.
 
 ### The note thread under the draft
 
-Every game card carries a thread (`components/scrims/scrim-game-notes.tsx`), on both
-`/scrims/history` and `/scrims/[id]`. Anyone can answer any note, **including a reply** — but
+Every game card carries a thread (`components/team/game-notes.tsx`), on both
+`/matches` — inside the expanded row — and `/matches/[id]`. Anyone can answer any note, **including a reply** — but
 the drawing stops at two levels however deep the conversation actually goes. Answers sit under
 the root behind a single left rule, in time order, and one whose target *isn't* the root prints
 `replying to <name>` above itself instead of earning another indent. Indenting per level inside
@@ -475,7 +462,7 @@ an empty array means "none yet", which still gets the composer.
 
 ### `BarRow`
 
-Ranked champion lists (`/scrims/drafts`, the scouting page) draw each row's value as a
+Ranked champion lists (`/prep/picks`, the scouting page) draw each row's value as a
 tinted fill *behind* the row. The shape of the distribution — "these three, then a long
 tail" — lands before any number does, and a background fill costs no horizontal space,
 which matters inside a two-column grid. Pick and ban lists scale against the top row of
@@ -572,11 +559,11 @@ drafted games to a typo is the worse failure. Bans are stripped too, not just pi
 champion picked earlier is unavailable for *every* slot later, ban slots included.
 
 A **Fearless toggle** sits next to the switcher, defaulted on. Not every series is fearless
-— `scrim_series.fearless` exists as a column for that reason — and off makes each game
+— `team_series.fearless` exists as a column for that reason — and off makes each game
 independent. It's threaded as an argument to `unavailableInSeries`, not a module flag.
 
-`MAX_GAMES = 5`, against the ten `lib/scrims/types.ts` allows. That limit exists because
-the `scrim_games_number` check constraint does and hand-entry shouldn't fight the database;
+`MAX_GAMES = 5`, against the ten `lib/team/types.ts` allows. That limit exists because
+the `team_games_number` check constraint does and hand-entry shouldn't fight the database;
 nothing is written from here, and five buttons fit in a row where ten are noise.
 
 ### State lives in the tab, not the database
@@ -612,7 +599,7 @@ paths into one table is the duplication the one-table decision was made to avoid
 **Save composition** takes one side's five picks. With both sides full the dialog asks
 which; with one, it's preselected and the chooser doesn't render. The dialog previews the
 champions it will write — non-negotiable, because it covers the board while open, so "did I
-save blue or red" is otherwise unanswerable until you visit `/draft/comps`.
+save blue or red" is otherwise unanswerable until you visit `/prep/comps`.
 
 That preview is also the control: `CompOrderEditor` makes it a `@dnd-kit` sortable row.
 Champions arrive in draft order, which is rarely how anyone reads a comp, so dragging them
@@ -689,11 +676,11 @@ changing, for a surface you glance at rather than work in.
 
 ### It loads all four tables, unfiltered
 
-`/draft/page.tsx` runs five loads and passes `loadDraftComps` no options at all, which looks
+`/prep/draft/page.tsx` runs five loads and passes `loadDraftComps` no options at all, which looks
 like an oversight. It isn't, and the reasoning is at the top of `lib/draft/context.ts` for
 the next person who sees it. The board changes on every click; a server round trip per click
 would make the panel feel broken. The whole dataset is ~170 profiles, a few dozen tags, some
-hundreds of counters and maybe a hundred comps — less than one page of `/insights` already
+hundreds of counters and maybe a hundred comps — less than one page of the roster board already
 pulls, and the same trade ADR-015 and ADR-024 document for every stats page in the app. The
 options on `loadDraftComps` exist for the list pages, which fetch one kind for one route.
 
@@ -803,159 +790,36 @@ Sharing them would mean `dense` plus an optional `onEdit` plus a per-champion em
 callback on a component whose job is none of that. They share `ChampionAvatar` and `Badge`,
 which is the part that would actually drift.
 
-## 14. `/demo` — one page, rendered twice
-
-The public demo is the same pages against anonymized data. The security half is
-[04, §10](04-auth-and-security.md); this is how it avoids being a second copy of the
-frontend.
-
-### `DataSource`, not `if (demo)`
-
-A loader takes a `DataSource` instead of a `SupabaseClient`:
+## 14. `DataSource` — which tables a read goes to
 
 ```ts
-export type DataSource = {
+type DataSource = {
   supabase: SupabaseClient;
-  table: (name: TableName) => string;   // "matches" → "matches" | "demo_matches"
-  demo: boolean;
+  table: (name: TableName) => string;   // "match_participants" → "soloq_participants"
+  queue: QueueScope;                    // "solo" | "flex" | "ranked"
 };
 ```
 
-The `demo_*` views expose **the same column names** as the base tables, so the only thing
-that differs between the two reads is the table name. `privateSource(supabase)` and
-`demoSource(createPublicClient())` are the two constructors, and the second is the only
-place `/demo` gets a client from.
+One axis: the queue. A loader calls `source.table("match_participants")` and gets the view
+that already holds only that queue, so **a page reads soloQ because of which source it was
+handed**, not because somebody wrote `.eq("queue_id", 420)` in the right dozen places. That
+protection is the whole point — migration 012 gave scrims their own tables rather than
+sharing these precisely because a forgotten queue filter produces a plausible wrong number
+instead of an error.
 
-The `demo` flag is not for choosing a table — `table()` does that. It is for the handful
-of things the demo has no counterpart *for*: match notes, AI attribution, "Edited by X".
-Those are conditional selects rather than conditional renders, so the column is never
-fetched:
+`privateSource(supabase, queue = "solo")` is the only constructor, and the default is
+load-bearing: every page written before flex existed still reads exactly the rows it did.
 
-```ts
-const seriesColumns = (source: DataSource) =>
-  source.demo ? SERIES_BASE_COLUMNS : `${SERIES_BASE_COLUMNS}, created_by`;
-```
+There was a second axis until ADR-050 — `demo: boolean`, which swapped every table name for
+its `demo_` view so one loader served both the private app and the public demo. The demo is
+gone and so is that half; what survives is the pattern, and it is worth naming because the
+next time two readings of the same data are wanted, this is the shape that worked.
 
-Asking a view for a column it doesn't have is a `42703` error, not a `null` — so getting
-this wrong breaks the page loudly, which is the correct direction.
+**Eight reads bypass it** and name `SOLOQ_PARTICIPANTS` by hand — the navbar's lane sample,
+the AI prompts, the weekly recap, the tier-list editor's champion pool. They are listed in
+02 §3b. A ninth added later inherits nothing.
 
-### `fetchXRows` + `buildX`, and why the split is mandatory
-
-Every loader in `src/lib/loaders/` is split in two: a `fetchXRows(source)` that returns
-**plain arrays**, and a pure `buildX(rows)` that folds them into whatever the page wants.
-That mirrors the fetch/compute split the rest of the codebase already uses, but here it is
-load-bearing rather than stylistic:
-
-> **`unstable_cache` serializes its entries.** A `Map` returned from a cached loader comes
-> back as a plain `{}` on the second request, and every `.get()` on it throws.
-
-The trap is that the *first* request is a cache miss and works perfectly. It looks fine
-locally and breaks for the second visitor. Cache the rows; fold afterwards.
-
-### Data cache, not ISR
-
-```ts
-export const dynamic = "force-dynamic";          // on every demo page
-cachedDemoLoad("insights", () => fetchInsightsRows(source));   // 1h, tag "demo"
-```
-
-`export const revalidate = 3600` would be the obvious way to do this and is wrong here:
-with no dynamic API in the tree, Next prerenders such a page **at build time**, which
-means `next build` connects to Supabase. CI builds with a placeholder project URL
-precisely because nothing should be contacted at build time, so an ISR demo page turns a
-green pipeline red for reasons unrelated to the code. Keeping the page dynamic and caching
-the *data* gets the thing that actually matters — a link passed around a coaching staff
-costs one read an hour, not one per person — with no build-time database dependency.
-
-Not `"use cache"` either: that directive needs `cacheComponents: true`, which changes the
-rendering model for every existing route. Not a change to make in passing for the demo's
-benefit. See [09, ADR-036](09-decision-log.md).
-
-Publishing a demo summary calls `revalidateTag("demo", "max")`. Next 16 takes **two**
-arguments there; the single-argument form is deprecated. `"max"` is
-stale-while-revalidate, so the first read after publishing still serves the old page — the
-success message in `/settings` says so rather than letting it look broken.
-
-### Private-only UI is a slot, not a flag
-
-Where a page has controls the demo must not render, the shared component takes a
-`ReactNode` slot or a render prop, and the demo **omits it by not passing it**:
-
-```tsx
-<ScrimSeriesView series={series} actions={<SeriesActions … />} notesFor={…} />   // private
-<ScrimSeriesView series={series} />                                             // demo
-```
-
-A boolean prop (`canEdit={false}`) puts the unsafe branch inside the shared component,
-where it renders unless someone remembers to pass the flag. A slot inverts that: the
-dangerous markup only exists at the private call site. `ScrimEmptyState` follows the same
-rule from the other end — `canAdd` defaults to `false`, so the value that reveals a write
-path has to be typed on purpose.
-
-A slot becomes a **render prop** when the private-only UI needs something the shared view
-already computed. `OpponentScoutingView`'s `banPlanForm` takes the enemy pick counts the
-page's own aggregate produced, so the editable ban plan carries the same *"they picked it
-3×"* annotation the read-only one does without counting twice — and the demo, passing no
-function, falls back to the read-only list rather than losing the section.
-
-`/demo/scrims` gets its own `layout.tsx` rather than reusing the private one for exactly
-this reason: that layout's "New scrim" button is the entrance to the whole write path.
-
-### The dashboard is the demo's front page, and it has three slots
-
-`/demo` renders the same `DashboardView` as `/`, off the same
-`fetchDashboardRows` + `buildDashboard`. The roster grid that used to live at `/demo` is
-`/demo/team`, where `/team` is — so the public nav is now the private nav with a prefix,
-and someone comparing the two is comparing the same thing.
-
-The private page passes two slots the demo doesn't: `syncStatus` and `notesFor`. `sync_state`
-is operational detail with no demo view, and notes have no `demo_match_notes` to read.
-
-The third slot, `recap`, both versions pass — but they are **different rows written in
-different voices**. The private one is `team_ai_summary`, rewritten nightly in the group's
-own voice off `clan_profile.context`. The demo's is `demo_text` under
-`source = 'team_summary'`, written in the analyst voice by a prompt that never loads the
-clan blurb, and published by a person pressing a button (ADR-039, ADR-043). The demo page
-passes no card at all until one is published, rather than the private page's *"nothing yet —
-the recap is written once a day"* empty state, which isn't true there.
-
-That read is `optional()`, not `maybeRow()` — a recap that fails to load costs the reader a
-card, not the page. It is also what decouples the deploy from migration 021: before the
-migration runs the view doesn't exist, the read is a `42P01` in the log, and the dashboard
-renders whole without it.
-
-Splitting the dashboard out is also what closed the last page that read Supabase inline: it
-was 760 lines, and its award tiles, streaks and activity feed are now a loader like every
-other page's.
-
-### Tier labels are relabelled, not hidden
-
-`/tierlists` rows are named by the person who made the list, and those names are group
-in-jokes. `relabelForDemo` replaces them positionally with `S/A/B/C/D/F`, which is what a
-stranger would expect a tier list to say anyway.
-
-The flag that drives it is carried **on the fetched rows**, not passed to the component by
-the page. Forgetting a prop would publish the real labels; there is no way to forget a
-field that arrived with the data.
-
-### What the demo drops, measured rather than assumed
-
-Anonymization is not free and it is worth knowing what it costs before showing the page:
-
-| Surface | Lost |
-|---|---|
-| `/demo` (the dashboard) | the sync card. The clan recap is rewritten, not dropped — a different row in a different voice |
-| `/demo/draft/champions` | nothing — 96 profiles, 0 notes |
-| `/demo/draft/counters` | 4 notes |
-| `/demo/draft/comps`, `/synergies` | 1 label, 5 notes |
-| every match row | the whole notes panel |
-| `/demo/tierlists` | "Edited by X" and the real row names |
-
-The draft simulator survives intact because it is `sessionStorage` state, not a database
-read (ADR-033) — a signed-out visitor can pick and ban on the board exactly as a member
-can, which is the most convincing thing on the demo and cost nothing to expose.
-
-## 15. `/scrims/team` — the filter is the page
+## 15. `/prep/scouting` — the filter is the page
 
 The other four scrim tabs each answer one question over every game ever recorded. This one
 answers any of them over a subset, because that is what preparation looks like: not "how do
@@ -963,7 +827,7 @@ we draft" but "how did we draft against this team, on this patch, when they had 
 
 So the page is a filter bar and then folds — record, draft order, game length, both
 champion pools, both ban lists, and the matching games themselves. Every section reads the
-same `applyScrimFilter(games, filter)` array.
+same `applyTeamMatchFilter(games, filter)` array.
 
 ### The filter lives in the URL
 
@@ -980,8 +844,7 @@ send to somebody: *"look at our last three officials on red side"*.
 Two consequences worth knowing:
 
 - **Nothing re-queries.** `loadScrimGames` already returns the section's entire dataset for
-  every tab, and the demo copy reads it from the same `"scrim-games"` cache entry the other
-  demo scrim pages share. A filtered view costs no extra read on either version.
+  every tab. A filtered view costs no extra read.
 - **The filter is applied in JavaScript, not pushed into PostgREST.** Consistent with
   ADR-015, and here it is not even a trade: a champion filter is a predicate over ten picks
   per game, which SQL would need a join to express, and the dataset is one season of
@@ -1010,7 +873,7 @@ added to this one.
 says no game matches *every one of these filters*, and points at the per-option counts —
 which are over the unfiltered set precisely so they can be read as a way out.
 
-## 16. The synergy graph — `/draft/synergies`
+## 16. The synergy graph — `/prep/synergies`
 
 Saved synergies overlap in ways a wall of cards cannot show. One champion turns up in six
 of them and his portrait appears in six unrelated boxes; a saved pair extends into a saved
@@ -1144,3 +1007,32 @@ above the line; the trio reads *"extends Wukong + Orianna"*.
 It's computed over **every** row, not over the filtered ones: that a pair extends into a trio
 is a fact about what's saved, not about what the search box is showing, and recomputing per
 filter would blink the note out of a card whose own contents hadn't changed.
+
+## 17. The two filters that are *not* in the URL
+
+§15 states the rule the rest of the app follows: a filter is a query string, the page
+re-renders on the server, and the filtered view stays linkable. Two filters break it on
+purpose, and both break it the same way.
+
+**The roster board's source filter** (`/`, Everything / Competitive / Flex / SoloQ) and
+**the account filter** on `/players/[slug]` are client state. Neither is a different query:
+
+- The roster board's four readings are folded server-side in one pass and arrive together
+  (`lib/loaders/roster-board.ts`). Switching is a re-render.
+- The player page reads every account's rows regardless of which one is selected — it has
+  to, because the count beside each account is what makes the filter legible, and a
+  narrowed read cannot say what the accounts you *didn't* pick hold. So the page folds one
+  profile per account and ships them all; picking one swaps which is in the tree
+  (`components/player/account-filter.tsx`).
+
+The test is not "does this change what's on screen" — every filter does that. It is
+**does this change what the server has to read**. `?source=` on the player page does: each
+source reads a different participant view, so it stays a link. `?view=` on
+`/prep/scouting` does not re-read either, but the filtered view there is the thing you
+send somebody, and that is the other half of the rule.
+
+What it costs, stated plainly: the payload carries N foldings instead of one. That is
+bounded by design — four sources, and at most a handful of accounts — and it is
+*aggregates*, never rows. The moment one of these would have to ship the participant rows
+themselves to fold in the browser, it stops being this pattern and goes back to being a
+link.

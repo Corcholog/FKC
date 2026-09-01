@@ -13,7 +13,7 @@ import {
   type DraftCompRow,
   type DraftTagRow,
 } from "@/lib/draft/types";
-import { saveDraftComp } from "@/app/(app)/draft/actions";
+import { saveDraftComp } from "@/app/(app)/prep/actions";
 import {
   buildCompPayload,
   emptySlot,

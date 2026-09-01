@@ -9,12 +9,18 @@
    Hextech direction (replacing the earlier softer navy+gold pass): near-black
    backgrounds, LoL-gold as the primary accent with a thin-border/glow
    treatment instead of soft drop shadows, hextech cyan as a secondary
-   accent, cream body text, and sharp/angular corners (--radius dropped from
-   16px to 4px — every rounded-* utility across the app is wired through the
+   accent, cream body text, and sharp/angular corners (--radius went 16px ->
+   4px -> 0 — every rounded-* utility across the app is wired through the
    calc chain below, so this one change re-sharpens every card/button/input
    at once). All accent/status colors re-verified at >=4.5:1 against
    --color-bg-secondary (WCAG AA) — see the contrast check run before this
-   pass, which also fixed --color-loss (previously ~3.1:1 against grey-mid). */
+   pass, which also fixed --color-loss (previously ~3.1:1 against grey-mid).
+
+   The palette is the app's own and predates this pass. What is borrowed from
+   the sibling FKC tracker is the *form* around it: zero radius, monospace body
+   copy, uppercase micro-labels tracked wide, a win/loss gradient on result
+   rows, and a lift-and-glow hover. The colors did not change; the edges,
+   the type and the density did. */
 
 :root {
   /* backgrounds, darkest to lightest */
@@ -82,7 +88,26 @@
   --chart-3: var(--color-win);
   --chart-4: var(--color-grey-light);
   --chart-5: var(--color-grey-mid);
-  --radius: 0.25rem; /* 4px — sharp/angular, not the old 16px rounded-card look */
+  /* 0 — fully square. Every rounded-* utility in the app resolves through the
+     calc chain in @theme inline below, so this one value is what makes panels,
+     buttons, inputs and chips share an edge treatment. `rounded-full` does not
+     read from it, which is deliberate: avatars, the win-rate ring and status
+     pips stay circular, and squaring those reads as a rendering fault rather
+     than as a style. */
+  --radius: 0;
+
+  /* ---- how wide the match-row lists reach -----------------------------
+     A match row is nine fixed-width columns plus a name that gets whatever
+     is left, so it wants more width than the prose around it. These are the
+     two numbers to change when a row feels cramped or too wide; nothing else
+     in the app reads them.
+
+     Both are clamped to the viewport where they are used, so raising one past
+     the window does nothing bad — the block just stops at the page gutter.
+     Setting one to the page's own max-width turns the widening off. */
+  --row-width-matches: 80rem; /* /matches — page column is max-w-5xl (64rem) */
+  --row-width-player: 64rem; /* /players/[slug] — page column is max-w-4xl (56rem) */
+
   --sidebar: var(--color-bg-secondary);
   --sidebar-foreground: var(--color-white);
   --sidebar-primary: var(--color-gold);
@@ -182,21 +207,120 @@ body {
    border color instead of the intended 4px win/loss color. */
 @layer components {
   .panel-hex {
-    background: var(--color-bg-secondary);
+    /* Two knobs the .is-win/.is-loss modifiers below turn, so that the base and
+       hover rules can each be written once instead of three times:
+         --panel-tint  the result wash bleeding in from the leading edge
+         --panel-glow  what colour this panel glows when you reach for it
+       Default tint is transparent, which makes the gradient layer a no-op — a
+       plain panel and a tinted one run through the same declaration. */
+    --panel-tint: transparent;
+    --panel-glow: var(--color-gold);
+
+    background:
+      linear-gradient(
+        90deg,
+        color-mix(in oklch, var(--panel-tint) 16%, transparent),
+        transparent 60%
+      ),
+      var(--color-bg-secondary);
     border: 1px solid color-mix(in oklch, var(--color-gold) 30%, var(--color-border));
     box-shadow: 0 2px 10px -6px rgba(0, 0, 0, 0.7);
     transition:
       border-color 150ms ease,
       box-shadow 150ms ease,
-      background-color 150ms ease;
+      transform 150ms ease;
   }
+
+  /* Won/lost result rows and cards.
+     The wash fades out by 60% so the right-hand side — where the numbers live —
+     stays on the flat panel colour and keeps its contrast ratio. Only
+     `border-color` is set, never the `border` shorthand, so MatchRow's
+     `border-l-4 border-l-win` utility still wins the left edge. */
+  .panel-hex.is-win {
+    --panel-tint: var(--color-win);
+    --panel-glow: var(--color-win);
+    border-color: color-mix(in oklch, var(--color-win) 35%, var(--color-border));
+  }
+  .panel-hex.is-loss {
+    --panel-tint: var(--color-loss);
+    --panel-glow: var(--color-loss);
+    border-color: color-mix(in oklch, var(--color-loss) 35%, var(--color-border));
+  }
+
   a.panel-hex:hover,
   .panel-hex.is-interactive:hover {
-    border-color: color-mix(in oklch, var(--color-gold) 70%, transparent);
+    border-color: color-mix(in oklch, var(--panel-glow) 70%, transparent);
     box-shadow:
-      0 0 16px -3px color-mix(in oklch, var(--color-gold) 45%, transparent),
+      0 0 16px -3px color-mix(in oklch, var(--panel-glow) 45%, transparent),
       0 2px 10px -6px rgba(0, 0, 0, 0.7);
-    background: var(--color-bg-tertiary);
+    background:
+      linear-gradient(
+        90deg,
+        color-mix(in oklch, var(--panel-tint) 22%, transparent),
+        transparent 60%
+      ),
+      var(--color-bg-tertiary);
+    transform: translateY(-2px);
+  }
+
+  /* 2px, not the 4px the sibling app lifts by: these are dense list rows, and a
+     4px jump on a row you're scanning past reads as the page moving. */
+  @media (prefers-reduced-motion: reduce) {
+    a.panel-hex:hover,
+    .panel-hex.is-interactive:hover {
+      transform: none;
+    }
+  }
+
+  /* A block that reaches wider than the column it sits in.
+
+     Match rows are the one thing in the app that is not prose: nine fixed-width
+     columns — portrait, champion, KDA, both team comps, CS/min, score, result,
+     chevron — plus a name that gets whatever is left over. In a 4xl reading
+     column, with the monospace body face, what was left over could not hold a
+     champion name. Widening the page instead would have stretched the champion
+     pool, the matchups and the prose along with it, which want the narrower
+     measure they already have.
+
+     left:50% puts the block's left edge on the parent's centre line and the
+     translate pulls it back by half its own width, so it stays centred on the
+     same axis while being wider than its parent. The width clamps against the
+     viewport so it never reaches past the page gutter.
+
+     `100vw` includes the classic scrollbar where the parent's width does not,
+     so on a scrolling page this can land a few pixels wide. That is the same
+     rounding the draft reference panel has, and `body { overflow-x: clip }` in
+     the base layer is what already absorbs it — see the comment there, and note
+     that it must stay `clip` rather than `hidden` or every sticky element in the
+     app stops sticking. */
+  .bleed-wide {
+    position: relative;
+    left: 50%;
+    width: min(var(--bleed-width, 80rem), 100vw - 2rem);
+    transform: translateX(-50%);
+  }
+  @media (width >= 40rem) {
+    .bleed-wide {
+      width: min(var(--bleed-width, 80rem), 100vw - 3rem);
+    }
+  }
+
+  /* The app's micro-label: section titles, badges, chips, award captions.
+     Was hand-typed at ~20 call sites in three drifting variants (tracking-wide
+     + font-semibold, tracking-wider + font-semibold, tracking-wide + no
+     weight). One class so the next label is the same as the last one. */
+  .label-micro {
+    @apply text-[10px] font-bold tracking-widest uppercase;
+  }
+
+  /* The same register one step up, for things you click: navbar links, the prep
+     and settings tab strips, the /matches filter chips. Separate from
+     .label-micro because 10px is a caption size — legible as a label on a badge
+     you are already looking at, too small for the primary way around the app.
+     `tracking-wider` rather than `widest`: nine prep tabs at the widest setting
+     wrap to a third row on a laptop. */
+  .label-nav {
+    @apply text-xs font-bold tracking-wider uppercase;
   }
 
   /* Champion tile hover on the draft board's picker — the same gold accent and
@@ -285,7 +409,45 @@ body {
        `position: sticky` in the app. */
     overflow-x: clip;
   }
+  /* Monospace body copy, not sans.
+
+     This app is almost entirely numbers — KDA, CS/min, damage share, LP, win
+     rates — laid out in columns that want to line up. Geist Mono is already
+     loaded for code-ish surfaces, so making it the body face costs no extra
+     webfont and buys column alignment everywhere at once, on top of the
+     terminal-ish register the rest of this pass is going for.
+
+     `tabular-nums` is still worth applying at stat call sites: a monospace face
+     fixes advance width, but the helper also keeps figures from being
+     substituted in any face that isn't this one (headings are Rajdhani). */
   html {
-    @apply font-sans;
+    @apply font-mono;
+  }
+
+  /* The document scrollbar, themed like .scrollbar-panel below.
+
+     That class handles the app's inner scroll containers, but the window's own
+     scrollbar was left to the platform, and Windows draws a light-grey slab
+     that reads as a rendering error down the side of a #0a0d12 page. Same two
+     properties for the same reason given on .scrollbar-panel: the standard
+     ones are what Firefox honours, ::-webkit-scrollbar is what Chrome and
+     Safari use. */
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-bg-tertiary) var(--color-bg-primary);
+  }
+  html::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  html::-webkit-scrollbar-track {
+    background: var(--color-bg-primary);
+  }
+  html::-webkit-scrollbar-thumb {
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+  }
+  html::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--color-gold) 35%, var(--color-bg-tertiary));
   }
 }

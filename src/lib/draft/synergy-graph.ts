@@ -59,7 +59,7 @@ function bucket(map: Map<number, Set<number>>, id: number): Set<number> {
  * Pull the drawable structure out of a set of saved rows.
  *
  * Takes whatever it is given and reads `champion_ids`, so a caller that hands it
- * comps gets a graph of comps. `/draft/synergies` hands it synergies.
+ * comps gets a graph of comps. `/prep/synergies` hands it synergies.
  *
  * Champion ids are deduped per row before anything else. The validator already
  * rejects a repeated champion (see phase-3's note — the check constraint can't
@@ -143,7 +143,7 @@ export type CompRelations = {
  * doesn't claim to extend itself. Cross-kind is possible in principle (a
  * two-champion synergy sits inside plenty of five-champion comps) and never
  * happens in practice, because `loadDraftComps` filters by kind and each list
- * page passes one kind's rows — on `/draft/comps` every row is size 5, so
+ * page passes one kind's rows — on `/prep/comps` every row is size 5, so
  * nothing properly contains anything and the map comes back empty.
  *
  * O(n²) subset checks over rows of at most five ids. At a few hundred saved rows

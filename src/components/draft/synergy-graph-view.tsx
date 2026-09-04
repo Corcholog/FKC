@@ -5,9 +5,10 @@ import { Maximize, ZoomIn, ZoomOut } from "lucide-react";
 import { championIconUrlById, type ChampionInfo } from "@/lib/ddragon";
 import type { DraftCompRow } from "@/lib/draft/types";
 import {
+  BADGE_DEGREE,
   buildSynergyGraph,
   layoutSynergyGraph,
-  nodeRadius,
+  NODE_RADIUS,
   type Point,
   type SynergyLayout,
 } from "@/lib/draft/synergy-graph";
@@ -32,8 +33,40 @@ const INK = {
 /** Everything not touching the focused champion fades to this. */
 const DIMMED = 0.14;
 
+/**
+ * How a group's region is painted — and why the fill and the outline are drawn
+ * in two flat layers rather than one path each.
+ *
+ * A pool of any size has groups that share champions, so their regions overlap,
+ * and `fill-opacity` *compounds*: two tints at 0.13 make 0.24, five make 0.51.
+ * A busy pool therefore painted itself into a few large near-solid cyan slabs
+ * whose brightness tracked how many regions happened to pile up in one spot —
+ * which is not a fact about the synergies, and it is the loudest thing on the
+ * screen. Putting every region's fill in one `<g opacity>` composites the
+ * layer once and then fades it as a whole, so the tint means "grouped
+ * synergies live here" at one strength no matter how many overlap.
+ *
+ * The outlines are the other half of the same problem, and get their own layer
+ * for the same reason. They also thin out as the pool grows: five regions can
+ * be told apart by their outlines and thirty cannot, at which point thirty
+ * outlines are a scribble over the middle of the graph. Past `STROKE_FADE_TO`
+ * the tint carries the regions and hovering carries the reading — a focused
+ * champion's own regions are drawn at `GROUP_STROKE_FOCUS`, which is the state
+ * where an individual synergy is meant to be legible anyway.
+ */
+const GROUP_FILL = 0.16;
+const GROUP_STROKE = 0.5;
+const GROUP_STROKE_FLOOR = 0.1;
+const GROUP_STROKE_FOCUS = 0.65;
+const STROKE_FADE_FROM = 6;
+const STROKE_FADE_TO = 28;
+
+function groupStrokeOpacity(count: number): number {
+  const t = Math.min(Math.max((count - STROKE_FADE_FROM) / (STROKE_FADE_TO - STROKE_FADE_FROM), 0), 1);
+  return GROUP_STROKE + (GROUP_STROKE_FLOOR - GROUP_STROKE) * t;
+}
+
 const NODE_CORNER = 4;
-const LABEL_OFFSET = 12;
 
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 3;
@@ -83,8 +116,18 @@ function wheelPixels(event: WheelEvent): number {
  * synergies is six separate cards scattered across a flex-wrap, and the pool has
  * a shape — a dense web around two or three hubs, plus a handful of pairs
  * connected to nothing — that no amount of scrolling makes visible. Here the
- * hubs are literally the biggest portraits, and a cluster that shares no
- * champion with anything else is laid out on its own.
+ * hubs are the ones with a count on them and lines running everywhere, and a
+ * cluster that shares no champion with anything else is laid out on its own.
+ *
+ * **Nothing is written on the canvas.** Champion names were drawn under the
+ * portraits and there is no density worth drawing this at where they do not
+ * end up across somebody's face — placing them in the emptiest gap around each
+ * portrait cut the collisions by three quarters and did not get rid of them.
+ * The name is on the portrait's tooltip, in its `aria-label`, and in the rail
+ * beside the graph as soon as a champion is hovered, which is where reading
+ * happens anyway. Portraits are all one size for a related reason: the badge
+ * says "in six of these" outright, and scaling the picture to say it again cost
+ * every group region around a hub its spare space.
  *
  * **A pair is a line; three or more is a region, never a triangle.** The whole
  * reason `buildSynergyGraph` splits `edges` from `groups` is that drawing
@@ -223,6 +266,19 @@ export function SynergyGraphView({
   const lit = (compId: string) => !focus || focus.compIds.has(compId);
   const litChampion = (id: number) => !focus || focus.champions.has(id);
 
+  // Every drawable region, with its path built once: the fill layer and the
+  // outline layer both walk this, and a hull that came back with fewer than
+  // three points has nothing to fill.
+  const regions = useMemo(
+    () =>
+      graph.groups.flatMap(({ comp, members }) => {
+        const hull = layout.hulls.get(comp.id);
+        if (!hull || hull.length < 3) return [];
+        return [{ comp, members, d: polygonPath(hull), on: !focus || focus.compIds.has(comp.id) }];
+      }),
+    [graph, layout, focus],
+  );
+
   /**
    * Bring a champion into view when it is tabbed to.
    *
@@ -273,9 +329,9 @@ export function SynergyGraphView({
                 height="10"
                 rx="2"
                 fill={INK.group}
-                fillOpacity="0.16"
+                fillOpacity={GROUP_FILL}
                 stroke={INK.group}
-                strokeOpacity="0.5"
+                strokeOpacity={GROUP_STROKE}
               />
             </svg>
             <span>
@@ -283,7 +339,7 @@ export function SynergyGraphView({
               <span className="text-grey-light">not three pairs</span>
             </span>
           </span>
-          <span>bigger portrait = in more synergies</span>
+          <span>a number on a portrait = how many synergies it is in</span>
         </div>
 
         <div className="flex items-center gap-1 border-t border-border pt-3">
@@ -423,24 +479,32 @@ export function SynergyGraphView({
         >
           <g transform={`translate(${view.x.toFixed(2)},${view.y.toFixed(2)}) scale(${view.k.toFixed(4)})`}>
             {/* Regions first, under everything — a group is the ground its
-                champions stand on, not an annotation over them. */}
-            {graph.groups.map(({ comp, members }) => {
-              const hull = layout.hulls.get(comp.id);
-              if (!hull || hull.length < 3) return null;
-              const on = lit(comp.id);
+                champions stand on, not an annotation over them. Two passes, so
+                the focused ones are painted over the faded ones rather than
+                interleaved with them; each pass flattens its own fills and
+                outlines. See `GROUP_FILL`. */}
+            {([false, true] as const).map((on) => {
+              const shapes = regions.filter((region) => region.on === on);
+              if (shapes.length === 0) return null;
 
               return (
-                <path
-                  key={comp.id}
-                  d={polygonPath(hull)}
-                  fill={INK.group}
-                  fillOpacity={on ? 0.13 : 0.13 * DIMMED}
-                  stroke={INK.group}
-                  strokeOpacity={on ? 0.45 : 0.45 * DIMMED}
-                  strokeWidth={1}
-                >
-                  <title>{`${members.map(nameOf).join(" + ")} — one saved synergy`}</title>
-                </path>
+                <g key={String(on)} opacity={on ? 1 : DIMMED}>
+                  <g opacity={GROUP_FILL}>
+                    {shapes.map(({ comp, members, d }) => (
+                      <path key={comp.id} d={d} fill={INK.group}>
+                        <title>{`${members.map(nameOf).join(" + ")} — one saved synergy`}</title>
+                      </path>
+                    ))}
+                  </g>
+                  <g
+                    opacity={on && focus ? GROUP_STROKE_FOCUS : groupStrokeOpacity(regions.length)}
+                    pointerEvents="none"
+                  >
+                    {shapes.map(({ comp, d }) => (
+                      <path key={comp.id} d={d} fill="none" stroke={INK.group} strokeWidth={1} />
+                    ))}
+                  </g>
+                </g>
               );
             })}
 
@@ -452,17 +516,16 @@ export function SynergyGraphView({
               const dx = pb.x - pa.x;
               const dy = pb.y - pa.y;
               const dist = Math.hypot(dx, dy) || 1;
-              const ra = nodeRadius(graph.degree.get(a) ?? 1) + 2;
-              const rb = nodeRadius(graph.degree.get(b) ?? 1) + 2;
+              const trim = NODE_RADIUS + 2;
               const on = lit(comp.id);
 
               return (
                 <line
                   key={comp.id}
-                  x1={pa.x + (dx / dist) * ra}
-                  y1={pa.y + (dy / dist) * ra}
-                  x2={pb.x - (dx / dist) * rb}
-                  y2={pb.y - (dy / dist) * rb}
+                  x1={pa.x + (dx / dist) * trim}
+                  y1={pa.y + (dy / dist) * trim}
+                  x2={pb.x - (dx / dist) * trim}
+                  y2={pb.y - (dy / dist) * trim}
                   stroke={on && focus ? CHART_INK.primary : INK.edge}
                   strokeOpacity={on ? 1 : DIMMED}
                   strokeWidth={on && focus ? 2.5 : 1.75}
@@ -476,7 +539,7 @@ export function SynergyGraphView({
             {[...layout.positions].map(([id, point]) => {
               const champion = championById.get(id);
               const degree = graph.degree.get(id) ?? 1;
-              const r = nodeRadius(degree);
+              const r = NODE_RADIUS;
               const on = litChampion(id);
               const isActive = id === active;
               const label = `${nameOf(id)} — in ${degree} saved ${degree === 1 ? "synergy" : "synergies"}`;
@@ -558,26 +621,12 @@ export function SynergyGraphView({
                     strokeWidth={isActive ? 2.5 : 1.25}
                   />
 
-                  {/* Haloed, so a name that lands over a neighbouring portrait
-                      stays readable instead of turning the layout into a
-                      constraint problem. paint-order puts the halo behind. */}
-                  <text
-                    y={r + LABEL_OFFSET}
-                    textAnchor="middle"
-                    fontSize={10}
-                    fill={isActive ? CHART_INK.primaryBright : CHART_INK.label}
-                    stroke={INK.surface}
-                    strokeWidth={3}
-                    paintOrder="stroke"
-                    style={{ pointerEvents: "none" }}
-                  >
-                    {nameOf(id)}
-                  </text>
-
-                  {/* Only for the hubs. Size already says "this one is in more of
-                      them"; the number is worth its ink where the answer is
-                      several, and would be noise on the long tail of ones. */}
-                  {degree >= 3 && (
+                  {/* Only for the hubs, and now the only thing that says a
+                      champion is in several of these: the portraits are all one
+                      size, and the name that used to sit under them collided
+                      with everything around it. The rest is the tooltip and the
+                      readout in the rail. */}
+                  {degree >= BADGE_DEGREE && (
                     <>
                       <circle cx={r - 2} cy={-r + 2} r={7.5} fill={INK.surface} stroke={INK.ring} />
                       <text

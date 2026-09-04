@@ -184,25 +184,117 @@ export function extraChampions(smaller: DraftCompRow, bigger: DraftCompRow): num
 // Layout
 // ------------------------------------------------------------
 
-/** Portrait radius at degree 1, and at `HUB_DEGREE` or above. */
-const NODE_MIN_R = 17;
-const NODE_MAX_R = 26;
-const HUB_DEGREE = 6;
+/**
+ * Portrait radius — one size, whatever the champion is in.
+ *
+ * This used to scale with degree, so a hub was literally the biggest thing on
+ * screen. It read well and it cost more than it was worth: a bigger portrait is
+ * a bigger keep-out radius and a bigger region around every group it is in, and
+ * the count badge already says the number outright. Uniform portraits also make
+ * the whole layout one length scale, which is why the keep-out and the
+ * separation below no longer carry a radius each.
+ */
+export const NODE_RADIUS = 24;
 
-/** Clear space around a portrait — enough for the name label under it. */
+/**
+ * Clear space around a portrait.
+ *
+ * It used to be wider below than beside, to hold the champion's name. The names
+ * are gone — they collided with the portraits at any density worth drawing —
+ * but "enough that two faces don't touch" turned out to be the wrong amount for
+ * a different reason: the portraits are not the only thing drawn between two
+ * portraits. A line runs from one to another and a region wraps three of them,
+ * and when the faces are a few pixels apart both of those are hidden behind a
+ * face they have nothing to do with. At ten pixels every saved pair crossed one
+ * and a half unrelated portraits on its way and under two thirds of each group
+ * region was covered up; at twenty it is one, and half the region shows.
+ *
+ * Sized against what the portrait has to do now that nothing is written next to
+ * it: the icon is the only thing naming the champion, and at these two numbers
+ * it lands between 45 and 48 pixels across at the opening scale, which is what
+ * DDragon serves. Bigger portraits keep winning on paper right up until the
+ * drawing stops fitting the canvas and the reader has to pan to find anything.
+ */
 const NODE_GAP = 20;
 
 const EDGE_LENGTH = 118;
 /** How far a group's members settle from its centroid. */
-const GROUP_LENGTH = 60;
-/** Clear space between a group's region and the portraits it encloses. */
-const HULL_PAD = 14;
+const GROUP_LENGTH = 30;
+/**
+ * Clear space between a group's region and the portraits it encloses — and so
+ * the width of the tinted band that is all anyone can actually see of a region
+ * whose members are surrounded by other portraits. Wider than it needs to be to
+ * merely contain them, and no wider: past about this the regions grow enough to
+ * start overlapping each other, which is its own kind of mess.
+ */
+const HULL_PAD = 12;
 
 const REPULSION = 7000;
-const EDGE_STIFFNESS = 0.055;
+/**
+ * Past this, two portraits stop pushing each other apart.
+ *
+ * An inverse-square force is weak far away and never zero, and in a cluster of
+ * sixty champions the *sum* of fifty weak pushes is not weak — it inflates the
+ * whole component until the springs, which only pull along saved pairs, balance
+ * it. That is what made a big pool draw as short edges near the middle and
+ * three-hundred-pixel ones at the rim. Cutting the tail off makes repulsion a
+ * local anti-overlap force, which is the only job it has here: keeping the
+ * component together is the springs' job, and keeping portraits off each other
+ * is the hard separation pass at the end of every step.
+ */
+const REPULSION_RANGE = 250;
+/** What is left of repulsion between two champions in the same saved synergy. */
+const GROUP_REPULSION = 0.3;
+/**
+ * Stiff, deliberately. A slack spring lets everything else in here — the
+ * repulsion of a crowd, a group hauling one member off toward its centroid —
+ * decide how long a saved pair is drawn, and the pairs then come out at two and
+ * three times their rest length with no relation to anything the reader can
+ * see. Holding them near `EDGE_LENGTH` is also what unpicks crossings: over the
+ * sizes measured here, four times the old stiffness roughly halves them.
+ */
+const EDGE_STIFFNESS = 0.22;
 const GROUP_STIFFNESS = 0.14;
 const ITERATIONS = 460;
 const START_TEMP = 46;
+
+/**
+ * How hard a group shoves a champion that isn't in it out of its region, and
+ * the furthest that shove can ever be from the edge of the region.
+ *
+ * **The cap is the whole point.** This force used to be uncapped and measured
+ * from the group's centroid out to `reach + padding`, which is a quantity the
+ * force itself inflates: shoving a stranger away spreads the groups *it*
+ * belongs to, which widens their reach, which shoves harder. Two groups sharing
+ * a champion were enough to start it, and a pool of forty-five synergies ran
+ * away to a twenty-thousand-pixel canvas — the graph the user actually sees
+ * then being a few specks and some enormous lines, drawn at whatever scale it
+ * took to fit that on screen. Capped, the worst case is a stranger that stays
+ * put and a saved pair drawn longer than it should be.
+ */
+const KEEPOUT_STIFFNESS = 0.45;
+const KEEPOUT_MAX_PUSH = 34;
+
+/**
+ * A weak pull toward the cluster's own centre, stronger vertically than
+ * horizontally.
+ *
+ * Two jobs, one force. It closes the holes a force layout leaves when a cluster
+ * is mostly one hub's spokes, and the asymmetry is what aims the result wider:
+ * the shelf packer can only spend the canvas's width when there are several
+ * clusters to shelve, and a real pool is one big component and a handful of
+ * pairs. Squeezing the big one vertically is the only thing that fills a wide
+ * canvas with it.
+ *
+ * Kept far below `EDGE_STIFFNESS` on purpose — enough to shape a component over
+ * hundreds of iterations, never enough to pull a champion through the middle of
+ * one. `GRAVITY_SQUEEZE` is how much more of it the vertical axis gets. It is
+ * deliberately not `PACK_ASPECT` and does not track it: gravity fights every
+ * other force for the shape and lands well short of what it asks for, so 5 here
+ * buys about 1.3, and asking for more starts stretching saved pairs instead.
+ */
+const GRAVITY = 0.04;
+const GRAVITY_SQUEEZE = 5;
 
 /** Gap between two clusters, and the margin around the whole drawing. */
 const CLUSTER_GAP = 44;
@@ -223,26 +315,36 @@ const MARGIN = 34;
  */
 const PACK_ASPECT = 1.9;
 
+/** Points sampled around one portrait, when a group's region is traced. */
+const HULL_SAMPLES = 16;
+
 /**
- * A hub is drawn bigger, because "this champion is in six of these" is the
- * single fact the card list cannot show and the one this view exists for.
- * Exported so the layout and the view can't disagree about how much room a
- * portrait takes.
+ * A ring of points just outside one portrait, for the hull of a group to catch.
+ *
+ * Pushed out by `1 / cos(π / samples)` so the polygon *circumscribes* the circle
+ * it stands for: sample the circle itself and the hull cuts a chord across every
+ * arc, which at sixteen samples is a pixel of portrait poking out of its own
+ * region on the diagonals.
  */
-export function nodeRadius(degree: number): number {
-  const t = Math.min(degree, HUB_DEGREE) / HUB_DEGREE;
-  return NODE_MIN_R + (NODE_MAX_R - NODE_MIN_R) * t;
+function portraitRing(centre: Point, radius: number): Point[] {
+  const r = radius / Math.cos(Math.PI / HULL_SAMPLES);
+  const ring: Point[] = [];
+  for (let i = 0; i < HULL_SAMPLES; i++) {
+    const angle = (i * 2 * Math.PI) / HULL_SAMPLES;
+    ring.push({ x: centre.x + Math.cos(angle) * r, y: centre.y + Math.sin(angle) * r });
+  }
+  return ring;
 }
 
 /**
- * How far a group's region sits outside the portraits it encloses.
+ * The degree at which a champion gets a count badge on its portrait.
  *
- * Shared with the view, which needs it for the one group shape the layout can't
- * express as a polygon — see the capsule branch in `SynergyGraphView`.
+ * With every portrait the same size, this is the only thing left saying "in
+ * more than a couple of these" — and it is worth its ink where the answer is
+ * several, not on the long tail of ones. Exported so the view and this file
+ * agree on which champions are hubs.
  */
-export function groupPadding(memberRadii: number[]): number {
-  return Math.max(...memberRadii, NODE_MIN_R) + HULL_PAD;
-}
+export const BADGE_DEGREE = 3;
 
 export type SynergyLayout = {
   width: number;
@@ -274,21 +376,24 @@ function mulberry32(seed: number): () => number {
  * the other sixteen" visible, which is most of the point of drawing this at all.
  *
  * **It runs to completion synchronously and the result is a static picture.**
- * No animation loop, no requestAnimationFrame, no state churn. The biggest
- * cluster in a realistic pool is a few dozen champions, and a few dozen squared
- * times `ITERATIONS` is a number of floating-point operations a browser gets
- * through before it has finished laying out the toolbar above the graph. The
- * seeded start is what makes it reproducible: filtering the list re-runs this,
- * and a layout that reshuffled every keystroke would be unreadable.
+ * No animation loop, no requestAnimationFrame, no state churn. That is a real
+ * budget, not a free one — the whole layout is about 100ms at forty-five saved
+ * synergies and about half a second at two hundred and forty, on one main
+ * thread, every time the toolbar filters. It is `ITERATIONS` passes over
+ * everything-against-everything, so it grows with the square of the biggest
+ * cluster; the squared-distance comparisons in the two `n²` passes and the
+ * cheap disc test in front of the keep-out are what keep that number down, and
+ * are worth leaving alone.
+ *
+ * The seeded start is what makes it reproducible: filtering the list re-runs
+ * this, and a layout that reshuffled every keystroke would be unreadable.
  */
 function layoutCluster(
   ids: number[],
   edges: SynergyEdge[],
   groups: SynergyGroup[],
-  radiusOf: (id: number) => number,
 ): { positions: Map<number, Point>; width: number; height: number } {
   const index = new Map(ids.map((id, i) => [id, i]));
-  const radii = ids.map(radiusOf);
   const n = ids.length;
 
   // Seeded on the cluster's own membership, so it keeps its shape when another
@@ -316,25 +421,54 @@ function layoutCluster(
     .filter((g) => g.members.every((id) => index.has(id)))
     .map((g) => g.members.map((id) => index.get(id) as number));
 
+  // Who is in each group, worked out once rather than 460 times.
+  const groupInfo = localGroups.map((members) => {
+    const mask = new Uint8Array(n);
+    for (const m of members) mask[m] = 1;
+    return { members, mask };
+  });
+
+  // Pairs that share a saved synergy of three or four, so repulsion can hold
+  // off between them. Full repulsion settles a trio about ninety pixels apart
+  // — well clear of the hard separation floor — and the region drawn around
+  // them is then mostly the gaps, which is the "big empty blob" this view kept
+  // producing. They are drawn as one thing; they should sit like one thing, and
+  // the separation pass below still guarantees no two portraits touch.
+  const grouped = new Set<number>();
+  for (const members of localGroups) {
+    for (let i = 0; i < members.length; i++) {
+      for (let j = i + 1; j < members.length; j++) {
+        const [a, b] = members[i] < members[j] ? [members[i], members[j]] : [members[j], members[i]];
+        grouped.add(a * n + b);
+      }
+    }
+  }
+
   const dx = new Float64Array(n);
   const dy = new Float64Array(n);
+  const nearest: Nearest = { x: 0, y: 0, distance: 0, inside: false };
 
   for (let step = 0; step < ITERATIONS; step++) {
     dx.fill(0);
     dy.fill(0);
 
-    // Repulsion, every pair.
+    // Repulsion, every pair within range of each other. Squared distances in
+    // the comparisons: this is the innermost loop in the file, and `Math.hypot`
+    // costs several times a multiply-and-compare for a number thrown away on
+    // most of the pairs it is asked about.
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
         let vx = px[i] - px[j];
         let vy = py[i] - py[j];
-        let dist = Math.hypot(vx, vy);
-        if (dist < 0.01) {
+        let square = vx * vx + vy * vy;
+        if (square > REPULSION_RANGE * REPULSION_RANGE) continue;
+        if (square < 0.0001) {
           vx = (random() - 0.5) || 0.5;
           vy = (random() - 0.5) || 0.5;
-          dist = Math.hypot(vx, vy);
+          square = vx * vx + vy * vy;
         }
-        const force = REPULSION / (dist * dist);
+        const dist = Math.sqrt(square);
+        const force = (REPULSION / (dist * dist)) * (grouped.has(i * n + j) ? GROUP_REPULSION : 1);
         const ux = (vx / dist) * force;
         const uy = (vy / dist) * force;
         dx[i] += ux;
@@ -361,7 +495,7 @@ function layoutCluster(
     // Groups pull toward their own centroid rather than toward each other —
     // a hyperedge has no pairwise structure to model, and giving it one here
     // would put back the clique the header rules out.
-    for (const members of localGroups) {
+    for (const { members, mask } of groupInfo) {
       let cx = 0;
       let cy = 0;
       for (const m of members) {
@@ -385,20 +519,66 @@ function layoutCluster(
       // and a hull is read as "these champions, together" — the reader has no
       // way to tell the intruder apart from a member. Cheap insurance against
       // the one misreading this rendering can still produce.
+      //
+      // Measured against the polygon the members actually span, not a circle
+      // around their centroid: three champions in a row occupy a thin sliver,
+      // and reserving the disc that contains it is most of a cluster's area
+      // spent on nothing. The push is capped — see `KEEPOUT_MAX_PUSH`.
+      // The disc that contains the group, as a cheap first pass: at a realistic
+      // pool size this is a hundred groups against a hundred champions on every
+      // one of 460 steps, and all but a handful of those pairs are nowhere near
+      // each other. Only what survives it pays for the polygon.
       let reach = 0;
       for (const m of members) reach = Math.max(reach, Math.hypot(px[m] - cx, py[m] - cy));
-      const keepOut = reach + HULL_PAD + NODE_MAX_R;
-      const inside = new Set(members);
+      // A stranger is clear when its own portrait misses the drawn region: the
+      // region reaches HULL_PAD past a member portrait, and the stranger is a
+      // portrait too.
+      const clearance = 2 * NODE_RADIUS + HULL_PAD;
+      const ignoreBeyond = reach + clearance;
+
+      let shape: Point[] | null = null;
       for (let i = 0; i < n; i++) {
-        if (inside.has(i)) continue;
-        const vx = px[i] - cx;
-        const vy = py[i] - cy;
-        const dist = Math.max(Math.hypot(vx, vy), 0.01);
-        if (dist >= keepOut) continue;
-        const force = (keepOut - dist) * 0.5;
-        dx[i] += (vx / dist) * force;
-        dy[i] += (vy / dist) * force;
+        if (mask[i] === 1) continue;
+        const awayX = px[i] - cx;
+        const awayY = py[i] - cy;
+        if (awayX * awayX + awayY * awayY >= ignoreBeyond * ignoreBeyond) continue;
+        shape ??= convexHull(members.map((m) => ({ x: px[m], y: py[m] })));
+        const near = nearestOnShape(shape, px[i], py[i], nearest);
+        const gap = near.inside ? -near.distance : near.distance;
+        if (gap >= clearance) continue;
+        // Straight out through the nearest edge. A point sitting exactly on the
+        // shape has no such direction, so fall back to the centroid ray.
+        let ux = px[i] - near.x;
+        let uy = py[i] - near.y;
+        let length = Math.hypot(ux, uy);
+        if (length < 0.01) {
+          ux = px[i] - cx || 0.5;
+          uy = py[i] - cy || 0.5;
+          length = Math.hypot(ux, uy);
+        }
+        if (near.inside) {
+          ux = -ux;
+          uy = -uy;
+        }
+        const force = Math.min(clearance - gap, KEEPOUT_MAX_PUSH) * KEEPOUT_STIFFNESS;
+        dx[i] += (ux / length) * force;
+        dy[i] += (uy / length) * force;
       }
+    }
+
+    // Gravity, last of the forces: weak, toward the cluster's own centre, and
+    // squeezing harder on the axis the canvas has least of. See `GRAVITY`.
+    let gx = 0;
+    let gy = 0;
+    for (let i = 0; i < n; i++) {
+      gx += px[i];
+      gy += py[i];
+    }
+    gx /= n;
+    gy /= n;
+    for (let i = 0; i < n; i++) {
+      dx[i] += (gx - px[i]) * GRAVITY;
+      dy[i] += (gy - py[i]) * GRAVITY * GRAVITY_SQUEEZE;
     }
 
     // Cool down, so early steps untangle and late ones only settle.
@@ -414,13 +594,15 @@ function layoutCluster(
     // Hard separation last, so nothing the forces did can leave two portraits
     // overlapping. Portraits that overlap don't read as a dense cluster, they
     // read as a rendering bug.
+    const minimum = 2 * NODE_RADIUS + NODE_GAP;
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
-        const minimum = radii[i] + radii[j] + NODE_GAP;
         const vx = px[j] - px[i];
         const vy = py[j] - py[i];
-        const dist = Math.hypot(vx, vy);
-        if (dist >= minimum || dist < 1e-6) continue;
+        const square = vx * vx + vy * vy;
+        if (square >= minimum * minimum || square < 1e-12) continue;
+        // Both move half of what it takes to get the pair apart.
+        const dist = Math.sqrt(square);
         const shift = (minimum - dist) / 2;
         const ux = (vx / dist) * shift;
         const uy = (vy / dist) * shift;
@@ -433,16 +615,16 @@ function layoutCluster(
   }
 
   // Normalise into a box whose origin is the top-left of the ink, portraits
-  // included — the packer works in whole boxes and can't know about radii.
+  // included — the packer works in whole boxes and can't know about portraits.
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (let i = 0; i < n; i++) {
-    minX = Math.min(minX, px[i] - radii[i]);
-    minY = Math.min(minY, py[i] - radii[i]);
-    maxX = Math.max(maxX, px[i] + radii[i]);
-    maxY = Math.max(maxY, py[i] + radii[i]);
+    minX = Math.min(minX, px[i] - NODE_RADIUS);
+    minY = Math.min(minY, py[i] - NODE_RADIUS);
+    maxX = Math.max(maxX, px[i] + NODE_RADIUS);
+    maxY = Math.max(maxY, py[i] + NODE_RADIUS);
   }
 
   const positions = new Map<number, Point>();
@@ -472,71 +654,73 @@ function convexHull(points: Point[]): Point[] {
   return [...half(sorted), ...half([...sorted].reverse())];
 }
 
-/** How finely a corner arc is subdivided. ~23° per segment reads as smooth. */
-const CORNER_STEP = 0.4;
-
 /**
- * Grow a convex hull outward by `pad` — the region within `pad` of the shape,
- * which is straight offset edges joined by circular arcs at the corners.
+ * The closest point on a convex shape's boundary, and which side of it we are on.
  *
- * **Mitering the corners instead is the obvious version and it is wrong.** The
- * bisector reach is `pad / cos(half-angle)`, which runs away as a corner gets
- * sharp — and a three-champion group laid out in a near-straight line is two
- * very sharp corners. On real data that drew a hundred-pixel cyan spike shooting
- * off across the graph, which reads as anything except "these three champions".
- * Clamping the miter trades the spike for a chisel; rounding has no bad case.
+ * `shape` is whatever `convexHull` returned, so it can be a polygon, a bare
+ * segment (collinear members) or a single point (coincident ones) — all three
+ * are the same walk over consecutive pairs, and only the polygon can have an
+ * inside. Used by the keep-out force, which needs the direction out as well as
+ * the distance.
  *
- * Rounding also folds in the degenerate shapes for free. Three collinear
- * champions leave a hull that is a bare segment, and its rounded offset is a
- * capsule — so the caller gets a fillable ring back whatever the hull was, and
- * no branch has to know the difference.
- *
- * Winding-agnostic on purpose: each corner interpolates between the two edge
- * normals the short way round, so there is no clockwise-versus-counterclockwise
- * to get backwards, and no SVG sweep flag to reason about.
+ * Writes into `out` instead of returning a fresh object, and compares squared
+ * distances so that the one square root is taken at the end rather than per
+ * edge. Both are here because of where this is called from: the innermost part
+ * of the keep-out force, which on a dense pool asks this question a few million
+ * times per layout, and a few million short-lived objects is the difference
+ * between the graph redrawing while you type and visibly stopping to think.
  */
-function roundedOffset(points: Point[], pad: number): Point[] {
-  const n = points.length;
-  const centroid = points.reduce(
-    (acc, p) => ({ x: acc.x + p.x / n, y: acc.y + p.y / n }),
-    { x: 0, y: 0 },
-  );
+type Nearest = { x: number; y: number; distance: number; inside: boolean };
 
-  // The edge normal, flipped if it aims at the centroid. For a two-point hull
-  // the midpoint *is* the centroid and neither side is "outward" — the test
-  // then leaves the two normals opposed, which is what turns the two corners
-  // into the two ends of a capsule.
-  const outward = (a: Point, b: Point): Point => {
+function nearestOnShape(shape: Point[], x: number, y: number, out: Nearest): Nearest {
+  if (shape.length === 1) {
+    out.x = shape[0].x;
+    out.y = shape[0].y;
+    out.distance = Math.sqrt((x - out.x) * (x - out.x) + (y - out.y) * (y - out.y));
+    out.inside = false;
+    return out;
+  }
+
+  let bestX = shape[0].x;
+  let bestY = shape[0].y;
+  let best = Infinity;
+  // A two-point shape is one segment, walked once; a polygon closes the ring.
+  const last = shape.length === 2 ? 1 : shape.length;
+  for (let i = 0; i < last; i++) {
+    const a = shape[i];
+    const b = shape[i + 1 === shape.length ? 0 : i + 1];
     const vx = b.x - a.x;
     const vy = b.y - a.y;
-    const len = Math.hypot(vx, vy) || 1;
-    let nx = -vy / len;
-    let ny = vx / len;
-    if (((a.x + b.x) / 2 - centroid.x) * nx + ((a.y + b.y) / 2 - centroid.y) * ny < 0) {
-      nx = -nx;
-      ny = -ny;
-    }
-    return { x: nx, y: ny };
-  };
+    const lengthSquared = vx * vx + vy * vy;
+    let t = lengthSquared < 1e-9 ? 0 : ((x - a.x) * vx + (y - a.y) * vy) / lengthSquared;
+    if (t < 0) t = 0;
+    else if (t > 1) t = 1;
+    const cx = a.x + vx * t;
+    const cy = a.y + vy * t;
+    const square = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+    if (square >= best) continue;
+    best = square;
+    bestX = cx;
+    bestY = cy;
+  }
 
-  const ring: Point[] = [];
-  for (let i = 0; i < n; i++) {
-    const current = points[i];
-    const before = outward(points[(i - 1 + n) % n], current);
-    const after = outward(current, points[(i + 1) % n]);
-
-    const from = Math.atan2(before.y, before.x);
-    let sweep = Math.atan2(after.y, after.x) - from;
-    while (sweep > Math.PI) sweep -= 2 * Math.PI;
-    while (sweep < -Math.PI) sweep += 2 * Math.PI;
-
-    const steps = Math.max(2, Math.ceil(Math.abs(sweep) / CORNER_STEP));
-    for (let s = 0; s <= steps; s++) {
-      const angle = from + (sweep * s) / steps;
-      ring.push({ x: current.x + Math.cos(angle) * pad, y: current.y + Math.sin(angle) * pad });
+  let inside = false;
+  if (shape.length >= 3) {
+    for (let i = 0, j = shape.length - 1; i < shape.length; j = i++) {
+      if (
+        shape[i].y > y !== shape[j].y > y &&
+        x < ((shape[j].x - shape[i].x) * (y - shape[i].y)) / (shape[j].y - shape[i].y) + shape[i].x
+      ) {
+        inside = !inside;
+      }
     }
   }
-  return ring;
+
+  out.x = bestX;
+  out.y = bestY;
+  out.distance = Math.sqrt(best);
+  out.inside = inside;
+  return out;
 }
 
 /**
@@ -549,13 +733,12 @@ function roundedOffset(points: Point[], pad: number): Point[] {
  * `width`/`height` are the viewBox.
  */
 export function layoutSynergyGraph(graph: SynergyGraph): SynergyLayout {
-  const radiusOf = (id: number) => nodeRadius(graph.degree.get(id) ?? 1);
   const positions = new Map<number, Point>();
 
   // Lay every cluster out first: the shelf width is a function of the total
   // area, which isn't known until they all have one.
   const laidOut = graph.clusters.map((ids) =>
-    layoutCluster(ids, graph.edges, graph.groups, radiusOf),
+    layoutCluster(ids, graph.edges, graph.groups),
   );
   const area = laidOut.reduce(
     (total, laid) => total + (laid.width + CLUSTER_GAP) * (laid.height + CLUSTER_GAP),
@@ -588,32 +771,45 @@ export function layoutSynergyGraph(graph: SynergyGraph): SynergyLayout {
     width = Math.max(width, shelfX - CLUSTER_GAP);
   }
 
+  // The hull of the members' *portraits*, not of their centres grown by a
+  // padding. Two reasons, and the second is the one that shows.
+  //
+  // Growing a centre-hull outward means one padding for the whole shape, so
+  // every corner is inflated by the biggest member's radius even where the
+  // member is the smallest — and doing it by mitering the corners is worse
+  // still: the bisector reach is `pad / cos(half-angle)`, which runs away as a
+  // corner gets sharp, and three champions in a near-straight line are two very
+  // sharp corners. That drew a hundred-pixel spike shooting off across the
+  // graph, which reads as anything except "these three champions".
+  //
+  // Hulling the rings has no such case. Each portrait contributes its own
+  // radius, the shape comes out closed and fillable whatever the members did —
+  // three collinear champions give a capsule, coincident ones a disc — and it is
+  // the tightest region that still contains every portrait it claims.
   const hulls = new Map<string, Point[]>();
   for (const group of graph.groups) {
-    const points = group.members
-      .map((id) => positions.get(id))
-      .filter((p): p is Point => p !== undefined);
-    if (points.length < 2) continue;
-    // Always a closed, fillable ring — a hull that came back as a bare segment
-    // rounds into a capsule rather than needing a second rendering. See
-    // `roundedOffset`.
-    hulls.set(group.comp.id, roundedOffset(convexHull(points), groupPadding(group.members.map(radiusOf))));
+    const ring: Point[] = [];
+    for (const id of group.members) {
+      const point = positions.get(id);
+      if (point) ring.push(...portraitRing(point, NODE_RADIUS + HULL_PAD));
+    }
+    if (ring.length === 0) continue;
+    hulls.set(group.comp.id, convexHull(ring));
   }
 
   // Re-measure with the hulls in, then shift the whole drawing so the margin
   // holds on every side. A hull reaches past the portrait box it was measured
-  // from — by the padding, and by more at a sharp miter — so a group on the left
-  // or top edge of a cluster would otherwise be clipped by the viewBox.
+  // from, by `HULL_PAD`, so a group on the left or top edge of a cluster would
+  // otherwise be clipped by the viewBox.
   let minX = 0;
   let minY = 0;
   let maxX = width;
   let maxY = shelfY + shelfHeight;
-  for (const [id, point] of positions) {
-    const r = radiusOf(id);
-    minX = Math.min(minX, point.x - r);
-    minY = Math.min(minY, point.y - r);
-    maxX = Math.max(maxX, point.x + r);
-    maxY = Math.max(maxY, point.y + r);
+  for (const point of positions.values()) {
+    minX = Math.min(minX, point.x - NODE_RADIUS);
+    minY = Math.min(minY, point.y - NODE_RADIUS);
+    maxX = Math.max(maxX, point.x + NODE_RADIUS);
+    maxY = Math.max(maxY, point.y + NODE_RADIUS);
   }
   for (const hull of hulls.values()) {
     for (const point of hull) {
